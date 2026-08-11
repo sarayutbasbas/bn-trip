@@ -1,0 +1,2 @@
+ALTER TABLE itineraries
+ADD COLUMN IF NOT EXISTS cost_items JSONB NOT NULL DEFAULT '[]'::jsonb;
