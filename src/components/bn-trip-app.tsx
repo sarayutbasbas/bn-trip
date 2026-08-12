@@ -28,7 +28,7 @@ function fetchTripList(){
   return tripListRequest;
 }
 
-function Brand(){return <div className="brand"><Image src="/bn-trip-logo.png" alt="BN Trip" width={48} height={48} priority/><div>BN Trip<small>our tiny trip club</small></div></div>}
+function Brand(){return <div className="brand"><Image src="/bn-trip-icon-black-192.png" alt="BN Trip" width={48} height={48} priority/><div>BN Trip<small>our tiny trip club</small></div></div>}
 
 function EmptyState({title,description,action,onClick,icon:Icon=Navigation}:{title:string;description:string;action:string;onClick:()=>void;icon?:typeof Navigation}){
   return <article className="card empty-state"><span className="empty-icon"><Icon size={25}/></span><h3>{title}</h3><p>{description}</p><button className="primary-btn" onClick={onClick}><Plus size={16}/>{action}</button></article>;

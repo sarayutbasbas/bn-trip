@@ -14,7 +14,13 @@ export const metadata: Metadata = {
   applicationName: "BN Trip",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "BN Trip", statusBarStyle: "black-translucent" },
-  icons: { icon: "/bn-trip-logo.png", apple: "/bn-trip-logo.png" },
+  icons: {
+    icon: [
+      { url: "/bn-trip-icon-black-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/bn-trip-icon-black-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon-black.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
