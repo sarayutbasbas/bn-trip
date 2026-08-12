@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
 
-const tripSchema = z.object({ name:z.string().min(2), destination:z.string().min(2), outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), coverImageUrl:z.string().max(500).optional() }).refine(x=>new Date(`${x.returnDate}T${x.returnTime}`)>=new Date(`${x.outboundDate}T${x.outboundTime}`),{message:"Return must be after departure"});
+const tripSchema = z.object({ name:z.string().min(2), destination:z.string().min(2), outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), coverImageUrl:z.string().max(500).optional() }).refine(x=>x.returnDate>x.outboundDate,{message:"Return date must be after departure date"});
 
 export async function GET() {
   const session = await getSession(); if (!session) return NextResponse.json({error:"Unauthorized"},{status:401});
