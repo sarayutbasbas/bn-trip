@@ -9,6 +9,8 @@ const schema=z.object({
   startTime:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   placeName:z.string().trim().min(1).max(180),
   address:z.string().max(1000).optional(),
+  imageUrl:z.string().max(2000).optional(),
+  transportMode:z.string().max(100).optional(),
   transportNote:z.string().max(1000).optional(),
   costItems:z.array(z.object({
     id:z.string().optional(),key:z.string().trim().min(1).max(100),value:z.number().min(0),
@@ -24,7 +26,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   try{
     const {id}=await params;
     const x=schema.parse(await request.json());
-    const result=await query("UPDATE itineraries i SET day_number=$1,time_slot=$2,start_time=$3,place_name=$4,address=$5,transport_note=$6,cost_items=$7::jsonb,updated_at=now() FROM trips t WHERE i.id=$8 AND t.id=i.trip_id AND t.owner_id=$9 AND $1 BETWEEN 1 AND t.total_days RETURNING i.*",[x.dayNumber,x.timeSlot,x.startTime,x.placeName,x.address||null,x.transportNote||null,JSON.stringify(x.costItems),id,session.userId]);
+    const result=await query("UPDATE itineraries i SET day_number=$1,time_slot=$2,start_time=$3,place_name=$4,address=$5,image_url=COALESCE($6,image_url),transport_mode=COALESCE($7,transport_mode),transport_note=$8,cost_items=$9::jsonb,updated_at=now() FROM trips t WHERE i.id=$10 AND t.id=i.trip_id AND t.owner_id=$11 AND $1 BETWEEN 1 AND t.total_days RETURNING i.*",[x.dayNumber,x.timeSlot,x.startTime,x.placeName,x.address||null,x.imageUrl||null,x.transportMode||null,x.transportNote||null,JSON.stringify(x.costItems),id,session.userId]);
     return result.rows[0]?NextResponse.json(result.rows[0]):NextResponse.json({error:"Not found"},{status:404});
   }catch{return NextResponse.json({error:"ข้อมูลรายการไม่ถูกต้อง"},{status:400});}
 }

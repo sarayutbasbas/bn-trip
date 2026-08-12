@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource/ibm-plex-sans/400.css";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/600.css";
-import "@fontsource/ibm-plex-sans-thai/300.css";
-import "@fontsource/ibm-plex-sans-thai/400.css";
-import "@fontsource/ibm-plex-sans-thai/500.css";
-import "@fontsource/ibm-plex-sans-thai/600.css";
+import "@fontsource/ibm-plex-sans-thai/thai-300.css";
+import "@fontsource/ibm-plex-sans-thai/thai-400.css";
+import "@fontsource/ibm-plex-sans-thai/thai-500.css";
+import "@fontsource/ibm-plex-sans-thai/thai-600.css";
+import "@fontsource/ibm-plex-sans-thai/thai-700.css";
+import "@fontsource/ibm-plex-sans/latin-300.css";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-500.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
+import "@fontsource/ibm-plex-sans/latin-700.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,15 +19,17 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "BN Trip", statusBarStyle: "black-translucent" },
   icons: {
     icon: [
-      { url: "/bn-trip-icon-black-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/bn-trip-icon-black-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/bn-trip-icon-orange-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon-black.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon-orange.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f6f0e6",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ff7412" },
+    { media: "(prefers-color-scheme: dark)", color: "#ff5a0a" },
+  ],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -36,7 +41,7 @@ const themeScript = `
     const dark = saved === 'dark' || (!saved && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.classList.toggle('dark', dark);
     const themeMeta = document.querySelector('meta[name="theme-color"]');
-    if (themeMeta) themeMeta.setAttribute('content', dark ? '#242127' : '#f6f0e6');
+    if (themeMeta) themeMeta.setAttribute('content', dark ? '#000000' : '#f2f2f7');
   } catch (_) {}
 `;
 
