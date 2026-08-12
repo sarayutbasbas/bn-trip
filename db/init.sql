@@ -64,6 +64,7 @@ CREATE INDEX IF NOT EXISTS itinerary_trip_day_idx ON itineraries(trip_id, day_nu
 CREATE INDEX IF NOT EXISTS expenses_trip_date_idx ON expenses(trip_id, spent_at);
 CREATE INDEX IF NOT EXISTS flights_trip_idx ON flights(trip_id);
 
+-- LOCAL_DEMO_SEED: the cloud setup script intentionally stops before this marker.
 INSERT INTO users (shared_id, display_name, password_hash)
 VALUES ('BNTOGETHER', 'B & N', '$2b$12$QzvL320ojyU4JzsAJSCmG.YmVyn7ZCxm/nKju7Q.PU1JZEHbmukzm')
 ON CONFLICT (shared_id) DO NOTHING;

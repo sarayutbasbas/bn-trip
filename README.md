@@ -18,6 +18,17 @@ Mobile-first PWA สำหรับวางแผนท่องเที่ย
 - แยกทริปที่กำลังจะมาถึงและทริปที่ผ่านมาแล้วตามวันกลับ
 - อัปโหลดรูปปก JPG/PNG/WebP สูงสุด 8 MB และเก็บถาวรใน Docker volume `bntrip_uploads`
 
+## Local และ Cloud แยกข้อมูลกัน
+
+แอปรองรับสองโหมดโดยใช้ environment variables ชุดละที่ จึงไม่แชร์ฐานข้อมูลหรือรูปกันโดยอัตโนมัติ:
+
+| สภาพแวดล้อม | ฐานข้อมูล | รูปที่อัปโหลด |
+| --- | --- | --- |
+| Local / Docker | PostgreSQL ที่ `localhost:5434` หรือ service `db` | Docker volume `bntrip_uploads` |
+| Vercel | PostgreSQL จาก `DATABASE_URL` (แนะนำ Neon pooled URL) | Private Vercel Blob |
+
+`STORAGE_BACKEND` รับค่า `local` หรือ `blob` หากไม่กำหนด แอปจะใช้ `blob` บน Vercel และใช้ `local` ในสภาพแวดล้อมอื่น URL รูปในฐานข้อมูลยังเป็น `/api/uploads/<filename>` เหมือนกันทั้งสองโหมด และ route นี้ตรวจ session ก่อนส่งรูปเสมอ
+
 ## โครงสร้างโปรเจกต์
 
 ```text
@@ -127,6 +138,59 @@ Compose จะเปิด `cloudflared` พร้อมกันและตั
    ```bash
    npm run build
    ```
+
+## Deploy ขึ้น Vercel + Neon + Private Blob
+
+### 1. สร้าง Vercel project
+
+Import private repository `sarayutbasbas/bn-trip` ใน Vercel โดยใช้ค่า Framework Preset เป็น Next.js และค่า build อื่นใช้ค่าเริ่มต้นได้ทั้งหมด
+
+### 2. สร้าง cloud storage
+
+ในหน้า Vercel project:
+
+1. ไปที่ Storage/Marketplace แล้วเพิ่ม Neon Postgres เลือก region ใกล้กับ Vercel Function
+2. ตรวจว่า integration สร้าง `DATABASE_URL` ให้ project แล้ว
+3. สร้าง Blob store แบบ **Private** แล้วเชื่อมกับ project เพื่อให้ได้ `BLOB_READ_WRITE_TOKEN`
+4. เพิ่ม environment variables สำหรับ Production และ Preview:
+
+   ```env
+   STORAGE_BACKEND=blob
+   DATABASE_POOL_MAX=1
+   AUTH_SECRET=<production-secret-อย่างน้อย-32-ตัวอักษร>
+   ```
+
+ห้ามนำ `.env`, database URL, Blob token หรือ production secret ขึ้น Git โดยเด็ดขาด
+
+### 3. สร้าง schema และบัญชีแรกบน cloud
+
+สร้างไฟล์ `.env.cloud.local` ในเครื่อง ไฟล์นี้ถูก `.gitignore` ไว้อยู่แล้ว:
+
+```env
+DATABASE_URL=postgresql://<neon-pooled-url>?sslmode=require
+INITIAL_SHARED_ID=<shared-id-ที่ต้องการ>
+INITIAL_DISPLAY_NAME=<ชื่อที่แสดง>
+INITIAL_PASSWORD=<รหัสผ่านใหม่อย่างน้อย-10-ตัวอักษร>
+```
+
+จากนั้นรัน:
+
+```bash
+node --env-file=.env.cloud.local scripts/setup-cloud-db.mjs
+```
+
+สคริปต์รันใน transaction, สร้าง schema ที่ยังไม่มี และ upsert เฉพาะบัญชีที่กำหนดไว้ โดยจะไม่สร้างบัญชี demo `BNTOGETHER` บน cloud
+
+### 4. Deploy และตรวจระบบ
+
+กด Deploy/Redeploy ใน Vercel แล้วตรวจตามลำดับ:
+
+- Login ด้วย Shared Trip ID และรหัสผ่าน production
+- สร้างทริปทดสอบ
+- อัปโหลดรูป แล้ว refresh หน้าเพื่อยืนยันว่ารูปยังเปิดได้
+- Logout แล้วลองเปิด URL รูป ต้องได้รับ `401 Unauthorized`
+
+การ push เข้า branch `main` หลังเชื่อม GitHub แล้วจะ deploy production ให้อัตโนมัติ ส่วน local Docker จะยังใช้ข้อมูลและรูปเดิมในเครื่อง
 
 ## Database model
 
