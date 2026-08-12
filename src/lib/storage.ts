@@ -12,9 +12,9 @@ export function getStorageBackend(): StorageBackend {
   return process.env.VERCEL ? "blob" : "local";
 }
 
-function requireBlobToken() {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    throw new Error("BLOB_READ_WRITE_TOKEN is required when STORAGE_BACKEND=blob");
+function requireBlobCredentials() {
+  if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_STORE_ID) {
+    throw new Error("BLOB_STORE_ID or BLOB_READ_WRITE_TOKEN is required when STORAGE_BACKEND=blob");
   }
 }
 
@@ -24,7 +24,7 @@ function blobPath(filename: string) {
 
 export async function saveUpload(filename: string, data: Buffer, contentType: string) {
   if (getStorageBackend() === "blob") {
-    requireBlobToken();
+    requireBlobCredentials();
     await put(blobPath(filename), data, {
       access: "private",
       addRandomSuffix: false,
@@ -41,7 +41,7 @@ export async function saveUpload(filename: string, data: Buffer, contentType: st
 
 export async function readUpload(filename: string, ifNoneMatch?: string) {
   if (getStorageBackend() === "blob") {
-    requireBlobToken();
+    requireBlobCredentials();
     const result = await get(blobPath(filename), {
       access: "private",
       ifNoneMatch,

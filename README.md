@@ -151,7 +151,7 @@ Import private repository `sarayutbasbas/bn-trip` ใน Vercel โดยใช�
 
 1. ไปที่ Storage/Marketplace แล้วเพิ่ม Neon Postgres เลือก region ใกล้กับ Vercel Function
 2. ตรวจว่า integration สร้าง `DATABASE_URL` ให้ project แล้ว
-3. สร้าง Blob store แบบ **Private** แล้วเชื่อมกับ project เพื่อให้ได้ `BLOB_READ_WRITE_TOKEN`
+3. สร้าง Blob store แบบ **Private** แล้วเชื่อมกับ project รุ่นใหม่จะเพิ่ม `BLOB_STORE_ID` และใช้ OIDC token อายุสั้นอัตโนมัติ (store รุ่นเก่าอาจใช้ `BLOB_READ_WRITE_TOKEN`)
 4. เพิ่ม environment variables สำหรับ Production และ Preview:
 
    ```env

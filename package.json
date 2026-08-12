@@ -10,7 +10,7 @@
     "build": "next build --webpack",
     "start": "next start -p 8001",
     "test": "npm run build",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel",
     "db:generate": "drizzle-kit generate",
     "db:setup:cloud": "node scripts/setup-cloud-db.mjs"
   },
