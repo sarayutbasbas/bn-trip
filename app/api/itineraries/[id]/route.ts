@@ -10,7 +10,12 @@ const schema=z.object({
   placeName:z.string().trim().min(1).max(180),
   address:z.string().max(1000).optional(),
   transportNote:z.string().max(1000).optional(),
-  costItems:z.array(z.object({key:z.string().trim().min(1).max(100),value:z.number().min(0)})).max(30),
+  costItems:z.array(z.object({
+    id:z.string().optional(),key:z.string().trim().min(1).max(100),value:z.number().min(0),
+    category:z.string().max(60).optional(),currency:z.string().length(3).optional(),
+    foreignAmount:z.number().min(0).optional(),exchangeRate:z.number().positive().optional(),rateDate:z.string().optional(),
+    paymentMethod:z.string().max(60).optional(),
+  })).max(30),
 }).strict();
 
 export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){

@@ -3,7 +3,12 @@ import { z } from "zod";
 import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
 
-const costItem=z.object({key:z.string().trim().min(1).max(100),value:z.number().min(0)});
+const costItem=z.object({
+  id:z.string().optional(),key:z.string().trim().min(1).max(100),value:z.number().min(0),
+  category:z.string().max(60).optional(),currency:z.string().length(3).optional(),
+  foreignAmount:z.number().min(0).optional(),exchangeRate:z.number().positive().optional(),rateDate:z.string().optional(),
+  paymentMethod:z.string().max(60).optional(),
+});
 const schema=z.object({dayNumber:z.number().int().min(1),timeSlot:z.enum(["morning","afternoon","evening"]).optional(),startTime:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),placeName:z.string().min(1),address:z.string().optional(),imageUrl:z.string().optional(),transportMode:z.string().optional(),transportNote:z.string().optional(),costItems:z.array(costItem).max(30).optional()});
 
 export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});const {id}=await params;const result=await query("SELECT i.* FROM itineraries i JOIN trips t ON t.id=i.trip_id WHERE i.trip_id=$1 AND t.owner_id=$2 AND i.place_name IS NOT NULL ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order",[id,session.userId]);return NextResponse.json(result.rows);}

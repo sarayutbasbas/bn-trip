@@ -18,12 +18,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f0e8" },
-    { media: "(prefers-color-scheme: dark)", color: "#1d1b1f" },
-  ],
+  themeColor: "#f6f0e6",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 const themeScript = `
@@ -31,6 +29,8 @@ const themeScript = `
     const saved = localStorage.getItem('bn-theme');
     const dark = saved === 'dark' || (!saved && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.classList.toggle('dark', dark);
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', dark ? '#242127' : '#f6f0e6');
   } catch (_) {}
 `;
 

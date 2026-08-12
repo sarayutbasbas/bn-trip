@@ -15,7 +15,7 @@ export async function POST(request:Request) {
   try {
     const input = tripSchema.parse(await request.json());
     const totalDays=Math.floor((new Date(`${input.returnDate}T00:00:00`).getTime()-new Date(`${input.outboundDate}T00:00:00`).getTime())/86400000)+1;
-    const result = await query("INSERT INTO trips (owner_id,name,destination,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",[session.userId,input.name,input.destination,input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||null]);
+    const result = await query("INSERT INTO trips (owner_id,name,destination,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *",[session.userId,input.name,input.destination,input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg"]);
     const trip = result.rows[0];
     return NextResponse.json(trip,{status:201});
   } catch { return NextResponse.json({error:"Invalid trip data"},{status:400}); }

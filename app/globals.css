@@ -828,3 +828,867 @@ body { background:radial-gradient(circle at 86% 12%,color-mix(in srgb,var(--bran
   .trip-card,.trip-card:nth-child(n),.trip-body { min-height:0; }
   .trip-detail-head.has-cover { min-height:205px; }
 }
+
+/* Illustrated postcard backdrop */
+html { background:#d9d2e6; }
+body {
+  position:relative;
+  background-color:#d9d2e6;
+}
+body::before {
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(rgba(255,250,240,.08),rgba(238,232,244,.08)),
+    url('/travel-postcard-background.jpg');
+  background-position:center top;
+  background-size:cover;
+  background-repeat:no-repeat;
+}
+.dark body { background-color:#171326; }
+.dark body::before {
+  background-image:
+    linear-gradient(rgba(20,16,31,.58),rgba(20,16,31,.64)),
+    url('/travel-postcard-background.jpg');
+}
+body > * { position:relative;z-index:1; }
+.app-shell {
+  width:calc(100% - 36px);
+  max-width:1120px;
+  min-height:calc(100vh - 36px);
+  margin:18px auto;
+  border:1px solid color-mix(in srgb,var(--surface) 76%,var(--line));
+  border-radius:28px;
+  background:color-mix(in srgb,var(--surface) 76%,transparent);
+  box-shadow:0 28px 80px rgba(53,42,76,.2);
+}
+.dark .app-shell { background:color-mix(in srgb,var(--surface) 82%,transparent); }
+
+@media (max-width:639px) {
+  body::before {
+    background-position:31% center;
+    background-size:auto 100vh;
+  }
+  .app-shell {
+    width:calc(100% - 12px);
+    min-height:calc(100vh - 12px);
+    margin:6px;
+    border-radius:18px;
+    background:color-mix(in srgb,var(--surface) 72%,transparent);
+    box-shadow:0 12px 38px rgba(53,42,76,.16);
+  }
+}
+
+/* Live trip progress */
+.day-pill.past-day {
+  opacity:.4;
+  filter:grayscale(.35) saturate(.55);
+}
+.day-pill.past-day.active { opacity:.68; }
+.day-pill.today {
+  border-color:var(--gold);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 20%,transparent);
+}
+.day-pill.today small:last-child { color:var(--gold);font-weight:700; }
+.day-pill.today.active small:last-child { color:white; }
+.timeline-stop {
+  transition:opacity .25s ease,filter .25s ease,transform .25s ease;
+}
+.timeline-stop.past-stop {
+  opacity:.36;
+  filter:grayscale(.45) saturate(.55);
+}
+.timeline-stop.current-stop {
+  position:relative;
+  z-index:2;
+  transform:translateY(-1px);
+}
+.timeline-stop.current-stop .event-card {
+  position:relative;
+  border-color:var(--gold);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 22%,transparent),0 14px 34px rgba(83,61,32,.16);
+}
+.timeline-stop.current-stop .event-dot {
+  border-color:var(--gold);
+  color:#6b4308;
+  background:var(--gold-soft);
+  box-shadow:0 0 0 5px color-mix(in srgb,var(--gold) 22%,transparent);
+}
+.current-stop-badge {
+  position:absolute;
+  z-index:3;
+  top:-11px;
+  right:12px;
+  min-height:23px;
+  padding:4px 9px;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  color:#49300c;
+  background:var(--gold);
+  font-size:9px;
+  font-weight:700;
+  box-shadow:0 4px 12px color-mix(in srgb,var(--gold) 28%,transparent);
+}
+.editable-event-card > .current-stop-badge {
+  position:static;
+  align-self:stretch;
+  justify-content:center;
+  border-radius:0;
+  box-shadow:none;
+}
+
+/* Keep sheets stationary when opening and closing */
+.modal { animation:none; }
+
+/* Full-width trip cover with compact controls */
+.trip-detail-head { position:relative;overflow:hidden; }
+.trip-detail-head > div:not(.trip-cover-actions) { position:relative;z-index:1; }
+.trip-cover-actions {
+  position:absolute;
+  z-index:3;
+  top:12px;
+  right:12px;
+  display:flex;
+  gap:7px;
+}
+.trip-cover-actions button {
+  min-height:34px;
+  padding:0 10px;
+  border:1px solid rgba(255,255,255,.48);
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  color:white;
+  background:rgba(34,31,39,.54);
+  font-size:9px;
+  font-weight:600;
+  box-shadow:0 5px 16px rgba(0,0,0,.18);
+}
+.trip-cover-actions button:hover { background:rgba(34,31,39,.76); }
+.trip-detail-head:not(.has-cover) .trip-cover-actions button { color:var(--brand);border-color:var(--line);background:var(--surface); }
+.trip-cover-back {
+  position:absolute;
+  z-index:3;
+  top:12px;
+  left:12px;
+  min-height:34px;
+  margin:0;
+  padding:0 11px;
+  border:1px solid rgba(255,255,255,.48);
+  border-radius:999px;
+  color:white;
+  background:rgba(34,31,39,.54);
+  box-shadow:0 5px 16px rgba(0,0,0,.18);
+}
+.trip-cover-back:hover { background:rgba(34,31,39,.76); }
+.trip-detail-head:not(.has-cover) .trip-cover-back { color:var(--brand);border-color:var(--line);background:var(--surface); }
+.trip-hub-screen .trip-detail-head.has-cover {
+  width:calc(100% + 36px);
+  height:clamp(230px,52vw,420px);
+  min-height:0;
+  margin-left:-18px;
+  margin-bottom:9px;
+  border-radius:0;
+}
+.trip-hub-screen .day-strip { padding-top:5px;padding-bottom:5px; }
+.trip-hub-screen .timeline-heading { margin-top:14px; }
+
+@media (min-width:640px) {
+  .trip-hub-screen .trip-detail-head.has-cover {
+    width:calc(100% + 56px);
+    margin-left:-28px;
+  }
+}
+
+@media (min-width:1024px) {
+  .trip-hub-screen .trip-detail-head.has-cover {
+    width:calc(100% + 76px);
+    margin-left:-38px;
+  }
+}
+
+/* Fixed top navigation with content attached below */
+.flow-shell { padding-top:0; }
+.flow-header {
+  position:sticky;
+  top:18px;
+  z-index:30;
+  width:calc(100% + 36px);
+  margin-left:-18px;
+  margin-bottom:0;
+  padding:12px 18px;
+  border-radius:27px 27px 0 0;
+  background:color-mix(in srgb,var(--surface) 96%,transparent);
+  box-shadow:0 7px 18px rgba(53,42,76,.1);
+}
+
+@media (max-width:639px) {
+  .flow-header {
+    top:6px;
+    border-radius:17px 17px 0 0;
+  }
+}
+
+@media (min-width:640px) {
+  .flow-header {
+    width:calc(100% + 56px);
+    margin-left:-28px;
+    padding-right:28px;
+    padding-left:28px;
+  }
+}
+
+@media (min-width:1024px) {
+  .flow-header {
+    width:calc(100% + 76px);
+    margin-left:-38px;
+    padding-right:38px;
+    padding-left:38px;
+  }
+}
+
+/* Solid navigation fixed to the viewport */
+.flow-shell { margin-top:0; }
+.flow-shell main { padding-top:71px; }
+.flow-header {
+  position:fixed;
+  top:0;
+  left:50%;
+  width:min(calc(100% - 36px),1120px);
+  margin:0;
+  padding:12px 18px;
+  border-radius:0;
+  background:var(--surface);
+  backdrop-filter:none;
+  transform:translateX(-50%);
+  box-shadow:0 5px 16px rgba(53,42,76,.12);
+}
+
+@media (max-width:639px) {
+  .flow-shell { margin:0 6px 6px; }
+  .flow-header {
+    width:calc(100% - 12px);
+    padding-right:18px;
+    padding-left:18px;
+  }
+}
+
+/* Google Maps navigation choices */
+.navigate-actions {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(128px,1fr));
+  border-top:1px dashed var(--line);
+}
+.navigate-actions .navigate-point-btn {
+  min-width:0;
+  min-height:46px;
+  padding:8px 10px;
+  border-top:0;
+  font-size:9px;
+}
+.navigate-actions .navigate-point-btn + .navigate-point-btn {
+  border-left:1px solid rgba(255,255,255,.25);
+}
+.navigate-current-btn {
+  background:linear-gradient(90deg,color-mix(in srgb,var(--brand) 82%,#27364a),color-mix(in srgb,var(--brand) 82%,var(--mint)));
+}
+
+@media (max-width:360px) {
+  .navigate-actions { grid-template-columns:1fr; }
+  .navigate-actions .navigate-point-btn + .navigate-point-btn {
+    border-top:1px solid rgba(255,255,255,.25);
+    border-left:0;
+  }
+}
+
+/* Timeline floating add button */
+.trip-hub-screen,.timeline-screen { padding-bottom:92px; }
+.timeline-fab {
+  position:fixed;
+  z-index:25;
+  right:max(26px,calc((100vw - 1120px) / 2 + 26px));
+  bottom:calc(28px + env(safe-area-inset-bottom,0px));
+  width:58px;
+  height:58px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  box-shadow:0 10px 28px color-mix(in srgb,var(--brand) 34%,transparent),0 3px 8px rgba(42,31,72,.2);
+}
+.timeline-fab:hover {
+  transform:translateY(-2px);
+  box-shadow:0 14px 32px color-mix(in srgb,var(--brand) 38%,transparent),0 4px 10px rgba(42,31,72,.22);
+}
+
+/* Distinguish Google Maps actions from the purple add button */
+.navigate-actions .navigate-point-btn {
+  background:linear-gradient(90deg,#2f7472,#438c86);
+}
+.navigate-actions .navigate-current-btn {
+  background:linear-gradient(90deg,#315f73,#477f91);
+}
+.navigate-actions .navigate-point-btn:hover {
+  background:linear-gradient(90deg,#285f5e,#35756f);
+}
+.navigate-actions .navigate-current-btn:hover {
+  background:linear-gradient(90deg,#294f60,#396b7b);
+}
+
+/* Keep trip tags visible and use the standard Thai font for dates */
+.trip-card .trip-body { padding-top:20%; }
+.trip-card .trip-duration {
+  flex-shrink:0;
+  color:rgba(255,255,255,.82);
+  font-family:inherit;
+  font-size:9px;
+  font-weight:500;
+  line-height:1.45;
+  letter-spacing:0;
+  text-transform:none;
+  white-space:nowrap;
+}
+.trip-card .trip-body h3,
+.trip-card .trip-body p,
+.trip-card .trip-meta,
+.trip-card .open-trip { flex-shrink:0; }
+.trip-card .trip-meta {
+  min-height:22px;
+  margin:7px 0 8px;
+  overflow:visible;
+}
+
+/* Costs are edited directly on each timeline card */
+.inline-cost {
+  border-top:1px dashed var(--line);
+  background:color-mix(in srgb,var(--surface) 88%,var(--bg));
+}
+.inline-cost-summary {
+  min-height:42px;
+  padding:7px 11px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  color:var(--muted);
+  font-size:9px;
+}
+.inline-cost-summary button {
+  min-height:28px;
+  padding:0 10px;
+  border:1px solid color-mix(in srgb,var(--brand) 32%,var(--line));
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  color:var(--brand);
+  background:color-mix(in srgb,var(--brand) 7%,var(--surface));
+  font-size:9px;
+  font-weight:600;
+}
+.inline-cost-summary .cost-total-button {
+  min-width:0;
+  padding:0;
+  border:0;
+  justify-content:flex-start;
+  color:var(--muted);
+  background:transparent;
+  font-weight:500;
+}
+.inline-cost-summary .cost-total-button span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.timeline-cost-chips {
+  padding:0 10px 9px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+}
+.timeline-cost-chips button {
+  max-width:100%;
+  min-height:27px;
+  padding:4px 8px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:var(--muted);
+  background:var(--surface);
+  font-size:8px;
+}
+.timeline-cost-chips button span { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.timeline-cost-chips button b { flex:none;color:var(--brand);font-size:9px; }
+.inline-cost-panel {
+  padding:3px 10px 11px;
+  display:grid;
+  gap:7px;
+}
+.inline-cost-row {
+  display:grid;
+  grid-template-columns:minmax(0,1.25fr) minmax(72px,.7fr) 32px;
+  gap:6px;
+}
+.inline-cost-row input {
+  width:100%;
+  min-width:0;
+  height:36px;
+  padding:0 9px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  color:var(--ink);
+  background:var(--surface);
+  font:inherit;
+  font-size:10px;
+}
+.inline-cost-row > button {
+  width:32px;
+  height:36px;
+  border-radius:10px;
+  display:grid;
+  place-items:center;
+  color:#c45d5d;
+  background:color-mix(in srgb,#c45d5d 9%,var(--surface));
+}
+.inline-add-cost,.inline-save-cost {
+  min-height:34px;
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  font-size:10px;
+  font-weight:600;
+}
+.inline-add-cost {
+  border:1px dashed color-mix(in srgb,var(--brand) 34%,var(--line));
+  color:var(--brand);
+  background:transparent;
+}
+.inline-save-cost {
+  color:white;
+  background:var(--brand);
+}
+.inline-save-cost:disabled { opacity:.55; }
+.inline-cost-panel > p { margin:0;color:#bd5555;font-size:9px; }
+
+/* Expense overview mirrors the plan and groups every amount by day */
+.plan-expenses { padding-top:14px; }
+.plan-expense-total { grid-template-columns:1fr; }
+.expense-days {
+  margin-top:16px;
+  display:grid;
+  gap:12px;
+}
+.expense-day-card {
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:var(--surface);
+  box-shadow:0 5px 14px rgba(54,44,42,.05);
+}
+.expense-day-head {
+  padding:13px 15px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  background:color-mix(in srgb,var(--brand) 8%,var(--surface));
+}
+.expense-day-head > div { display:grid;gap:2px; }
+.expense-day-head span {
+  color:var(--brand);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.08em;
+}
+.expense-day-head small { color:var(--muted);font-size:9px; }
+.expense-day-head strong { color:var(--ink);font-size:18px; }
+.expense-day-actions { display:flex;align-items:center;gap:9px; }
+.expense-day-actions button {
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  color:white;
+  background:var(--brand);
+}
+.expense-day-list { padding:2px 14px; }
+.expense-plan-row {
+  width:100%;
+  min-height:54px;
+  padding:9px 0;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  border-bottom:1px dashed var(--line);
+  color:var(--ink);
+  background:transparent;
+  text-align:left;
+}
+.expense-plan-row:last-child { border-bottom:0; }
+.expense-plan-row > div { min-width:0;display:grid;gap:2px; }
+.expense-plan-row strong { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px; }
+.expense-plan-row small { overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:9px; }
+.expense-plan-row > span { flex:none;display:grid;justify-items:end;gap:1px; }
+.expense-plan-row b { flex:none;color:var(--brand);font-size:12px; }
+.expense-day-empty { margin:0;padding:18px 15px;color:var(--muted);font-size:10px;text-align:center; }
+.expense-toolbar { align-items:center;gap:12px; }
+.expense-add-btn { min-height:38px;padding:0 13px;white-space:nowrap;font-size:10px; }
+.expense-add-btn:disabled,
+.expense-day-actions button:disabled {
+  cursor:not-allowed;
+  opacity:.34;
+  box-shadow:none;
+  filter:grayscale(.35);
+}
+.expense-day-card.without-timeline .expense-day-head { background:color-mix(in srgb,var(--muted) 5%,var(--surface)); }
+.category-summary {
+  margin-top:14px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(105px,1fr));
+  gap:8px;
+}
+.category-summary article {
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  display:grid;
+  gap:2px;
+  background:color-mix(in srgb,var(--surface) 92%,var(--mint));
+}
+.category-summary span { color:var(--muted);font-size:9px; }
+.category-summary strong { color:var(--ink);font-size:14px; }
+.category-summary small { color:var(--brand);font-size:8px; }
+.cost-sheet .modal-head > div { display:grid;gap:3px; }
+.cost-sheet .modal-head p { margin:0;color:var(--muted);font-size:9px; }
+.cost-sheet .field small { margin-top:4px;color:var(--muted);font-size:8px; }
+.rate-input-row {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:stretch;
+}
+.rate-input-row input { min-width:0; }
+.current-rate-btn {
+  min-height:44px;
+  padding:0 13px;
+  border:1px solid color-mix(in srgb,var(--brand) 35%,var(--line));
+  border-radius:13px;
+  color:var(--brand);
+  background:color-mix(in srgb,var(--brand) 8%,var(--surface));
+  font-size:9px;
+  font-weight:600;
+  white-space:nowrap;
+}
+.current-rate-btn:disabled { opacity:.55; }
+
+@media (max-width:360px) {
+  .rate-input-row { grid-template-columns:minmax(0,1fr) 105px; }
+  .current-rate-btn { padding:0 8px;font-size:8px; }
+}
+
+/* Edge-to-edge postcard canvas and theme-aware glass */
+.app-shell,
+.flow-shell {
+  width:100%;
+  max-width:none;
+  min-height:100vh;
+  margin:0;
+  border:0;
+  border-radius:0;
+  background:color-mix(in srgb,var(--surface) 62%,transparent);
+  box-shadow:none;
+}
+.dark .app-shell,
+.dark .flow-shell {
+  background:color-mix(in srgb,var(--surface) 44%,transparent);
+}
+.dark body::before {
+  background-image:
+    linear-gradient(rgba(20,16,31,.18),rgba(20,16,31,.26)),
+    url('/travel-postcard-background.jpg');
+}
+.flow-header {
+  width:100%;
+  max-width:none;
+  border:0;
+  border-bottom:1px solid color-mix(in srgb,var(--line) 58%,transparent);
+  background:color-mix(in srgb,var(--surface) 40%,transparent);
+  box-shadow:0 8px 28px rgba(53,42,76,.08);
+  -webkit-backdrop-filter:blur(22px) saturate(1.25);
+  backdrop-filter:blur(22px) saturate(1.25);
+}
+.dark .flow-header {
+  background:color-mix(in srgb,var(--surface) 34%,transparent);
+  border-bottom-color:color-mix(in srgb,var(--line) 46%,transparent);
+  box-shadow:0 8px 30px rgba(0,0,0,.13);
+}
+.flow-header .icon-btn,
+.flow-header .icon-btn.active {
+  background:color-mix(in srgb,var(--surface) 48%,transparent);
+  -webkit-backdrop-filter:blur(12px);
+  backdrop-filter:blur(12px);
+}
+.dark .flow-header .icon-btn,
+.dark .flow-header .icon-btn.active {
+  background:color-mix(in srgb,var(--surface) 42%,transparent);
+}
+
+@media (max-width:639px) {
+  .app-shell,
+  .flow-shell {
+    width:100%;
+    min-height:100vh;
+    margin:0;
+    border-radius:0;
+    background:color-mix(in srgb,var(--surface) 56%,transparent);
+  }
+  .dark .app-shell,
+  .dark .flow-shell { background:color-mix(in srgb,var(--surface) 40%,transparent); }
+  .flow-header { width:100%; }
+}
+
+/* iOS Safari: keep native date/time controls inside bottom-sheet columns */
+.form-row {
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  min-width:0;
+}
+.form-row > .field,
+.field {
+  min-width:0;
+  max-width:100%;
+}
+.field input,
+.field select,
+.field textarea,
+.field input[type="date"],
+.field input[type="time"] {
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+.field input[type="date"],
+.field input[type="time"] {
+  -webkit-min-logical-width:0;
+  min-inline-size:0;
+  text-align:left;
+}
+.modal {
+  max-height:calc(100dvh - max(10px,env(safe-area-inset-top)));
+  padding-bottom:max(24px,calc(14px + env(safe-area-inset-bottom)));
+}
+
+@supports (-webkit-touch-callout:none) {
+  .field input,
+  .field select,
+  .field textarea { font-size:16px; }
+  .field input[type="date"],
+  .field input[type="time"] {
+    overflow:hidden;
+    white-space:nowrap;
+  }
+  .field input[type="date"]::-webkit-date-and-time-value,
+  .field input[type="time"]::-webkit-date-and-time-value {
+    min-width:0;
+    width:100%;
+    margin:0;
+    text-align:left;
+  }
+}
+
+@media (max-width:639px) {
+  .form-row { grid-template-columns:1fr; }
+}
+
+/* Extend the glass navigation behind the iPhone status bar */
+html { background:#f6f0e6; }
+html.dark { background:#242127; }
+.flow-header {
+  padding-top:calc(12px + env(safe-area-inset-top));
+}
+.flow-shell main {
+  padding-top:calc(71px + env(safe-area-inset-top));
+}
+
+/* Keep the interface on one horizontal canvas; only the day picker may pan sideways */
+html,
+body {
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+  overscroll-behavior-x:none;
+}
+.app-shell,
+.flow-shell,
+.flow-shell main,
+.modal-backdrop,
+.modal {
+  min-width:0;
+  max-width:100%;
+  overflow-x:hidden;
+}
+.screen { min-width:0;max-width:100%; }
+.modal { overflow-y:auto; }
+.form-grid,
+.expense-days,
+.expense-day-card,
+.timeline,
+.event,
+.event-card { min-width:0;max-width:100%; }
+.day-strip {
+  max-width:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-x;
+}
+
+/* Keep the daily total and add action together on one clean line */
+.expense-day-head > .expense-day-actions {
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+}
+.expense-day-actions strong {
+  line-height:1;
+  white-space:nowrap;
+}
+.expense-day-actions button {
+  flex:0 0 34px;
+  width:34px;
+  height:34px;
+  box-shadow:0 5px 14px color-mix(in srgb,var(--brand) 24%,transparent);
+}
+
+/* Stable visual shell over iOS native date/time pickers */
+.field .native-picker-control {
+  position:relative;
+  isolation:isolate;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  height:48px;
+  overflow:hidden;
+  padding:0 14px;
+  border:1.5px solid var(--line);
+  border-radius:15px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  color:var(--ink);
+  background:var(--bg);
+  font-size:16px;
+  cursor:pointer;
+}
+.native-picker-control > span {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.native-picker-control > svg {
+  flex:none;
+  color:var(--muted);
+  pointer-events:none;
+}
+.field .native-picker-control > input[type="date"],
+.field .native-picker-control > input[type="time"] {
+  position:absolute!important;
+  inset:0!important;
+  z-index:2;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:inherit!important;
+  opacity:.001;
+  background:transparent!important;
+  cursor:pointer;
+  -webkit-appearance:auto;
+  appearance:auto;
+}
+.native-picker-control:focus-within {
+  border-color:var(--brand);
+  background:var(--surface);
+  outline:2px solid color-mix(in srgb,var(--brand) 16%,transparent);
+}
+
+/* Trip cover and padded content are separate layout regions. */
+.trip-page-shell,
+.trip-page-shell main { overflow-x:visible; }
+.trip-hub-screen {
+  position:relative;
+  left:50%;
+  width:100vw;
+  max-width:100vw;
+  margin-left:-50vw;
+}
+.trip-cover-region { width:100%; }
+.trip-cover-region .trip-detail-head.has-cover {
+  left:auto;
+  width:100%;
+  max-width:none;
+  margin:0 0 9px;
+  border-radius:0;
+}
+.trip-hub-body { min-width:0;padding-inline:clamp(18px,3vw,38px); }
+.timeline-date-label { margin-left:7px;color:var(--muted);font-size:.72em;font-weight:500;white-space:nowrap; }
+.screen:has(> .settings-list) { padding-top:18px; }
+
+/* Give the used amount and budget their own readable space */
+.plan-expense-total .stat-value {
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  column-gap:9px;
+  row-gap:2px;
+}
+.plan-expense-total .stat-value strong { font:inherit; }
+.plan-expense-total .stat-value small { margin-left:0; }
+
+/* Match the iPhone browser safe-area to the active sheet in both themes. */
+html.sheet-open,
+html.sheet-open body { background-color:var(--surface); }
+html.sheet-open .modal-backdrop { min-height:100dvh; }
+
+/* Keep the final field clear of the bottom-sheet actions. */
+.modal .modal-submit-actions { margin-top:20px; }
+
+/* Keep sheets in the normal document viewport; locking body position creates an iOS gap. */
+.modal-backdrop {
+  inset:0;
+  height:100dvh;
+}
+.modal {
+  max-height:calc(100dvh - max(10px,env(safe-area-inset-top)));
+}
+.timeline-fab {
+  bottom:calc(36px + env(safe-area-inset-bottom,0px));
+}
+.trip-hub-screen,
+.timeline-screen {
+  padding-bottom:calc(128px + env(safe-area-inset-bottom,0px));
+}
+html,
+body,
+.app-shell,
+.flow-shell { min-height:100dvh; }
+html,
+body { overscroll-behavior-y:none; }
+.trip-hub-screen,
+.timeline-screen { animation:none;transform:none; }
