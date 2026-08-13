@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 56" role="img" aria-label="Credit card">
+  <rect width="96" height="56" rx="12" fill="#fff"/>
+  <rect x="13" y="12" width="70" height="32" rx="7" fill="#767680"/>
+  <path d="M13 20h70v7H13z" fill="#d1d1d6"/>
+  <rect x="21" y="33" width="18" height="4" rx="2" fill="#fff" opacity=".9"/>
+</svg>
