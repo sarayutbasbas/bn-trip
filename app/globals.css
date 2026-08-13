@@ -409,6 +409,14 @@ button:disabled { cursor: not-allowed; opacity: 0.44; }
 .separated-expense-totals span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
 .separated-expense-totals strong { overflow: hidden; font-size: clamp(20px,5vw,28px); line-height: 1.15; letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
 .separated-expense-totals small { color: var(--muted); font-size: 9px; }
+.separated-expense-totals em { color: var(--muted); font-size: 9px; font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
+.expense-budget-meta { min-width: 0; margin-top: 2px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.expense-budget-meta small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.expense-budget-meta em { flex: 0 0 auto; }
+.expense-budget-progress { height: 7px; margin-top: 3px; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
+.expense-budget-progress i { display: block; height: 100%; border-radius: inherit; background: var(--brand-gradient); transition: width 420ms var(--ease-ios); }
+.separated-expense-totals .shopping-total .expense-budget-progress i { background: linear-gradient(90deg,#ff9f0a,#ffd159); }
+.separated-expense-totals .over-budget .expense-budget-progress i { background: linear-gradient(90deg,#ff453a,#ff7a45); }
 .budget-donut-summary .expense-total-banner { margin-top: 12px; }
 .payment-summary { margin-top: 12px; overflow: hidden; border: 0.5px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .payment-summary h3 { margin: 0; padding: 13px 14px; border-bottom: 0.5px solid var(--line); font-size: 12px; }
@@ -488,6 +496,8 @@ button:disabled { cursor: not-allowed; opacity: 0.44; }
 .expense-plan-row small { color: var(--muted); font-size: 9px; }
 .expense-plan-row > span { min-width: 86px; display: grid; justify-items: end; gap: 2px; text-align: right; }
 .expense-plan-row b { font-size: 13px; line-height: 1.2; white-space: nowrap; }
+.expense-plan-row .expense-row-payment { max-width: 132px; padding: 3px 6px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; color: var(--ink); background: var(--surface-3); }
+.expense-row-payment svg { flex: 0 0 auto; color: var(--orange); }
 .expense-day-empty { margin: 0; padding: 19px 14px; color: var(--muted); font-size: 10px; text-align: center; }
 .expense-add-btn { min-height: 42px; padding: 0 13px; white-space: nowrap; font-size: 11px; }
 
@@ -621,8 +631,12 @@ html.sheet-open body { background: var(--surface-solid); }
 
 @media (max-width: 639px) {
   .app-shell, .flow-shell { padding-left: 14px; padding-right: 14px; }
-  .welcome { min-height: 270px; padding: 26px 22px 22px; }
+  .welcome { min-height: 0; aspect-ratio: 16 / 9; padding: 17px; gap: 8px; }
+  .welcome .eyebrow { font-size: 8px; }
+  .welcome h1 { margin: 8px 0 3px; font-size: clamp(26px, 8vw, 31px); }
+  .welcome p { font-size: 11px; line-height: 1.35; }
   .welcome .primary-btn { width: 100%; }
+  .welcome .primary-btn { min-height: 38px; font-size: 12px; }
   .welcome-actions { width: 100%; }
   .form-row { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
   .flight-datetime-row .field > label:not(.native-picker-control) { min-height: 28px; display: flex; align-items: flex-end; }
