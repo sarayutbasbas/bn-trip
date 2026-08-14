@@ -16,10 +16,10 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     const {id}=await params;
     const input=cardUpdateSchema.parse(await request.json());
     const saved=await transaction(async client=>{
-      const current=await client.query("SELECT id,nickname,brand,last_four,is_active FROM credit_cards WHERE id=$1 AND user_id=$2",[id,session.userId]);
+      const current=await client.query("SELECT id,nickname,brand,last_four,is_active,sort_order FROM credit_cards WHERE id=$1 AND user_id=$2",[id,session.userId]);
       const card=current.rows[0];
       if(!card)return null;
-      const updated=await client.query("UPDATE credit_cards SET nickname=$1,brand=$2 WHERE id=$3 AND user_id=$4 RETURNING id,nickname,brand,last_four,is_active",[input.nickname,input.brand,id,session.userId]);
+      const updated=await client.query("UPDATE credit_cards SET nickname=$1,brand=$2 WHERE id=$3 AND user_id=$4 RETURNING id,nickname,brand,last_four,is_active,sort_order",[input.nickname,input.brand,id,session.userId]);
       const oldMethod=`${card.nickname} · x-${card.last_four}`;
       const newMethod=`${input.nickname} · x-${card.last_four}`;
       if(oldMethod!==newMethod){

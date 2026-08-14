@@ -50,8 +50,10 @@ CREATE TABLE IF NOT EXISTS itineraries (
 CREATE TABLE IF NOT EXISTS credit_cards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   nickname VARCHAR(80) NOT NULL, brand VARCHAR(30), last_four CHAR(4), is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  sort_order INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE credit_cards ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS expenses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -81,6 +83,7 @@ CREATE INDEX IF NOT EXISTS trips_owner_idx ON trips(owner_id);
 CREATE INDEX IF NOT EXISTS trip_collaborators_user_idx ON trip_collaborators(user_id);
 CREATE INDEX IF NOT EXISTS trip_collaborators_email_idx ON trip_collaborators(lower(email));
 CREATE INDEX IF NOT EXISTS collaborator_contacts_recent_idx ON collaborator_contacts(owner_user_id,last_used_at DESC);
+CREATE INDEX IF NOT EXISTS credit_cards_user_sort_idx ON credit_cards(user_id,sort_order,created_at DESC);
 CREATE INDEX IF NOT EXISTS itinerary_trip_day_idx ON itineraries(trip_id, day_number, sort_order);
 CREATE INDEX IF NOT EXISTS expenses_trip_date_idx ON expenses(trip_id, spent_at);
 CREATE INDEX IF NOT EXISTS flights_trip_idx ON flights(trip_id);

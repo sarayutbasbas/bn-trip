@@ -5,8 +5,8 @@ function timestamp(date:string,time:string){return `${date}T${time}:00`}
 
 const demoProfile={id:DEMO_USER_ID,email:"demo@bn-trip.app",display_name:"BN Trip Explorer",avatar_url:"/bn-trip-icon-orange-512.png"};
 const demoCards=[
-  {id:"d3000000-0000-4000-8000-000000000001",nickname:"Travel Visa",brand:"visa",last_four:"2026",is_active:true,owner_id:DEMO_USER_ID,owner_name:demoProfile.display_name,owner_email:demoProfile.email,owner_avatar_url:demoProfile.avatar_url,is_own:true,member_role:"owner"},
-  {id:"d3000000-0000-4000-8000-000000000002",nickname:"Journey JCB",brand:"jcb",last_four:"8899",is_active:true,owner_id:DEMO_USER_ID,owner_name:demoProfile.display_name,owner_email:demoProfile.email,owner_avatar_url:demoProfile.avatar_url,is_own:true,member_role:"owner"},
+  {id:"d3000000-0000-4000-8000-000000000001",nickname:"Travel Visa",brand:"visa",last_four:"2026",is_active:true,sort_order:0,owner_id:DEMO_USER_ID,owner_name:demoProfile.display_name,owner_email:demoProfile.email,owner_avatar_url:demoProfile.avatar_url,is_own:true,member_role:"owner"},
+  {id:"d3000000-0000-4000-8000-000000000002",nickname:"Journey JCB",brand:"jcb",last_four:"8899",is_active:true,sort_order:1,owner_id:DEMO_USER_ID,owner_name:demoProfile.display_name,owner_email:demoProfile.email,owner_avatar_url:demoProfile.avatar_url,is_own:true,member_role:"owner"},
 ];
 
 function buildTrips(){

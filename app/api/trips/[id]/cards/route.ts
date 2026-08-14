@@ -4,7 +4,7 @@ import { query } from "@/src/lib/db";
 import { getDemoCards,isDemoTrip } from "@/src/lib/demo-data";
 
 type TripCardRow={
-  id:string;nickname:string;brand:"visa"|"mastercard"|"jcb"|null;last_four:string;is_active:boolean;
+  id:string;nickname:string;brand:"visa"|"mastercard"|"jcb"|null;last_four:string;is_active:boolean;sort_order:number;
   owner_id:string;owner_name:string;owner_email:string|null;owner_avatar_url:string|null;is_own:boolean;member_role:"owner"|"collaborator";
 };
 
@@ -29,12 +29,12 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
       JOIN accessible_trip ON accessible_trip.id=collaborator.trip_id
       WHERE collaborator.user_id IS NOT NULL AND collaborator.user_id<>accessible_trip.owner_id
     )
-    SELECT card.id,card.nickname,card.brand,card.last_four,card.is_active,
+    SELECT card.id,card.nickname,card.brand,card.last_four,card.is_active,card.sort_order,
       member.id AS owner_id,COALESCE(NULLIF(member.display_name,''),split_part(member.email,'@',1),'Member') AS owner_name,
       member.email AS owner_email,member.avatar_url AS owner_avatar_url,(member.id=$1) AS is_own,trip_members.member_role
     FROM trip_members
     JOIN users member ON member.id=trip_members.user_id
     JOIN credit_cards card ON card.user_id=member.id AND card.is_active=true
-    ORDER BY (trip_members.member_role='owner') DESC,member.display_name,card.created_at DESC`,[session.userId,id]);
+    ORDER BY (trip_members.member_role='owner') DESC,member.display_name,card.sort_order,card.created_at DESC`,[session.userId,id]);
   return NextResponse.json(result.rows);
 }
