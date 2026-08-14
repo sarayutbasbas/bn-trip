@@ -42,13 +42,13 @@ export const tripMembersSql=(alias="trips")=>`CASE
     )
     FROM (
       SELECT owner.id::text AS id, owner.email, owner.display_name, owner.avatar_url,
-             'owner'::text AS role, 0 AS sort_order, ${alias}.created_at
+             'owner'::text AS role, 1 AS sort_order, ${alias}.created_at
       FROM users owner
       WHERE owner.id=${alias}.owner_id
       UNION ALL
       SELECT COALESCE(member.id::text,'invite:'||collaborator.id::text), collaborator.email,
              COALESCE(member.display_name,collaborator.email), member.avatar_url,
-             'collaborator'::text, 1, collaborator.created_at
+             'collaborator'::text, 0, collaborator.created_at
       FROM trip_collaborators collaborator
       LEFT JOIN users member ON member.id=collaborator.user_id
       WHERE collaborator.trip_id=${alias}.id
