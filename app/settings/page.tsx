@@ -8,5 +8,6 @@ export const metadata:Metadata={title:"ตั้งค่า"};
 
 export default async function SettingsPage(){
   const session=await getSession();if(!session)redirect("/");
-  return <BNTripApp authenticated demo={Boolean(session.isDemo)} page="settings"/>;
+  const storageAdmin=session.email.trim().toLowerCase()===(process.env.STORAGE_ADMIN_EMAIL||"sarayutkongpeng@gmail.com").trim().toLowerCase();
+  return <BNTripApp authenticated demo={Boolean(session.isDemo)} storageAdmin={storageAdmin} page="settings"/>;
 }
