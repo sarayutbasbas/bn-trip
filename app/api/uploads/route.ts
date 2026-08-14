@@ -8,6 +8,7 @@ const types:Record<string,string>={"image/jpeg":"jpg","image/png":"png","image/w
 
 export async function POST(request:Request){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
   try{
     const form=await request.formData();const file=form.get("file");
     if(!(file instanceof File))return NextResponse.json({error:"กรุณาเลือกไฟล์รูป"},{status:400});

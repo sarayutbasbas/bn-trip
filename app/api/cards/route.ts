@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
+import { getDemoCards } from "@/src/lib/demo-data";
 
 const cardSchema=z.object({
   nickname:z.string().trim().min(1).max(40),
@@ -12,6 +13,7 @@ const cardSchema=z.object({
 export async function GET(){
   const session=await getSession();
   if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json(getDemoCards());
   const result=await query("SELECT id,nickname,brand,last_four,is_active FROM credit_cards WHERE user_id=$1 AND is_active=true ORDER BY created_at DESC",[session.userId]);
   return NextResponse.json(result.rows);
 }
@@ -19,6 +21,7 @@ export async function GET(){
 export async function POST(request:Request){
   const session=await getSession();
   if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
   try{
     const input=cardSchema.parse(await request.json());
     const result=await query("INSERT INTO credit_cards (user_id,nickname,brand,last_four) VALUES ($1,$2,$3,$4) RETURNING id,nickname,brand,last_four,is_active",[session.userId,input.nickname,input.brand,input.lastFour]);

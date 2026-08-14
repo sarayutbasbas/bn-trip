@@ -24,6 +24,7 @@ const schema=z.object({
 export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();
   if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
   try{
     const {id}=await params;
     const x=schema.parse(await request.json());
@@ -38,6 +39,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
 export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();
   if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
   const {id}=await params;
   const trip=await query<{trip_id:string}>("SELECT trip_id FROM itineraries WHERE id=$1",[id]);const role=trip.rows[0]?await getTripRole(trip.rows[0].trip_id,session.userId):null;if(role==="collaborator")return NextResponse.json({error:"ผู้ร่วมทริปไม่มีสิทธิลบรายการ"},{status:403});
   const result=await query("DELETE FROM itineraries i USING trips t WHERE i.id=$1 AND t.id=i.trip_id AND t.owner_id=$2 RETURNING i.id",[id,session.userId]);

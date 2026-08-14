@@ -12,5 +12,5 @@ export const dynamic = "force-dynamic";
 export default async function Home({searchParams}:{searchParams:Promise<{authError?:string|string[]}>}) {
   const session = await getSession();
   const raw=(await searchParams).authError;const authError=typeof raw==="string"?raw:undefined;
-  return <BNTripApp authenticated={Boolean(session)} authError={authError} page="dashboard" />;
+  return <BNTripApp authenticated={Boolean(session)} demo={Boolean(session?.isDemo)} authError={authError} page="dashboard" />;
 }

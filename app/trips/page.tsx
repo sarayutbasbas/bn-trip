@@ -10,5 +10,5 @@ export default async function TripsPage({searchParams}:{searchParams:Promise<Rec
   const session=await getSession();if(!session)redirect("/");
   const params=await searchParams;
   const value=(key:string)=>typeof params[key]==="string"?params[key] as string:"";
-  return <BNTripApp authenticated page="trips" initialTripFilters={{status:value("status"),year:value("year"),q:value("q"),sort:value("sort")}}/>;
+  return <BNTripApp authenticated demo={Boolean(session.isDemo)} page="trips" initialTripFilters={{status:value("status"),year:value("year"),q:value("q"),sort:value("sort")}}/>;
 }

@@ -7,6 +7,7 @@ const mime:Record<string,string>={jpg:"image/jpeg",png:"image/png",webp:"image/w
 
 export async function GET(request:Request,{params}:{params:Promise<{filename:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json({error:"Not found"},{status:404});
   const {filename}=await params;if(!/^[a-f0-9-]+\.(jpg|png|webp)$/.test(filename))return NextResponse.json({error:"Not found"},{status:404});
   try{
     const result=await readUpload(filename,request.headers.get("if-none-match")??undefined);

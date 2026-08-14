@@ -4,6 +4,7 @@ import { getSession } from "@/src/lib/auth";
 type CurrencyResponse = { date?:string;[currency:string]:string|Record<string,number>|undefined };
 type CachedRate = { rate:number;date:string;expiresAt:number };
 const rateCache=new Map<string,CachedRate>();
+const SUPPORTED_CURRENCIES=["THB","CNY","JPY","USD","EUR","GBP","KRW","SGD","HKD","TWD","MYR","VND","IDR","PHP","AUD","NZD","CAD","CHF","AED","INR"];
 
 async function fetchCurrencyRate(url:string,base:string){
   const response=await fetch(url,{next:{revalidate:21600},signal:AbortSignal.timeout(2500)});
@@ -22,7 +23,7 @@ export async function GET(request:Request){
   const currency=(params.get("currency")||"").toUpperCase();
   const requestedDate=params.get("date")||"";
   const forceLatest=params.get("latest")==="1";
-  if(!["THB","CNY","JPY","USD"].includes(currency)||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(requestedDate))return NextResponse.json({error:"Invalid currency or date"},{status:400});
+  if(!SUPPORTED_CURRENCIES.includes(currency)||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(requestedDate))return NextResponse.json({error:"Invalid currency or date"},{status:400});
   if(currency==="THB")return NextResponse.json({rate:1,date:requestedDate,estimated:false});
   const today=new Date().toISOString().slice(0,10);
   const historical=!forceLatest&&requestedDate<=today;

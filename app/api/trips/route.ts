@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
 import { tripAccessSql,tripMembersSql,tripRoleSql } from "@/src/lib/trip-access";
+import { getDemoTrips } from "@/src/lib/demo-data";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const tripSchema = z.object({ name:z.string().min(2), destination:z.string().min(2), outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), coverImageUrl:z.string().max(500).optional(), googlePhotosUrl:googlePhotosUrlSchema.optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
@@ -10,6 +11,7 @@ const tripSchema = z.object({ name:z.string().min(2), destination:z.string().min
 export async function GET(request:Request) {
   const session = await getSession(); if (!session) return NextResponse.json({error:"Unauthorized"},{status:401});
   const params=new URL(request.url).searchParams;
+  if(session.isDemo)return NextResponse.json(getDemoTrips(params));
   const mode=params.get("mode");
   const access=tripAccessSql("t");const role=tripRoleSql("t");const members=tripMembersSql("t");
   if(mode==="dashboard"){
@@ -51,6 +53,7 @@ export async function GET(request:Request) {
 
 export async function POST(request:Request) {
   const session = await getSession(); if (!session) return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
   try {
     const input = tripSchema.parse(await request.json());
     const totalDays=Math.floor((new Date(`${input.returnDate}T00:00:00`).getTime()-new Date(`${input.outboundDate}T00:00:00`).getTime())/86400000)+1;

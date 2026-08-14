@@ -9,5 +9,5 @@ export const metadata:Metadata={title:"ค่าใช้จ่าย"};
 export default async function ExpensesPage({params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)redirect("/");
   const {id}=await params;
-  return <BNTripApp authenticated page="expenses" tripId={id}/>;
+  return <BNTripApp authenticated demo={Boolean(session.isDemo)} page="expenses" tripId={id}/>;
 }

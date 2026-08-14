@@ -9,5 +9,5 @@ export const metadata:Metadata={title:"แผนเที่ยว"};
 export default async function ItineraryPage({params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)redirect("/");
   const {id}=await params;
-  return <BNTripApp authenticated page="timeline" tripId={id}/>;
+  return <BNTripApp authenticated demo={Boolean(session.isDemo)} page="timeline" tripId={id}/>;
 }

@@ -25,6 +25,7 @@ const tables = [
   "flights",
   "lounges",
 ];
+const jsonColumns = new Set(["cost_items"]);
 
 const quoteIdentifier = (value) => `"${value.replaceAll('"', '""')}"`;
 const source = new Pool({ connectionString: sourceUrl, max: 1 });
@@ -51,7 +52,7 @@ try {
   for (const table of tables) {
     const [sourceColumns, targetColumns] = await Promise.all([
       columnsFor(source, table),
-      columnsFor(target, table),
+      columnsFor(targetClient, table),
     ]);
     const targetColumnSet = new Set(targetColumns);
     const columns = sourceColumns.filter((column) => targetColumnSet.has(column));
@@ -61,7 +62,12 @@ try {
     );
 
     for (const row of rows.rows) {
-      const values = columns.map((column) => row[column]);
+      const values = columns.map((column) => {
+        const value = row[column];
+        return jsonColumns.has(column) && typeof value !== "string"
+          ? JSON.stringify(value)
+          : value;
+      });
       const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
       await targetClient.query(
         `INSERT INTO ${quoteIdentifier(table)} (${selected}) VALUES (${placeholders})`,

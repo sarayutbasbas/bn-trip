@@ -11,5 +11,5 @@ export default async function TripPage({params,searchParams}:{params:Promise<{id
   const {id}=await params;
   const rawReturnTo=(await searchParams).returnTo;
   const returnTo=typeof rawReturnTo==="string"&&/^\/trips(?:\?.*)?$/.test(rawReturnTo)?rawReturnTo:undefined;
-  return <BNTripApp authenticated page="trip" tripId={id} returnTo={returnTo}/>;
+  return <BNTripApp authenticated demo={Boolean(session.isDemo)} page="trip" tripId={id} returnTo={returnTo}/>;
 }

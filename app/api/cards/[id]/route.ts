@@ -11,6 +11,7 @@ const cardUpdateSchema=z.object({
 export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();
   if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
   try{
     const {id}=await params;
     const input=cardUpdateSchema.parse(await request.json());
@@ -39,6 +40,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
 export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();
   if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
   const {id}=await params;
   const removed=await transaction(async client=>{
     const current=await client.query("SELECT id FROM credit_cards WHERE id=$1 AND user_id=$2",[id,session.userId]);
