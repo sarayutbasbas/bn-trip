@@ -9,7 +9,8 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({searchParams}:{searchParams:Promise<{authError?:string|string[]}>}) {
   const session = await getSession();
-  return <BNTripApp authenticated={Boolean(session)} page="dashboard" />;
+  const raw=(await searchParams).authError;const authError=typeof raw==="string"?raw:undefined;
+  return <BNTripApp authenticated={Boolean(session)} authError={authError} page="dashboard" />;
 }

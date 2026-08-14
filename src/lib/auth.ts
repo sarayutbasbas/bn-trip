@@ -4,8 +4,11 @@ import { cookies } from "next/headers";
 export const SESSION_COOKIE = "bn_trip_session";
 const secret = new TextEncoder().encode(process.env.AUTH_SECRET ?? "dev-only-change-me-before-production");
 
-export async function createSession(userId: string, sharedId: string) {
-  return new SignJWT({ sharedId }).setProtectedHeader({ alg: "HS256" }).setSubject(userId).setIssuedAt().setExpirationTime("30d").sign(secret);
+export type SessionUser = { userId:string; email:string; displayName:string; avatarUrl:string|null };
+
+export async function createSession(user: SessionUser) {
+  return new SignJWT({ email:user.email,displayName:user.displayName,avatarUrl:user.avatarUrl })
+    .setProtectedHeader({ alg: "HS256" }).setSubject(user.userId).setIssuedAt().setExpirationTime("30d").sign(secret);
 }
 
 export async function getSession() {
@@ -13,6 +16,7 @@ export async function getSession() {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret);
-    return { userId: payload.sub!, sharedId: String(payload.sharedId) };
+    if(!payload.sub||typeof payload.email!=="string")return null;
+    return { userId:payload.sub,email:payload.email,displayName:String(payload.displayName||payload.email),avatarUrl:typeof payload.avatarUrl==="string"?payload.avatarUrl:null };
   } catch { return null; }
 }

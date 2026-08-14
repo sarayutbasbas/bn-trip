@@ -26,6 +26,11 @@ services:
     environment:
       DATABASE_URL: postgresql://bntrip:${POSTGRES_PASSWORD:-bntrip_dev_password}@db:5432/bntrip
       AUTH_SECRET: ${AUTH_SECRET:-replace-this-with-a-long-random-secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      APP_URL: ${APP_URL:-https://bn-trip.basnana.com}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://bn-trip.basnana.com/api/auth/google/callback}
+      GOOGLE_OWNER_EMAIL: ${GOOGLE_OWNER_EMAIL:-sarayutkongpeng@gmail.com}
       UPLOAD_DIR: /app/uploads
       NODE_ENV: production
     volumes:

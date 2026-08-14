@@ -4,8 +4,8 @@ DO $$ BEGIN CREATE TYPE time_slot AS ENUM ('morning','afternoon','evening'); EXC
 DO $$ BEGIN CREATE TYPE expense_type AS ENUM ('budget','actual'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), shared_id VARCHAR(60) UNIQUE NOT NULL,
-  display_name VARCHAR(120) NOT NULL, password_hash TEXT NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email VARCHAR(320), google_sub TEXT, avatar_url TEXT,
+  display_name VARCHAR(120) NOT NULL,
   locale VARCHAR(5) NOT NULL DEFAULT 'th', theme VARCHAR(12) NOT NULL DEFAULT 'system',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -19,6 +19,21 @@ CREATE TABLE IF NOT EXISTS trips (
   outbound_departure_at TIMESTAMP, return_departure_at TIMESTAMP,
   cover_image_url TEXT, google_photos_url TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users(lower(email)) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique_idx ON users(google_sub) WHERE google_sub IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS trip_collaborators (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  email VARCHAR(320) NOT NULL, user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  invited_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(trip_id,email)
+);
+
+CREATE TABLE IF NOT EXISTS collaborator_contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email VARCHAR(320) NOT NULL, last_used_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(owner_user_id,email)
 );
 
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS google_photos_url TEXT;
@@ -63,11 +78,14 @@ CREATE TABLE IF NOT EXISTS lounges (
 );
 
 CREATE INDEX IF NOT EXISTS trips_owner_idx ON trips(owner_id);
+CREATE INDEX IF NOT EXISTS trip_collaborators_user_idx ON trip_collaborators(user_id);
+CREATE INDEX IF NOT EXISTS trip_collaborators_email_idx ON trip_collaborators(lower(email));
+CREATE INDEX IF NOT EXISTS collaborator_contacts_recent_idx ON collaborator_contacts(owner_user_id,last_used_at DESC);
 CREATE INDEX IF NOT EXISTS itinerary_trip_day_idx ON itineraries(trip_id, day_number, sort_order);
 CREATE INDEX IF NOT EXISTS expenses_trip_date_idx ON expenses(trip_id, spent_at);
 CREATE INDEX IF NOT EXISTS flights_trip_idx ON flights(trip_id);
 
 -- LOCAL_DEMO_SEED: the cloud setup script intentionally stops before this marker.
-INSERT INTO users (shared_id, display_name, password_hash)
-VALUES ('BNTOGETHER', 'B & N', '$2b$12$QzvL320ojyU4JzsAJSCmG.YmVyn7ZCxm/nKju7Q.PU1JZEHbmukzm')
-ON CONFLICT (shared_id) DO NOTHING;
+INSERT INTO users (email, display_name)
+VALUES ('sarayutkongpeng@gmail.com', 'Sarayut Kongpeng')
+ON CONFLICT DO NOTHING;

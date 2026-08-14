@@ -11,7 +11,7 @@ Mobile-first PWA สำหรับวางแผนท่องเที่ย
 - Expense Tracker แยก Budget/Actual, เก็บสกุลเงินเดิม อัตราแลกเปลี่ยน ณ วันบันทึก และยอด THB
 - หมวด Shopping แยกออกจากงบหลัก
 - จัดการบัตรเครดิตและช่องทางชำระเงิน
-- Shared Trip ID สำหรับคู่เดินทางเข้าถึงข้อมูลชุดเดียวกัน
+- Google OAuth พร้อมสิทธิ์เจ้าของและผู้ร่วมทริปตามอีเมล
 - Light/Dark mode และภาษา TH/EN (ค่าหน้าจอเก็บในอุปกรณ์)
 - PWA manifest และ app icon พร้อมติดตั้งบนหน้าจอโฮม
 - Responsive ตั้งแต่มือถือจนถึง Desktop
@@ -95,10 +95,7 @@ Compose จะเปิด `cloudflared` พร้อมกันและตั
 
 ใน Cloudflare Zero Trust → Networks → Tunnels → Public Hostname ให้กำหนด Service URL เป็น `http://app:8001` เนื่องจาก cloudflared และแอปอยู่ใน Docker network เดียวกัน
 
-บัญชีตัวอย่าง:
-
-- Shared Trip ID: `BNTOGETHER`
-- Password: `bntogether`
+การเข้าสู่ระบบใช้ Google Account เท่านั้น โดยต้องตั้งค่า `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` และ Redirect URI ก่อนใช้งาน
 
 แอปเปิดที่พอร์ต `8001` ส่วน PostgreSQL เปิดให้เครื่อง host เชื่อมต่อที่ `5434` และใช้ `5432` ภายใน Docker network เพื่อไม่ให้ชนกับพอร์ตแอปและโปรเจกต์อื่น
 
@@ -160,6 +157,23 @@ Import private repository `sarayutbasbas/bn-trip` ใน Vercel โดยใช�
    AUTH_SECRET=<production-secret-อย่างน้อย-32-ตัวอักษร>
    ```
 
+5. เพิ่ม Google OAuth variables สำหรับ Production (เก็บ Client Secret เป็น Sensitive):
+
+   ```env
+   GOOGLE_CLIENT_ID=<Google OAuth web client ID>
+   GOOGLE_CLIENT_SECRET=<Google OAuth web client secret>
+   APP_URL=https://bn-trip.vercel.app
+   GOOGLE_REDIRECT_URI=https://bn-trip.vercel.app/api/auth/google/callback
+   GOOGLE_OWNER_EMAIL=sarayutkongpeng@gmail.com
+   ```
+
+6. ใน Google Cloud Console เพิ่มค่าตรงตัวดังนี้:
+
+   - Authorized JavaScript origin: `https://bn-trip.vercel.app`
+   - Authorized redirect URI: `https://bn-trip.vercel.app/api/auth/google/callback`
+
+Google OAuth ไม่รองรับ wildcard callback สำหรับ preview URL ที่เปลี่ยนทุก deployment จึงใช้ production alias `bn-trip.vercel.app` เป็น callback หลัก
+
 ห้ามนำ `.env`, database URL, Blob token หรือ production secret ขึ้น Git โดยเด็ดขาด
 
 ### 3. สร้าง schema และบัญชีแรกบน cloud
@@ -168,9 +182,8 @@ Import private repository `sarayutbasbas/bn-trip` ใน Vercel โดยใช�
 
 ```env
 DATABASE_URL=postgresql://<neon-pooled-url>?sslmode=require
-INITIAL_SHARED_ID=<shared-id-ที่ต้องการ>
 INITIAL_DISPLAY_NAME=<ชื่อที่แสดง>
-INITIAL_PASSWORD=<รหัสผ่านใหม่อย่างน้อย-10-ตัวอักษร>
+GOOGLE_OWNER_EMAIL=sarayutkongpeng@gmail.com
 ```
 
 จากนั้นรัน:
@@ -179,13 +192,23 @@ INITIAL_PASSWORD=<รหัสผ่านใหม่อย่างน้อ�
 node --env-file=.env.cloud.local scripts/setup-cloud-db.mjs
 ```
 
-สคริปต์รันใน transaction, สร้าง schema ที่ยังไม่มี และ upsert เฉพาะบัญชีที่กำหนดไว้ โดยจะไม่สร้างบัญชี demo `BNTOGETHER` บน cloud
+สคริปต์รันใน transaction, สร้าง schema ที่ยังไม่มี และ upsert บัญชีเจ้าของตาม `GOOGLE_OWNER_EMAIL`
+
+หากต้องย้ายข้อมูลจาก PostgreSQL เดิมไปฐานข้อมูล cloud ให้สำรองฐานข้อมูลปลายทางก่อน แล้วรันสคริปต์ต่อไปนี้ สคริปต์จะล้างเฉพาะตารางของ BN Trip ที่ปลายทางก่อนคัดลอกข้อมูลทั้งหมด:
+
+```bash
+SOURCE_DATABASE_URL=postgresql://<source> \
+DATABASE_URL=postgresql://<target> \
+ALLOW_TARGET_REPLACE=yes \
+npm run db:migrate:data
+```
 
 ### 4. Deploy และตรวจระบบ
 
 กด Deploy/Redeploy ใน Vercel แล้วตรวจตามลำดับ:
 
-- Login ด้วย Shared Trip ID และรหัสผ่าน production
+- Login ด้วย Google Account เจ้าของ
+- เปิด `/api/health` ต้องได้ `{"status":"ok"}`
 - สร้างทริปทดสอบ
 - อัปโหลดรูป แล้ว refresh หน้าเพื่อยืนยันว่ารูปยังเปิดได้
 - Logout แล้วลองเปิด URL รูป ต้องได้รับ `401 Unauthorized`
@@ -194,7 +217,7 @@ node --env-file=.env.cloud.local scripts/setup-cloud-db.mjs
 
 ## Database model
 
-- `users` — Shared ID, password hash, theme, locale
+- `users` — Google identity, email, รูปโปรไฟล์, ชื่อที่แสดง, theme และ locale
 - `trips` — ชื่อทริป ปลายทาง จำนวนวัน ผู้ร่วมเดินทาง งบหลักและ Shopping
 - `itineraries` — วัน ช่วงเวลา สถานที่ รูป และการเดินทางระหว่างจุด
 - `expenses` — Budget/Actual, สกุลเดิม, stamped rate, THB, payment method และ Shopping flag
