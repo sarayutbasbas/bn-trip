@@ -1,0 +1,1 @@
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS google_photos_url TEXT;

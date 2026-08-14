@@ -17,14 +17,17 @@ CREATE TABLE IF NOT EXISTS trips (
   traveller_count INTEGER NOT NULL DEFAULT 2 CHECK (traveller_count > 0),
   budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0, shopping_budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0,
   outbound_departure_at TIMESTAMP, return_departure_at TIMESTAMP,
-  cover_image_url TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  cover_image_url TEXT, google_photos_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS google_photos_url TEXT;
 
 CREATE TABLE IF NOT EXISTS itineraries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
   day_number INTEGER NOT NULL CHECK (day_number > 0), time_slot time_slot NOT NULL DEFAULT 'morning',
   start_time TIME, place_name VARCHAR(180), address TEXT, image_url TEXT,
-  transport_mode VARCHAR(40), transport_note VARCHAR(180), cost_items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  transport_mode VARCHAR(40), transport_note TEXT, cost_items JSONB NOT NULL DEFAULT '[]'::jsonb,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
