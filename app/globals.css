@@ -481,32 +481,6 @@
 .checklist-category-delete:disabled {
   opacity: 0.45;
 }
-.checklist-category-avatars {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-}
-.checklist-category-avatar {
-  width: 30px;
-  height: 30px;
-  margin-left: -8px;
-  overflow: hidden;
-  border: 2px solid color-mix(in srgb, var(--line-strong) 36%, #fff);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  background-color: var(--surface-solid);
-  background-position: center;
-  background-size: cover;
-  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.1);
-  font-size: 8px;
-  font-weight: 750;
-  text-transform: uppercase;
-}
-.checklist-category-avatar:first-child {
-  margin-left: 0;
-}
 .checklist-groups > section.collapsed {
   gap: 0;
 }
@@ -2244,6 +2218,22 @@ button:disabled {
 }
 .trip-card:active {
   transform: scale(0.985);
+}
+
+/* Avoid painting long, off-screen lists until they approach the viewport. */
+@supports (content-visibility: auto) {
+  .compact-trip-card,
+  .document-list article,
+  .activity-list article {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 104px;
+  }
+
+  .expense-day-card,
+  .checklist-groups > section {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 220px;
+  }
 }
 .trip-card-link {
   position: absolute;

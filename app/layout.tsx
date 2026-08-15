@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource/ibm-plex-sans-thai/thai-300.css";
 import "@fontsource/ibm-plex-sans-thai/thai-400.css";
 import "@fontsource/ibm-plex-sans-thai/thai-500.css";
 import "@fontsource/ibm-plex-sans-thai/thai-600.css";
 import "@fontsource/ibm-plex-sans-thai/thai-700.css";
-import "@fontsource/ibm-plex-sans/latin-300.css";
 import "@fontsource/ibm-plex-sans/latin-400.css";
 import "@fontsource/ibm-plex-sans/latin-500.css";
 import "@fontsource/ibm-plex-sans/latin-600.css";

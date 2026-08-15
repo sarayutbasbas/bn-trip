@@ -11,12 +11,17 @@ import {
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { TripWorkspace } from "@/src/components/trip-workspace";
 import {
   clearOfflineDocuments,
   clearPrivateOfflineData,
 } from "@/src/components/pwa-runtime";
+import {
+  clearCurrentAccount,
+  getCurrentAccount,
+  updateCurrentAccount,
+} from "@/src/lib/client-account";
 import {
   AlertTriangle,
   ArrowRight,
@@ -61,6 +66,14 @@ import {
   Users,
   X,
 } from "lucide-react";
+
+const TripWorkspace = dynamic(
+  () =>
+    import("@/src/components/trip-workspace").then(
+      (module) => module.TripWorkspace,
+    ),
+  { loading: () => <div className="card">กำลังเปิดพื้นที่ทริป…</div> },
+);
 
 type Screen =
   | "dashboard"
@@ -1646,10 +1659,9 @@ function Dashboard({
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   useEffect(() => {
     let active = true;
-    fetch("/api/me")
-      .then(async (response) => {
-        const data = await response.json();
-        if (response.ok && active) setProfile(data);
+    getCurrentAccount()
+      .then((data) => {
+        if (active) setProfile(data);
       })
       .catch(() => {});
     return () => {
@@ -4410,10 +4422,9 @@ function SettingsScreen(
   const [storageOpen, setStorageOpen] = useState(false);
   useEffect(() => {
     let active = true;
-    fetch("/api/me")
-      .then(async (response) => {
-        const data = await response.json();
-        if (response.ok && active) setProfile(data);
+    getCurrentAccount()
+      .then((data) => {
+        if (active) setProfile(data);
       })
       .catch(() => {});
     return () => {
@@ -4432,6 +4443,7 @@ function SettingsScreen(
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || t("บันทึกไม่สำเร็จ"));
+    updateCurrentAccount(data);
     setProfile(data);
   }
   return (
@@ -5970,7 +5982,7 @@ export function BNTripApp({
     document.documentElement.lang = lang === "EN" ? "en" : "th";
   }, [lang]);
   useEffect(() => {
-    if (!authenticated) return;
+    if (!authenticated || page !== "settings") return;
     let active = true;
     fetch("/api/cards")
       .then(async (response) => {
@@ -5984,7 +5996,7 @@ export function BNTripApp({
     return () => {
       active = false;
     };
-  }, [authenticated]);
+  }, [authenticated, page]);
   useEffect(() => {
     if (!authenticated || !selected) {
       return;
@@ -6441,6 +6453,7 @@ export function BNTripApp({
     );
   const logout = async () => {
     await clearPrivateOfflineData();
+    clearCurrentAccount();
     await fetch("/api/auth/logout", { method: "POST" });
     tripListCache = null;
     itineraryCache.clear();

@@ -188,13 +188,16 @@ export function TripWorkspace({
     const categoryNames = new Set(
       workspace.checklist.map((item) => item.category_name || "อื่น ๆ"),
     );
+    // Capture the previous categories before scheduling React's state update.
+    // Reading the ref inside the updater races with the assignment below and
+    // made the first load look as if every category had already been seen.
+    const knownCategories = knownChecklistCategoriesRef.current;
     setCollapsedCategories((current) => {
       const next = new Set(
         [...current].filter((category) => categoryNames.has(category)),
       );
       for (const category of categoryNames) {
-        if (!knownChecklistCategoriesRef.current.has(category))
-          next.add(category);
+        if (!knownCategories.has(category)) next.add(category);
       }
       return next;
     });
@@ -723,30 +726,13 @@ export function TripWorkspace({
   useEffect(() => {
     if (!deleteTarget) return;
     const root = document.documentElement;
-    const body = document.body;
-    const scrollY = window.scrollY;
-    const previousBodyPosition = body.style.position;
-    const previousBodyTop = body.style.top;
-    const previousBodyWidth = body.style.width;
-    const previousScrollBehavior = root.style.scrollBehavior;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setDeleteTarget(null);
     };
     root.classList.add("confirm-open");
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.width = "100%";
     document.addEventListener("keydown", closeOnEscape);
     return () => {
       root.classList.remove("confirm-open");
-      body.style.position = previousBodyPosition;
-      body.style.top = previousBodyTop;
-      body.style.width = previousBodyWidth;
-      root.style.scrollBehavior = "auto";
-      window.scrollTo(0, scrollY);
-      window.requestAnimationFrame(() => {
-        root.style.scrollBehavior = previousScrollBehavior;
-      });
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [deleteTarget]);
@@ -948,6 +934,9 @@ export function TripWorkspace({
               onClick={() => {
                 setError("");
                 setChecklistSheetOpen(false);
+                setCollapsedMasterCategories(
+                  new Set(data.masterCategories.map((category) => category.id)),
+                );
                 setMasterOpen(true);
               }}
             >
@@ -970,11 +959,6 @@ export function TripWorkspace({
               const progress = Math.round(
                 (completedCount / categoryItems.length) * 100,
               );
-              const assignedMembers = orderedMembers.filter((member) =>
-                categoryItems.some(
-                  (item) => item.assigned_user_id === member.id,
-                ),
-              );
               return (
                 <section
                   className={collapsed ? "collapsed" : ""}
@@ -992,38 +976,6 @@ export function TripWorkspace({
                         <strong>{category}</strong>
                       </span>
                       <div className="checklist-category-summary">
-                        {assignedMembers.length > 0 && (
-                          <span
-                            className="checklist-category-avatars"
-                            aria-label={label("ผู้รับผิดชอบในหมวดนี้")}
-                          >
-                            {assignedMembers.slice(0, 3).map((member) => {
-                              const memberName =
-                                member.display_name || member.email || "Member";
-                              return (
-                                <span
-                                  className="checklist-category-avatar"
-                                  key={member.id}
-                                  title={memberName}
-                                  style={
-                                    member.avatar_url
-                                      ? {
-                                          backgroundImage: `url("${member.avatar_url}")`,
-                                        }
-                                      : undefined
-                                  }
-                                >
-                                  {!member.avatar_url && memberName.slice(0, 1)}
-                                </span>
-                              );
-                            })}
-                            {assignedMembers.length > 3 && (
-                              <span className="checklist-category-avatar">
-                                +{assignedMembers.length - 3}
-                              </span>
-                            )}
-                          </span>
-                        )}
                         <small>
                           {label(`${categoryItems.length} รายการ`)}
                           <span

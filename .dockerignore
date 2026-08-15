@@ -6,3 +6,13 @@ node_modules
 .wrangler
 dist
 npm-debug.log
+public/*-source.png
+public/bn-trip-logo.png
+public/bn-trip-icon-192.png
+public/bn-trip-icon-512.png
+public/bn-trip-icon-1024.png
+public/bn-trip-icon-black-*.png
+public/bn-trip-icon-white-*.png
+public/apple-touch-icon.png
+public/apple-touch-icon-black.png
+public/travel-postcard-background.png

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getCurrentAccount } from "@/src/lib/client-account";
 
 export function PwaRuntime(){
   const [offline,setOffline]=useState(false);
-  useEffect(()=>{if("serviceWorker" in navigator)void navigator.serviceWorker.register("/sw.js");void fetch("/api/me").then(async response=>{if(!response.ok)return;const account=await response.json();const previous=localStorage.getItem("bn-trip-offline-user-id");if(previous&&previous!==account.id)await clearPrivateOfflineData();localStorage.setItem("bn-trip-offline-user-id",account.id)}).catch(()=>{});const update=()=>setOffline(!navigator.onLine);update();window.addEventListener("online",update);window.addEventListener("offline",update);return()=>{window.removeEventListener("online",update);window.removeEventListener("offline",update)}},[]);
+  useEffect(()=>{if("serviceWorker" in navigator)void navigator.serviceWorker.register("/sw.js");void getCurrentAccount().then(async account=>{const previous=localStorage.getItem("bn-trip-offline-user-id");if(previous&&previous!==account.id)await clearPrivateOfflineData();localStorage.setItem("bn-trip-offline-user-id",account.id)}).catch(()=>{});const update=()=>setOffline(!navigator.onLine);update();window.addEventListener("online",update);window.addEventListener("offline",update);return()=>{window.removeEventListener("online",update);window.removeEventListener("offline",update)}},[]);
   return offline?<div className="offline-status" role="status">ออฟไลน์ · กำลังแสดงข้อมูลที่บันทึกไว้</div>:null;
 }
 
