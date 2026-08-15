@@ -3,13 +3,16 @@
 import {
   createContext,
   useContext,
+  useDeferredValue,
   useEffect,
+  useMemo,
   useRef,
   useState,
+  startTransition,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
+import Image, { type ImageLoaderProps } from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -87,7 +90,7 @@ type Lang = "TH" | "EN";
 type TripStatus = "all" | "ongoing" | "upcoming" | "past";
 type TripSort = "latest" | "nearest" | "oldest" | "name";
 type TripFilters = { status: string; year: string; q: string; sort: string };
-type DashboardCounts = {
+export type DashboardCounts = {
   total: number;
   ongoing: number;
   upcoming: number;
@@ -121,7 +124,7 @@ type TripMember = {
   avatar_url: string | null;
   role: "owner" | "collaborator";
 };
-type Trip = {
+export type Trip = {
   id: string;
   name: string;
   destination: string;
@@ -146,7 +149,7 @@ type Collaborator = {
   avatar_url?: string | null;
 };
 type CardBrand = "visa" | "mastercard" | "jcb";
-type PaymentCard = {
+export type PaymentCard = {
   id: string;
   nickname: string;
   brand: CardBrand | null;
@@ -173,7 +176,7 @@ type CostItem = {
   creditCardId?: string;
   paymentOwnerName?: string;
 };
-type Itinerary = {
+export type Itinerary = {
   id: string;
   day_number: number;
   time_slot: "morning" | "afternoon" | "evening";
@@ -210,6 +213,72 @@ type StorageMetric = {
 };
 type StorageUsage = { metrics: StorageMetric[]; updatedAt: string };
 const DEFAULT_TRIP_COVER = "/travel-postcard-fallback.jpg";
+const EMPTY_ITINERARIES: Itinerary[] = [];
+const coverPlaceholderCache = new Map<string, string>();
+function authenticatedCoverLoader({ src, width, quality }: ImageLoaderProps) {
+  const separator = src.includes("?") ? "&" : "?";
+  return `${src}${separator}w=${width}&q=${quality || 76}`;
+}
+function TripCoverImage({
+  src,
+  alt,
+  sizes,
+  priority = false,
+  className = "",
+}: {
+  src: string;
+  alt: string;
+  sizes: string;
+  priority?: boolean;
+  className?: string;
+}) {
+  const privateUpload = src.startsWith("/api/uploads/");
+  const cachedPlaceholder = coverPlaceholderCache.get(src);
+  const rememberPlaceholder = (image: HTMLImageElement) => {
+    if (coverPlaceholderCache.has(src) || !image.naturalWidth) return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 32;
+      canvas.height = 18;
+      canvas
+        .getContext("2d")
+        ?.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const placeholder = canvas.toDataURL("image/jpeg", 0.58);
+      if (coverPlaceholderCache.size >= 64) {
+        const oldest = coverPlaceholderCache.keys().next().value;
+        if (oldest) coverPlaceholderCache.delete(oldest);
+      }
+      coverPlaceholderCache.set(src, placeholder);
+    } catch {
+      // A cover can still render normally if a browser blocks canvas access.
+    }
+  };
+  return (
+    <Image
+      loader={privateUpload ? authenticatedCoverLoader : undefined}
+      src={src}
+      alt={alt}
+      fill
+      sizes={sizes}
+      quality={76}
+      priority={priority}
+      loading={!priority && cachedPlaceholder ? "eager" : undefined}
+      decoding={cachedPlaceholder ? "sync" : "async"}
+      className={className}
+      draggable={false}
+      style={
+        cachedPlaceholder
+          ? {
+              backgroundImage: `url("${cachedPlaceholder}")`,
+              backgroundPosition: "center",
+              backgroundSize: "cover",
+            }
+          : undefined
+      }
+      onLoad={(event) => rememberPlaceholder(event.currentTarget)}
+    />
+  );
+}
 const CURRENCY_OPTIONS = [
   { value: "THB", label: "บาท (THB)" },
   { value: "CNY", label: "หยวน (CNY)" },
@@ -1428,6 +1497,7 @@ function TripCard({
   selectTrip,
   editTrip,
   deleteTrip,
+  priority = false,
 }: {
   trip: Trip;
   past?: boolean;
@@ -1435,10 +1505,10 @@ function TripCard({
   selectTrip: (t: Trip) => void;
   editTrip: (t: Trip) => void;
   deleteTrip: (t: Trip) => void;
+  priority?: boolean;
 }) {
   const t = useT();
   const coverUrl = trip.cover_image_url || DEFAULT_TRIP_COVER;
-  const coverStyle = { backgroundImage: `url("${coverUrl}")` };
   const temporal = tripTemporalStatus(trip, now);
   const ongoing = temporal.ongoing;
   const countdownLabel = !trip.outbound_departure_at
@@ -1455,7 +1525,14 @@ function TripCard({
         onClick={() => selectTrip(trip)}
         aria-label={`${past ? "View" : "Open"} trip ${trip.name}`}
       />
-      <div className="trip-cover" style={coverStyle}>
+      <div className="trip-cover">
+        <TripCoverImage
+          src={coverUrl}
+          alt={`รูปปก ${trip.name}`}
+          sizes="(max-width: 600px) calc(100vw - 32px), 520px"
+          priority={priority}
+          className="trip-cover-image"
+        />
         <span />
         {past ? (
           <b className="past-badge">{t("ที่ผ่านมาแล้ว")}</b>
@@ -1580,12 +1657,14 @@ function TripInvitations({
           };
           return (
             <article className="trip-invitation-card" key={invitation.id}>
-              <div
-                className="trip-invitation-cover"
-                style={{
-                  backgroundImage: `url("${invitation.cover_image_url || DEFAULT_TRIP_COVER}")`,
-                }}
-              />
+              <div className="trip-invitation-cover">
+                <TripCoverImage
+                  src={invitation.cover_image_url || DEFAULT_TRIP_COVER}
+                  alt={`รูปปก ${invitation.trip_name}`}
+                  sizes="74px"
+                  className="trip-invitation-cover-image"
+                />
+              </div>
               <div className="trip-invitation-copy">
                 <h3>{invitation.trip_name}</h3>
                 <p>
@@ -1668,15 +1747,19 @@ function Dashboard({
       active = false;
     };
   }, []);
-  const ongoing = trips.filter((trip) => tripTemporalStatus(trip, now).ongoing);
-  const upcoming = trips.filter((trip) => {
-    const status = tripTemporalStatus(trip, now);
-    return !status.ongoing && !status.past;
-  });
-  const past = trips.filter((trip) => tripTemporalStatus(trip, now).past);
-  const cards = (items: Trip[], isPast = false) => (
+  const { ongoing, upcoming, past } = useMemo(() => {
+    const grouped = { ongoing: [] as Trip[], upcoming: [] as Trip[], past: [] as Trip[] };
+    for (const trip of trips) {
+      const status = tripTemporalStatus(trip, now);
+      if (status.ongoing) grouped.ongoing.push(trip);
+      else if (status.past) grouped.past.push(trip);
+      else grouped.upcoming.push(trip);
+    }
+    return grouped;
+  }, [now, trips]);
+  const cards = (items: Trip[], isPast = false, prioritizeFirst = false) => (
     <div className="trip-grid">
-      {items.map((trip) => (
+      {items.map((trip, index) => (
         <TripCard
           key={trip.id}
           trip={trip}
@@ -1685,6 +1768,7 @@ function Dashboard({
           selectTrip={selectTrip}
           editTrip={editTrip}
           deleteTrip={deleteTrip}
+          priority={prioritizeFirst && index === 0}
         />
       ))}
     </div>
@@ -1756,7 +1840,7 @@ function Dashboard({
             counts.ongoing,
             "ongoing",
           )}
-          {cards(ongoing)}
+          {cards(ongoing, false, true)}
         </>
       )}
       {heading(
@@ -1766,7 +1850,7 @@ function Dashboard({
         "upcoming",
       )}
       {upcoming.length ? (
-        cards(upcoming)
+        cards(upcoming, false, ongoing.length === 0)
       ) : (
         <EmptyState
           title="หน้ากระดาษนี้ยังว่าง"
@@ -1826,12 +1910,14 @@ function CompactTripCard({
         onClick={() => selectTrip(trip)}
         aria-label={`${t("ทริปทั้งหมด")} ${trip.name}`}
       />
-      <div
-        className="compact-trip-cover"
-        style={{
-          backgroundImage: `url("${trip.cover_image_url || DEFAULT_TRIP_COVER}")`,
-        }}
-      />
+      <div className="compact-trip-cover">
+        <TripCoverImage
+          src={trip.cover_image_url || DEFAULT_TRIP_COVER}
+          alt={`รูปปก ${trip.name}`}
+          sizes="(max-width: 600px) 42vw, 180px"
+          className="compact-trip-cover-image"
+        />
+      </div>
       <div className="compact-trip-body">
         <span className="compact-trip-status">{status}</span>
         <h3>{trip.name}</h3>
@@ -1862,6 +1948,7 @@ function CompactTripCard({
 
 function TripsDirectory({
   initialFilters,
+  initialData,
   revision,
   selectTrip,
   createTrip,
@@ -1869,6 +1956,7 @@ function TripsDirectory({
   deleteTrip,
 }: {
   initialFilters: TripFilters;
+  initialData?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
   revision: number;
   selectTrip: (trip: Trip) => void;
   createTrip: () => void;
@@ -1893,14 +1981,19 @@ function TripsDirectory({
   const [sort, setSort] = useState<TripSort>(() =>
     validSort(initialFilters.sort),
   );
-  const [items, setItems] = useState<Trip[]>([]);
-  const [years, setYears] = useState<number[]>([]);
-  const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<Trip[]>(initialData?.items || []);
+  const [years, setYears] = useState<number[]>(initialData?.years || []);
+  const [total, setTotal] = useState(initialData?.total || 0);
+  const [hasMore, setHasMore] = useState(Boolean(initialData?.hasMore));
+  const [loading, setLoading] = useState(!initialData);
   const [loadingMore, setLoadingMore] = useState(false);
   const [now] = useState(() => Date.now());
+  const skipInitialFetch = useRef(Boolean(initialData));
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
     const controller = new AbortController();
     const timer = window.setTimeout(
       async () => {
@@ -2111,10 +2204,16 @@ function TripHeader({
 }) {
   const t = useT();
   const coverUrl = trip.cover_image_url || DEFAULT_TRIP_COVER;
-  const coverStyle = { backgroundImage: `url("${coverUrl}")` };
   const ended = tripHasEnded(trip, new Date());
   return (
-    <div className="trip-detail-head has-cover" style={coverStyle}>
+    <div className="trip-detail-head has-cover">
+      <TripCoverImage
+        src={coverUrl}
+        alt={`รูปปก ${trip.name}`}
+        sizes="100vw"
+        priority
+        className="trip-detail-cover-image"
+      />
       <button
         className="back-btn trip-cover-back"
         onClick={back}
@@ -2180,6 +2279,24 @@ function useActiveDayScroll(day: number, tripId: string) {
   return stripRef;
 }
 
+function useItinerariesByDay(items: Itinerary[]) {
+  return useMemo(() => {
+    const grouped = new Map<number, Itinerary[]>();
+    for (const item of items) {
+      const dayItems = grouped.get(item.day_number);
+      if (dayItems) dayItems.push(item);
+      else grouped.set(item.day_number, [item]);
+    }
+    for (const dayItems of grouped.values())
+      dayItems.sort((left, right) =>
+        (left.start_time || "99:99").localeCompare(
+          right.start_time || "99:99",
+        ),
+      );
+    return grouped;
+  }, [items]);
+}
+
 function TripTimelineSearch({
   items,
   onSelect,
@@ -2190,28 +2307,32 @@ function TripTimelineSearch({
   const t = useT();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const keyword = query.trim().toLocaleLowerCase();
-  const results = keyword
-    ? items
-        .filter((item) =>
-          [
-            item.place_name,
-            item.address,
-            item.transport_note,
-            ...(item.cost_items || []).map((cost) => cost.key),
-          ].some((value) =>
-            String(value || "")
-              .toLocaleLowerCase()
-              .includes(keyword),
-          ),
-        )
-        .sort(
-          (a, b) =>
-            a.day_number - b.day_number ||
-            (a.start_time || "99:99").localeCompare(b.start_time || "99:99"),
-        )
-        .slice(0, 12)
-    : [];
+  const deferredQuery = useDeferredValue(query);
+  const keyword = deferredQuery.trim().toLocaleLowerCase();
+  const searchIndex = useMemo(
+    () =>
+      items.map((item) => ({
+        item,
+        text: [
+          item.place_name,
+          item.address,
+          item.transport_note,
+          ...(item.cost_items || []).map((cost) => cost.key),
+        ]
+          .join(" ")
+          .toLocaleLowerCase(),
+      })),
+    [items],
+  );
+  const results = useMemo(() => {
+    if (!keyword) return EMPTY_ITINERARIES;
+    const matches: Itinerary[] = [];
+    for (const entry of searchIndex) {
+      if (entry.text.includes(keyword)) matches.push(entry.item);
+      if (matches.length === 12) break;
+    }
+    return matches;
+  }, [keyword, searchIndex]);
   function choose(item: Itinerary) {
     if (document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
@@ -2258,7 +2379,7 @@ function TripTimelineSearch({
           </button>
         )}
       </label>
-      {open && keyword && (
+      {open && query.trim() && (
         <div className="trip-search-results" role="listbox">
           {results.map((item) => (
             <button
@@ -2330,7 +2451,6 @@ function TripHub({
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
-  const currentStopRef = useRef<HTMLDivElement>(null);
   const hubRef = useRef<HTMLDivElement>(null);
   const pendingSearchTarget = useRef<string | null>(null);
   const searchHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(
@@ -2338,6 +2458,7 @@ function TripHub({
   );
   const searchScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dayStripRef = useActiveDayScroll(day, trip.id);
+  const itinerariesByDay = useItinerariesByDay(items);
   function selectView(nextView: "plan" | "expenses" | "workspace") {
     setView(nextView);
     const url = new URL(window.location.href);
@@ -2363,11 +2484,7 @@ function TripHub({
   );
   const baseDate = localDate(trip.outbound_departure_at, trip.start_date);
   const activeDateLabel = tripDayLabel(baseDate, day);
-  const dayItems = items
-    .filter((item) => item.day_number === day)
-    .sort((a, b) =>
-      (a.start_time || "99:99").localeCompare(b.start_time || "99:99"),
-    );
+  const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
   const slots = {
     morning: t("เช้า"),
     afternoon: t("บ่าย"),
@@ -2381,17 +2498,6 @@ function TripHub({
           return start !== null && start <= nowMinutes ? index : found;
         }, -1)
       : -1;
-  const currentItemId = currentIndex >= 0 ? dayItems[currentIndex].id : null;
-  useEffect(() => {
-    if (!currentItemId || !currentStopRef.current) return;
-    const frame = requestAnimationFrame(() =>
-      currentStopRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      }),
-    );
-    return () => cancelAnimationFrame(frame);
-  }, [currentItemId]);
   function revealSearchTarget(id: string) {
     const frame = requestAnimationFrame(() => {
       const target = hubRef.current?.querySelector<HTMLElement>(
@@ -2419,7 +2525,7 @@ function TripHub({
   function selectSearchResult(item: Itinerary) {
     pendingSearchTarget.current = item.id;
     if (item.day_number === day) revealSearchTarget(item.id);
-    else setDay(item.day_number);
+    else startTransition(() => setDay(item.day_number));
   }
   useEffect(() => {
     const targetId = pendingSearchTarget.current;
@@ -2517,7 +2623,7 @@ function TripHub({
                     key={number}
                     data-day={number}
                     className={`day-pill ${day === number ? "active" : ""} ${isToday ? "today" : ""} ${isPast ? "past-day" : ""}`}
-                    onClick={() => setDay(number)}
+                    onClick={() => startTransition(() => setDay(number))}
                   >
                     <small>DAY</small>
                     <strong>{number}</strong>
@@ -2590,7 +2696,6 @@ function TripHub({
                   const currentLocationMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
                   return (
                     <div
-                      ref={isCurrent ? currentStopRef : undefined}
                       data-itinerary-id={item.id}
                       className={`timeline-stop ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                       key={item.id}
@@ -2733,6 +2838,7 @@ function TimelineScreen({
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
   const dayStripRef = useActiveDayScroll(day, trip.id);
+  const itinerariesByDay = useItinerariesByDay(items);
   useEffect(
     () =>
       setDay(
@@ -2744,11 +2850,7 @@ function TimelineScreen({
       ),
     [trip.id, trip.total_days, tripDay, ended, setDay],
   );
-  const dayItems = items
-    .filter((i) => i.day_number === day)
-    .sort((a, b) =>
-      (a.start_time || "99:99").localeCompare(b.start_time || "99:99"),
-    );
+  const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
   const slots = {
     morning: t("เช้า"),
     afternoon: t("บ่าย"),
@@ -2778,7 +2880,7 @@ function TimelineScreen({
               key={n}
               data-day={n}
               className={`day-pill ${day === n ? "active" : ""} ${isToday ? "today" : ""} ${isPast ? "past-day" : ""}`}
-              onClick={() => setDay(n)}
+              onClick={() => startTransition(() => setDay(n))}
             >
               <small>DAY</small>
               <strong>{n}</strong>
@@ -4784,12 +4886,17 @@ function CoverImagePicker({
         <label
           className={`upload-field cover-upload ${preview ? "selected" : ""}`}
         >
-          <span
-            className="upload-preview"
-            style={
-              preview ? { backgroundImage: `url("${preview}")` } : undefined
-            }
-          >
+          <span className="upload-preview">
+            {preview && (
+              <Image
+                src={preview}
+                alt={t("รูปหน้าปกที่เลือก")}
+                fill
+                sizes="36vw"
+                unoptimized
+                className="upload-preview-image"
+              />
+            )}
             {!preview && <ImagePlus size={24} />}
           </span>
           <span>
@@ -5926,7 +6033,12 @@ export function BNTripApp({
   returnTo,
   authError,
   workspaceTab,
+  initialDashboard,
+  initialTrip,
+  initialItineraries,
+  initialTripCards,
   initialTripFilters = { status: "", year: "", q: "", sort: "" },
+  initialTripDirectory,
 }: {
   authenticated?: boolean;
   demo?: boolean;
@@ -5936,36 +6048,70 @@ export function BNTripApp({
   returnTo?: string;
   authError?: string;
   workspaceTab?: WorkspaceTab;
+  initialDashboard?: {
+    ongoing: Trip[];
+    upcoming: Trip[];
+    past: Trip[];
+    counts: DashboardCounts;
+  };
+  initialTrip?: Trip | null;
+  initialItineraries?: Itinerary[];
+  initialTripCards?: PaymentCard[];
   initialTripFilters?: TripFilters;
+  initialTripDirectory?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
 }) {
+  const initialDashboardTrips = initialDashboard
+    ? [
+        ...initialDashboard.ongoing,
+        ...initialDashboard.upcoming,
+        ...initialDashboard.past,
+      ]
+    : null;
   const cachedSelected = tripId
-    ? tripListCache?.find((trip) => trip.id === tripId) || null
+    ? initialTrip || tripListCache?.find((trip) => trip.id === tripId) || null
     : null;
   const router = useRouter();
   const [dark, setDark] = useState(false);
   const [lang, setLang] = useState<Lang>("TH");
-  const [trips, setTrips] = useState<Trip[]>(() => tripListCache || []);
+  const [trips, setTrips] = useState<Trip[]>(() =>
+    initialDashboardTrips || (initialTrip ? [initialTrip] : tripListCache || []),
+  );
   const [selected, setSelected] = useState<Trip | null>(cachedSelected);
   const [itineraries, setItineraries] = useState<Itinerary[]>(() =>
-    tripId ? itineraryCache.get(tripId) || [] : [],
+    initialItineraries || (tripId ? itineraryCache.get(tripId) || [] : []),
   );
   const [cards, setCards] = useState<PaymentCard[]>([]);
-  const [tripCards, setTripCards] = useState<PaymentCard[]>([]);
+  const [tripCards, setTripCards] = useState<PaymentCard[]>(
+    initialTripCards || [],
+  );
   const [modal, setModal] = useState<Modal>(null);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(
-    page === "dashboard" ||
+    (page === "dashboard" && !initialDashboard) ||
       (["trip", "timeline", "expenses"].includes(page) && !cachedSelected),
   );
   const [activeDay, setActiveDay] = useState(1);
-  const [dashboardCounts, setDashboardCounts] = useState<DashboardCounts>({
-    total: 0,
-    ongoing: 0,
-    upcoming: 0,
-    past: 0,
-  });
+  const [dashboardCounts, setDashboardCounts] = useState<DashboardCounts>(
+    initialDashboard?.counts || { total: 0, ongoing: 0, upcoming: 0, past: 0 },
+  );
   const [tripRevision, setTripRevision] = useState(0);
+  useEffect(() => {
+    if (initialDashboard)
+      tripListCache = [
+        ...initialDashboard.ongoing,
+        ...initialDashboard.upcoming,
+        ...initialDashboard.past,
+      ];
+    if (tripId && initialTrip) {
+      tripListCache = [
+        initialTrip,
+        ...(tripListCache || []).filter((trip) => trip.id !== initialTrip.id),
+      ];
+    }
+    if (tripId && initialItineraries)
+      itineraryCache.set(tripId, initialItineraries);
+  }, [initialDashboard, initialItineraries, initialTrip, tripId]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setDark(document.documentElement.classList.contains("dark"));
@@ -5998,7 +6144,7 @@ export function BNTripApp({
     };
   }, [authenticated, page]);
   useEffect(() => {
-    if (!authenticated || !selected) {
+    if (!authenticated || !selected || initialTripCards) {
       return;
     }
     const controller = new AbortController();
@@ -6012,9 +6158,21 @@ export function BNTripApp({
         if ((error as Error).name !== "AbortError") setTripCards([]);
       });
     return () => controller.abort();
-  }, [authenticated, selected]);
+  }, [authenticated, initialTripCards, selected]);
   useEffect(() => {
     if (!authenticated || page === "settings" || page === "trips") return;
+    // Server-rendered routes already provide a complete first snapshot. Toggling
+    // loading here after hydration briefly replaces that UI with the loading
+    // card when navigating back to Home/Plan, which presents as a one-frame
+    // flash even though there is nothing left to fetch.
+    if (page === "dashboard" && initialDashboard && tripRevision === 0) return;
+    if (
+      page !== "dashboard" &&
+      tripId &&
+      initialTrip &&
+      tripRevision === 0
+    )
+      return;
     const controller = new AbortController();
     void (async () => {
       setLoading(true);
@@ -6066,7 +6224,7 @@ export function BNTripApp({
       }
     })();
     return () => controller.abort();
-  }, [authenticated, page, tripId, tripRevision]);
+  }, [authenticated, initialDashboard, initialTrip, page, tripId, tripRevision]);
   useEffect(() => {
     if (!selected || itineraryCache.has(selected.id)) return;
     let active = true;
@@ -6074,76 +6232,8 @@ export function BNTripApp({
       const response = await fetch(`/api/trips/${selected.id}/itineraries`);
       const data = await response.json();
       const rows: Itinerary[] = Array.isArray(data) ? data : [];
-      const rateCache = new Map<
-        string,
-        Promise<{ rate: number; date: string }>
-      >();
-      const enriched = await Promise.all(
-        rows.map(async (item) => {
-          let changed = false;
-          const plannedDate = addDays(
-            localDate(selected.outbound_departure_at, selected.start_date),
-            item.day_number - 1,
-          );
-          const costItems = await Promise.all(
-            (item.cost_items || []).map(async (cost) => {
-              const currency = cost.currency || "THB";
-              if (currency === "THB" || cost.rateDate) return cost;
-              const cacheKey = `${currency}-${plannedDate}`;
-              if (!rateCache.has(cacheKey))
-                rateCache.set(
-                  cacheKey,
-                  fetch(
-                    `/api/exchange-rate?currency=${currency}&date=${plannedDate}`,
-                  ).then(async (rateResponse) => {
-                    const rateData = await rateResponse.json();
-                    if (!rateResponse.ok) throw new Error(rateData.error);
-                    return rateData;
-                  }),
-                );
-              try {
-                const rateData = await rateCache.get(cacheKey)!;
-                const foreignAmount = Number(cost.foreignAmount ?? cost.value);
-                changed = true;
-                return {
-                  ...cost,
-                  foreignAmount,
-                  exchangeRate: Number(rateData.rate),
-                  rateDate: rateData.date,
-                  value:
-                    Math.round(foreignAmount * Number(rateData.rate) * 100) /
-                    100,
-                };
-              } catch {
-                return cost;
-              }
-            }),
-          );
-          if (!changed) return item;
-          const startTime = item.start_time?.slice(0, 5) || "09:00";
-          const hour = Number(startTime.slice(0, 2));
-          const patched = await fetch(`/api/itineraries/${item.id}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              dayNumber: item.day_number,
-              timeSlot:
-                hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening",
-              startTime,
-              placeName: item.place_name,
-              address: item.address || "",
-              transportMode: item.transport_mode || undefined,
-              transportNote: item.transport_note || "",
-              costItems,
-            }),
-          });
-          return patched.ok
-            ? await patched.json()
-            : { ...item, cost_items: costItems };
-        }),
-      );
-      itineraryCache.set(selected.id, enriched);
-      if (active) setItineraries(enriched);
+      itineraryCache.set(selected.id, rows);
+      if (active) setItineraries(rows);
     })().catch(() => {
       if (active) setItineraries([]);
     });
@@ -6491,6 +6581,7 @@ export function BNTripApp({
   ) : page === "trips" ? (
     <TripsDirectory
       initialFilters={initialTripFilters}
+      initialData={initialTripDirectory}
       revision={tripRevision}
       selectTrip={(trip) =>
         selectTrip(trip, `${window.location.pathname}${window.location.search}`)

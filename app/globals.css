@@ -1182,7 +1182,10 @@ html {
   overflow-x: hidden;
   overflow-y: auto;
   background: var(--bg);
-  scroll-behavior: smooth;
+  /* Route navigation and browser back must restore scroll immediately.
+     A global smooth behavior makes Next.js restoration visibly glide and
+     exposes an intermediate frame of the destination page. */
+  scroll-behavior: auto;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1539,12 +1542,22 @@ button:disabled {
   box-shadow: var(--shadow-sm);
 }
 .trip-invitation-cover {
+  position: relative;
   width: 74px;
   min-height: 88px;
+  overflow: hidden;
   border-radius: 14px;
   background-color: var(--surface-3);
   background-position: center;
   background-size: cover;
+}
+.trip-invitation-cover-image,
+.compact-trip-cover-image,
+.trip-cover-image,
+.trip-detail-cover-image {
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
 }
 .trip-invitation-copy {
   min-width: 0;
@@ -2007,6 +2020,7 @@ button:disabled {
 .compact-trip-cover {
   position: relative;
   min-width: 0;
+  overflow: hidden;
   border-radius: 0;
   background: #3a3a3c center / cover no-repeat;
 }
@@ -2222,7 +2236,6 @@ button:disabled {
 
 /* Avoid painting long, off-screen lists until they approach the viewport. */
 @supports (content-visibility: auto) {
-  .compact-trip-card,
   .document-list article,
   .activity-list article {
     content-visibility: auto;
@@ -2265,6 +2278,12 @@ button:disabled {
     rgba(0, 0, 0, 0.82) 100%
   );
   pointer-events: none;
+}
+.trip-cover-image {
+  z-index: 0;
+}
+.trip-cover::after {
+  z-index: 1;
 }
 .trip-actions {
   position: absolute;
@@ -2417,10 +2436,15 @@ button:disabled {
     rgba(0, 0, 0, 0.58) 100%
   );
   pointer-events: none;
+  z-index: 1;
 }
 .trip-detail-head.has-cover > * {
   position: relative;
-  z-index: 1;
+  z-index: 2;
+}
+.trip-detail-head.has-cover > .trip-detail-cover-image {
+  position: absolute;
+  z-index: 0;
 }
 .trip-detail-head .eyebrow {
   color: rgba(255, 255, 255, 0.9);
@@ -5172,6 +5196,8 @@ button:disabled {
   pointer-events: none;
 }
 .upload-preview {
+  position: relative;
+  overflow: hidden;
   width: 36%;
   height: auto;
   align-self: stretch;
@@ -5184,6 +5210,10 @@ button:disabled {
   background: var(--surface-solid);
   background-size: cover;
   background-position: center;
+}
+.upload-preview-image {
+  object-fit: cover;
+  object-position: center;
 }
 .upload-field > span:last-of-type {
   min-width: 0;

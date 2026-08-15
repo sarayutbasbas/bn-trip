@@ -3,7 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertTriangle,
   ArrowUp,
@@ -255,23 +262,39 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     }
   }
 
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLocaleLowerCase("th");
-    if (!keyword) return new Set(categories.map(({ id }) => id));
-    return new Set(
-      categories
-        .filter(
-          (category) =>
-            category.name.toLocaleLowerCase("th").includes(keyword) ||
-            items.some(
-              (item) =>
-                item.category_id === category.id &&
-                item.title.toLocaleLowerCase("th").includes(keyword),
-            ),
-        )
-        .map(({ id }) => id),
-    );
-  }, [categories, items, search]);
+  const deferredSearch = useDeferredValue(search);
+  const keyword = deferredSearch.trim().toLocaleLowerCase("th");
+  const itemsByCategory = useMemo(() => {
+    const grouped = new Map<string, Item[]>();
+    for (const item of items) {
+      const categoryItems = grouped.get(item.category_id);
+      if (categoryItems) categoryItems.push(item);
+      else grouped.set(item.category_id, [item]);
+    }
+    return grouped;
+  }, [items]);
+  const masterView = useMemo(() => {
+    const visibleItems = new Map<string, Item[]>();
+    const visibleCategories: Category[] = [];
+    for (const category of categories) {
+      const categoryItems = itemsByCategory.get(category.id) || [];
+      const categoryMatches = category.name
+        .toLocaleLowerCase("th")
+        .includes(keyword);
+      const matches = keyword
+        ? categoryMatches
+          ? categoryItems
+          : categoryItems.filter((item) =>
+              item.title.toLocaleLowerCase("th").includes(keyword),
+            )
+        : categoryItems;
+      if (!keyword || categoryMatches || matches.length) {
+        visibleCategories.push(category);
+        visibleItems.set(category.id, matches);
+      }
+    }
+    return { categories: visibleCategories, items: visibleItems };
+  }, [categories, itemsByCategory, keyword]);
 
   return (
     <div className="app-shell flow-shell master-page-shell">
@@ -335,17 +358,8 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
             />
           </label>
           <div className="checklist-groups master-checklist-groups">
-            {categories
-              .filter((category) => filtered.has(category.id))
-              .map((category) => {
-                const keyword = search.trim().toLocaleLowerCase("th");
-                const categoryItems = items.filter(
-                  (item) =>
-                    item.category_id === category.id &&
-                    (!keyword ||
-                      category.name.toLocaleLowerCase("th").includes(keyword) ||
-                      item.title.toLocaleLowerCase("th").includes(keyword)),
-                );
+            {masterView.categories.map((category) => {
+                const categoryItems = masterView.items.get(category.id) || [];
                 const expanded = keyword ? true : open.includes(category.id);
                 const isEditingCategory = editingCategory?.id === category.id;
                 return (
@@ -376,10 +390,12 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                           type="button"
                           className="checklist-category-toggle"
                           onClick={() =>
-                            setOpen((current) =>
-                              current.includes(category.id)
-                                ? current.filter((id) => id !== category.id)
-                                : [...current, category.id],
+                            startTransition(() =>
+                              setOpen((current) =>
+                                current.includes(category.id)
+                                  ? current.filter((id) => id !== category.id)
+                                  : [...current, category.id],
+                              ),
                             )
                           }
                           aria-expanded={expanded}
@@ -390,9 +406,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                           </span>
                           <small>
                             {
-                              items.filter(
-                                (item) => item.category_id === category.id,
-                              ).length
+                              (itemsByCategory.get(category.id) || []).length
                             }{" "}
                             รายการ
                           </small>

@@ -1,7 +1,14 @@
 "use client";
 
 import { upload } from "@vercel/blob/client";
-import { useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -173,6 +180,9 @@ export function TripWorkspace({
   );
   const knownChecklistCategoriesRef = useRef<Set<string>>(new Set());
   const completedCategoriesRef = useRef<Set<string>>(new Set());
+  const loadedTabsRef = useRef<Set<"checklist" | "documents" | "history">>(
+    new Set(),
+  );
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const editDocumentFileRef = useRef<HTMLInputElement>(null);
@@ -203,21 +213,31 @@ export function TripWorkspace({
     });
     knownChecklistCategoriesRef.current = categoryNames;
   }
-  async function load() {
+  async function load(
+    targetTab: "checklist" | "documents" | "history" = tab,
+    force = true,
+  ) {
+    if (!force && loadedTabsRef.current.has(targetTab)) return;
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/trips/${tripId}/workspace`);
+      const response = await fetch(
+        `/api/trips/${tripId}/workspace?tab=${targetTab}`,
+      );
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
-      setData(body);
-      syncCollapsedChecklistCategories(body);
-      setCategoryId(
-        (current) => current || defaultChecklistCategory(body),
-      );
-      setOfflineIds(
-        JSON.parse(localStorage.getItem(offlineKey(tripId)) || "[]"),
-      );
+      if (targetTab === "checklist") {
+        syncCollapsedChecklistCategories(body as Workspace);
+        setCategoryId(
+          (current) => current || defaultChecklistCategory(body as Workspace),
+        );
+      }
+      setData((current) => ({ ...current, ...body }) as Workspace);
+      if (targetTab === "documents")
+        setOfflineIds(
+          JSON.parse(localStorage.getItem(offlineKey(tripId)) || "[]"),
+        );
+      loadedTabsRef.current.add(targetTab);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "โหลดข้อมูลไม่สำเร็จ",
@@ -227,33 +247,12 @@ export function TripWorkspace({
     }
   }
   useEffect(() => {
-    let active = true;
     knownChecklistCategoriesRef.current = new Set();
-    void (async () => {
-      try {
-        const response = await fetch(`/api/trips/${tripId}/workspace`);
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error);
-        if (active) {
-          setData(body);
-          syncCollapsedChecklistCategories(body);
-          setCategoryId(defaultChecklistCategory(body));
-          setOfflineIds(
-            JSON.parse(localStorage.getItem(offlineKey(tripId)) || "[]"),
-          );
-        }
-      } catch (reason) {
-        if (active)
-          setError(
-            reason instanceof Error ? reason.message : "โหลดข้อมูลไม่สำเร็จ",
-          );
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
+    loadedTabsRef.current = new Set();
+    const frame = requestAnimationFrame(() => void load(initialTab, false));
+    // The trip id is the lifecycle boundary; tab changes load on demand.
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
   async function json(url: string, options: RequestInit) {
     const response = await fetch(url, {
@@ -294,7 +293,7 @@ export function TripWorkspace({
       setAssignee("");
       setEditingItemId(null);
       setChecklistSheetOpen(false);
-      await load();
+      await load("checklist");
       if (editingItem) notify("แก้ไข Checklist แล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "บันทึกไม่สำเร็จ");
@@ -313,7 +312,7 @@ export function TripWorkspace({
       });
       setSelectedMaster([]);
       setMasterOpen(false);
-      await load();
+      await load("checklist");
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "นำเข้ารายการไม่สำเร็จ",
@@ -334,14 +333,16 @@ export function TripWorkspace({
           ? new Date().toISOString()
           : null
         : item.completed_at;
-    setData((current) => ({
-      ...current,
-      checklist: current.checklist.map((entry) =>
-        entry.id === item.id
-          ? { ...entry, completed_at: optimisticCompleted }
-          : entry,
-      ),
-    }));
+    startTransition(() =>
+      setData((current) => ({
+        ...current,
+        checklist: current.checklist.map((entry) =>
+          entry.id === item.id
+            ? { ...entry, completed_at: optimisticCompleted }
+            : entry,
+        ),
+      })),
+    );
     try {
       await json(`/api/trips/${tripId}/checklist/${item.id}`, {
         method: "PATCH",
@@ -362,19 +363,21 @@ export function TripWorkspace({
   function assignChecklist(item: Checklist, member: Member | null) {
     const previous = item;
     const assignedUserId = member?.id || null;
-    setData((current) => ({
-      ...current,
-      checklist: current.checklist.map((entry) =>
-        entry.id === item.id
-          ? {
-              ...entry,
-              assigned_user_id: assignedUserId,
-              assigned_name: member?.display_name || member?.email || null,
-              assigned_avatar_url: member?.avatar_url || null,
-            }
-          : entry,
-      ),
-    }));
+    startTransition(() =>
+      setData((current) => ({
+        ...current,
+        checklist: current.checklist.map((entry) =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                assigned_user_id: assignedUserId,
+                assigned_name: member?.display_name || member?.email || null,
+                assigned_avatar_url: member?.avatar_url || null,
+              }
+            : entry,
+        ),
+      })),
+    );
     setAssigningItemId(null);
     const existingTimer = assignmentTimers.current.get(item.id);
     if (existingTimer) clearTimeout(existingTimer);
@@ -528,7 +531,7 @@ export function TripWorkspace({
       setDocumentTitle("");
       setDocumentFileName("");
       setDocumentSheetOpen(false);
-      await load();
+      await load("documents");
       notify("อัปโหลดไฟล์แล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "อัปโหลดไม่สำเร็จ");
@@ -556,7 +559,7 @@ export function TripWorkspace({
       setEditingDocument(null);
       notify("ลบไฟล์แล้ว");
     } catch (reason) {
-      await load();
+      await load("documents");
       setError(reason instanceof Error ? reason.message : "ลบไม่สำเร็จ");
     } finally {
       setBusy("");
@@ -640,7 +643,7 @@ export function TripWorkspace({
       if (file) await removeOffline(editingDocument);
       setEditingDocument(null);
       setEditingDocumentFileName("");
-      await load();
+      await load("documents");
       notify("แก้ไขไฟล์แล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "แก้ไขเอกสารไม่สำเร็จ");
@@ -680,7 +683,7 @@ export function TripWorkspace({
       await json(`/api/trips/${tripId}/activities/${activity.id}/undo`, {
         method: "POST",
       });
-      await load();
+      await load("history");
       onUndo();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "ย้อนคืนไม่สำเร็จ");
@@ -736,31 +739,6 @@ export function TripWorkspace({
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [deleteTarget]);
-  useEffect(() => {
-    const totals = new Map<string, { total: number; completed: number }>();
-    data.checklist.forEach((item) => {
-      const category = item.category_name || "อื่น ๆ";
-      const count = totals.get(category) || { total: 0, completed: 0 };
-      count.total += 1;
-      if (item.completed_at) count.completed += 1;
-      totals.set(category, count);
-    });
-    const completedCategories = new Set(
-      [...totals.entries()]
-        .filter(([, count]) => count.total === count.completed)
-        .map(([category]) => category),
-    );
-    const newlyCompleted = [...completedCategories].filter(
-      (category) => !completedCategoriesRef.current.has(category),
-    );
-    completedCategoriesRef.current = completedCategories;
-    if (!newlyCompleted.length) return;
-    setCollapsedCategories((current) => {
-      const next = new Set(current);
-      newlyCompleted.forEach((category) => next.add(category));
-      return next;
-    });
-  }, [data.checklist]);
   useEffect(
     () => () => {
       assignmentTimers.current.forEach((timer) => clearTimeout(timer));
@@ -783,30 +761,76 @@ export function TripWorkspace({
       activity.entity_type === "checklist" ||
       (activity.entity_type === "document" && activity.action === "create") ||
     (activity.entity_type === "trip" && activity.action === "update"));
-  const checklistKeyword = checklistSearch.trim().toLocaleLowerCase("th");
-  const checklistMatchesSearch = (item: Checklist) =>
-    !checklistKeyword ||
-    `${item.title} ${item.category_name}`
-      .toLocaleLowerCase("th")
-      .includes(checklistKeyword);
-  const allChecklistCategories = [
-    ...new Set(
-      data.checklist.map((item) => item.category_name || "อื่น ๆ"),
-    ),
-  ];
-  const checklistCategories = allChecklistCategories.filter((category) =>
-    data.checklist.some(
-      (item) =>
-        (item.category_name || "อื่น ๆ") === category &&
-        checklistMatchesSearch(item),
-    ),
+  const deferredChecklistSearch = useDeferredValue(checklistSearch);
+  const checklistKeyword = deferredChecklistSearch
+    .trim()
+    .toLocaleLowerCase("th");
+  const checklistView = useMemo(() => {
+    const groups = new Map<string, Checklist[]>();
+    const visibleGroups = new Map<string, Checklist[]>();
+    const completed = new Map<string, number>();
+    for (const item of data.checklist) {
+      const category = item.category_name || "อื่น ๆ";
+      const categoryItems = groups.get(category);
+      if (categoryItems) categoryItems.push(item);
+      else groups.set(category, [item]);
+      if (item.completed_at)
+        completed.set(category, (completed.get(category) || 0) + 1);
+      if (
+        !checklistKeyword ||
+        `${item.title} ${category}`
+          .toLocaleLowerCase("th")
+          .includes(checklistKeyword)
+      ) {
+        const visibleItems = visibleGroups.get(category);
+        if (visibleItems) visibleItems.push(item);
+        else visibleGroups.set(category, [item]);
+      }
+    }
+    return {
+      groups,
+      visibleGroups,
+      completed,
+      categories: [...visibleGroups.keys()],
+      allCategories: [...groups.keys()],
+    };
+  }, [checklistKeyword, data.checklist]);
+  const personalCategoryNames = useMemo(
+    () =>
+      new Set(
+        data.masterCategories.map((category) =>
+          category.name.toLocaleLowerCase(),
+        ),
+      ),
+    [data.masterCategories],
   );
-  const personalCategoryNames = new Set(
-    data.masterCategories.map((category) => category.name.toLocaleLowerCase()),
+  const sharedOnlyCategories = useMemo(
+    () =>
+      checklistView.allCategories.filter(
+        (category) => !personalCategoryNames.has(category.toLocaleLowerCase()),
+      ),
+    [checklistView.allCategories, personalCategoryNames],
   );
-  const sharedOnlyCategories = allChecklistCategories.filter(
-    (category) => !personalCategoryNames.has(category.toLocaleLowerCase()),
-  );
+  useEffect(() => {
+    const completedCategories = new Set(
+      checklistView.allCategories.filter((category) => {
+        const total = checklistView.groups.get(category)?.length || 0;
+        return total > 0 && checklistView.completed.get(category) === total;
+      }),
+    );
+    const newlyCompleted = [...completedCategories].filter(
+      (category) => !completedCategoriesRef.current.has(category),
+    );
+    completedCategoriesRef.current = completedCategories;
+    if (!newlyCompleted.length) return;
+    startTransition(() =>
+      setCollapsedCategories((current) => {
+        const next = new Set(current);
+        newlyCompleted.forEach((category) => next.add(category));
+        return next;
+      }),
+    );
+  }, [checklistView]);
   const usagePercent = Math.min(
     100,
     data.documentQuotaBytes
@@ -821,38 +845,73 @@ export function TripWorkspace({
         : usagePercent >= 70
           ? "warning"
           : "normal";
-  const importedIds = new Set(
-    data.checklist.map((item) => item.master_item_id).filter(Boolean),
+  const importedIds = useMemo(
+    () =>
+      new Set(
+        data.checklist.map((item) => item.master_item_id).filter(Boolean),
+      ),
+    [data.checklist],
   );
-  const assigningItem = data.checklist.find(
-    (item) => item.id === assigningItemId,
+  const checklistById = useMemo(
+    () => new Map(data.checklist.map((item) => [item.id, item])),
+    [data.checklist],
   );
-  const editingItem = data.checklist.find((item) => item.id === editingItemId);
-  const normalizedDocumentSearch = documentSearch.trim().toLocaleLowerCase();
-  const filteredDocuments = data.documents.filter((item) => {
-    if (!normalizedDocumentSearch) return true;
-    return `${item.title} ${item.original_filename}`
-      .toLocaleLowerCase()
-      .includes(normalizedDocumentSearch);
-  });
+  const assigningItem = assigningItemId
+    ? checklistById.get(assigningItemId)
+    : undefined;
+  const editingItem = editingItemId
+    ? checklistById.get(editingItemId)
+    : undefined;
+  const deferredDocumentSearch = useDeferredValue(documentSearch);
+  const filteredDocuments = useMemo(() => {
+    const keyword = deferredDocumentSearch.trim().toLocaleLowerCase();
+    if (!keyword) return data.documents;
+    return data.documents.filter((item) =>
+      `${item.title} ${item.original_filename}`
+        .toLocaleLowerCase()
+        .includes(keyword),
+    );
+  }, [data.documents, deferredDocumentSearch]);
+  const masterItemsByCategory = useMemo(() => {
+    const grouped = new Map<string, MasterItem[]>();
+    for (const item of data.masterItems) {
+      const categoryItems = grouped.get(item.category_id);
+      if (categoryItems) categoryItems.push(item);
+      else grouped.set(item.category_id, [item]);
+    }
+    return grouped;
+  }, [data.masterItems]);
+  const availableMasterItemsByCategory = useMemo(() => {
+    const available = new Map<string, MasterItem[]>();
+    for (const [categoryId, categoryItems] of masterItemsByCategory) {
+      const remaining = categoryItems.filter((item) => !importedIds.has(item.id));
+      if (remaining.length) available.set(categoryId, remaining);
+    }
+    return available;
+  }, [importedIds, masterItemsByCategory]);
   function toggleCategory(category: string) {
-    setCollapsedCategories((current) => {
-      const next = new Set(current);
-      if (next.has(category)) next.delete(category);
-      else next.add(category);
-      return next;
-    });
+    startTransition(() =>
+      setCollapsedCategories((current) => {
+        const next = new Set(current);
+        if (next.has(category)) next.delete(category);
+        else next.add(category);
+        return next;
+      }),
+    );
   }
   function toggleMasterCategory(categoryId: string) {
-    setCollapsedMasterCategories((current) => {
-      const next = new Set(current);
-      if (next.has(categoryId)) next.delete(categoryId);
-      else next.add(categoryId);
-      return next;
-    });
+    startTransition(() =>
+      setCollapsedMasterCategories((current) => {
+        const next = new Set(current);
+        if (next.has(categoryId)) next.delete(categoryId);
+        else next.add(categoryId);
+        return next;
+      }),
+    );
   }
   function selectTab(nextTab: "checklist" | "documents" | "history") {
-    setTab(nextTab);
+    startTransition(() => setTab(nextTab));
+    void load(nextTab, false);
     const url = new URL(window.location.href);
     url.searchParams.set("workspace", nextTab);
     router.replace(`${url.pathname}${url.search}${url.hash}`, {
@@ -945,17 +1004,13 @@ export function TripWorkspace({
             </button>
           </div>
           <div className="checklist-groups">
-            {checklistCategories.map((category) => {
-              const categoryItems = data.checklist.filter(
-                (item) => (item.category_name || "อื่น ๆ") === category,
-              );
-              const visibleCategoryItems = categoryItems.filter(
-                checklistMatchesSearch,
-              );
+            {checklistView.categories.map((category) => {
+              const categoryItems =
+                checklistView.groups.get(category) || [];
+              const visibleCategoryItems =
+                checklistView.visibleGroups.get(category) || [];
               const collapsed = collapsedCategories.has(category);
-              const completedCount = categoryItems.filter(
-                (item) => item.completed_at,
-              ).length;
+              const completedCount = checklistView.completed.get(category) || 0;
               const progress = Math.round(
                 (completedCount / categoryItems.length) * 100,
               );
@@ -1114,7 +1169,7 @@ export function TripWorkspace({
                 </section>
               );
             })}
-            {!checklistCategories.length && (
+            {!checklistView.categories.length && (
               <p className="workspace-empty">
                 {label(
                   checklistKeyword
@@ -1303,7 +1358,7 @@ export function TripWorkspace({
               {label("ยังไม่มีประวัติการแก้ไข")}
             </p>
           )}
-          <button className="workspace-refresh" onClick={() => void load()}>
+          <button className="workspace-refresh" onClick={() => void load("history")}>
             <RefreshCcw size={14} />
             {label("รีเฟรช")}
           </button>
@@ -1442,11 +1497,8 @@ export function TripWorkspace({
             </div>
             <div className="master-picker">
               {data.masterCategories.map((category) => {
-                const available = data.masterItems.filter(
-                  (item) =>
-                    item.category_id === category.id &&
-                    !importedIds.has(item.id),
-                );
+                const available =
+                  availableMasterItemsByCategory.get(category.id) || [];
                 if (!available.length) return null;
                 const collapsed = collapsedMasterCategories.has(category.id);
                 const availableIds = available.map((item) => item.id);
@@ -1510,7 +1562,7 @@ export function TripWorkspace({
                   </section>
                 );
               })}
-              {!data.masterItems.some((item) => !importedIds.has(item.id)) && (
+              {!availableMasterItemsByCategory.size && (
                 <p className="workspace-empty">
                   {label("เพิ่มรายการจาก Master ครบแล้ว")}
                 </p>
