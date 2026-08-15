@@ -4,6 +4,7 @@ import { query } from "@/src/lib/db";
 import { getDemoTrip } from "@/src/lib/demo-data";
 import { getTripRole,tripMembersSql,tripRoleSql } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
+import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 
 const demoDenied=()=>NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
 
@@ -11,12 +12,14 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
   const {id}=await params;
   if(session.isDemo){const trip=getDemoTrip(id);return trip?NextResponse.json(trip):NextResponse.json({error:"Not found"},{status:404})}
+  await ensureLatestDatabaseSchema();
   const result=await query(`SELECT t.*,${tripRoleSql("t")},${tripMembersSql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,[session.userId,id]);
   return result.rows[0]?NextResponse.json(result.rows[0]):NextResponse.json({error:"Not found"},{status:404});
 }
 
 export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});if(session.isDemo)return demoDenied();
+  await ensureLatestDatabaseSchema();
   const {id}=await params;if(!await getTripRole(id,session.userId))return NextResponse.json({error:"Not found"},{status:404});
   const body=await request.json();if(!body.outboundDate||!body.outboundTime||!body.returnDate||!body.returnTime)return NextResponse.json({error:"Travel dates and times are required"},{status:400});
   if(body.returnDate<body.outboundDate)return NextResponse.json({error:"วันเดินทางกลับต้องไม่อยู่ก่อนวันเดินทาง"},{status:400});

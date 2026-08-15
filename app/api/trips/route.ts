@@ -4,6 +4,7 @@ import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
 import { tripAccessSql,tripMembersSql,tripRoleSql } from "@/src/lib/trip-access";
 import { getDemoTrips } from "@/src/lib/demo-data";
+import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const timezoneSchema=z.string().min(1).max(80).refine(value=>{try{new Intl.DateTimeFormat("en-US",{timeZone:value}).format();return true}catch{return false}},{message:"Invalid timezone"});
@@ -13,6 +14,7 @@ export async function GET(request:Request) {
   const session = await getSession(); if (!session) return NextResponse.json({error:"Unauthorized"},{status:401});
   const params=new URL(request.url).searchParams;
   if(session.isDemo)return NextResponse.json(getDemoTrips(params));
+  await ensureLatestDatabaseSchema();
   const mode=params.get("mode");
   const access=tripAccessSql("t");const role=tripRoleSql("t");const members=tripMembersSql("t");
   if(mode==="dashboard"){
@@ -55,6 +57,7 @@ export async function GET(request:Request) {
 export async function POST(request:Request) {
   const session = await getSession(); if (!session) return NextResponse.json({error:"Unauthorized"},{status:401});
   if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
+  await ensureLatestDatabaseSchema();
   try {
     const input = tripSchema.parse(await request.json());
     const totalDays=Math.floor((new Date(`${input.returnDate}T00:00:00`).getTime()-new Date(`${input.outboundDate}T00:00:00`).getTime())/86400000)+1;
