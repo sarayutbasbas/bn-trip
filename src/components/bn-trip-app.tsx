@@ -335,6 +335,12 @@ const EN_TEXT: Record<string, string> = {
   แก้ไข: "Edit",
   ลบ: "Delete",
   เรื่องราวระหว่างทาง: "Stories along the way",
+  ดึงลงเพื่อรีเฟรช: "Pull to refresh",
+  ปล่อยเพื่อรีเฟรช: "Release to refresh",
+  "กำลังอัปเดต…": "Refreshing…",
+  อัปเดตหน้าแรกแล้ว: "Home updated",
+  "รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง":
+    "Refresh failed. Please try again",
   "แพลนทริป หรือกลับมาเปิดดูความทรงจำเดิมได้ทุกเมื่อ":
     "Plan a new trip or revisit routes and memories anytime",
   สร้างทริปใหม่: "Create trip",
@@ -6096,6 +6102,10 @@ export function BNTripApp({
     initialDashboard?.counts || { total: 0, ongoing: 0, upcoming: 0, past: 0 },
   );
   const [tripRevision, setTripRevision] = useState(0);
+  const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshingDashboard, setRefreshingDashboard] = useState(false);
+  const pullDistanceRef = useRef(0);
   useEffect(() => {
     if (initialDashboard)
       tripListCache = [
@@ -6241,6 +6251,96 @@ export function BNTripApp({
       active = false;
     };
   }, [selected]);
+  useEffect(() => {
+    if (
+      page !== "dashboard" ||
+      modal ||
+      confirmation ||
+      refreshingDashboard
+    )
+      return;
+    let startY: number | null = null;
+    let pulling = false;
+    const updateDistance = (distance: number) => {
+      pullDistanceRef.current = distance;
+      setPullDistance(distance);
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || window.scrollY > 0) return;
+      startY = event.touches[0].clientY;
+      pulling = true;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!pulling || startY === null || event.touches.length !== 1) return;
+      if (window.scrollY > 0) {
+        pulling = false;
+        startY = null;
+        updateDistance(0);
+        return;
+      }
+      const delta = event.touches[0].clientY - startY;
+      if (delta <= 0) {
+        updateDistance(0);
+        return;
+      }
+      event.preventDefault();
+      updateDistance(Math.min(92, delta * 0.44));
+    };
+    const refresh = async () => {
+      setRefreshingDashboard(true);
+      updateDistance(54);
+      try {
+        const response = await fetch("/api/trips?mode=dashboard", {
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Refresh failed");
+        const rows: Trip[] = [
+          ...(data.ongoing || []),
+          ...(data.upcoming || []),
+          ...(data.past || []),
+        ];
+        tripListCache = rows;
+        startTransition(() => {
+          setTrips(rows);
+          setDashboardCounts(
+            data.counts || {
+              total: rows.length,
+              ongoing: 0,
+              upcoming: 0,
+              past: 0,
+            },
+          );
+          setDashboardRefreshToken((value) => value + 1);
+        });
+        setToast("อัปเดตหน้าแรกแล้ว");
+        window.setTimeout(() => setToast(""), 1800);
+      } catch {
+        setToast("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
+        window.setTimeout(() => setToast(""), 2400);
+      } finally {
+        setRefreshingDashboard(false);
+        updateDistance(0);
+      }
+    };
+    const onTouchEnd = () => {
+      if (!pulling) return;
+      pulling = false;
+      startY = null;
+      if (pullDistanceRef.current >= 68) void refresh();
+      else updateDistance(0);
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [confirmation, modal, page, refreshingDashboard]);
   if (!authenticated)
     return (
       <LanguageContext.Provider value={lang}>
@@ -6566,7 +6666,7 @@ export function BNTripApp({
     <Dashboard
       trips={trips}
       counts={dashboardCounts}
-      revision={tripRevision}
+      revision={tripRevision + dashboardRefreshToken}
       selectTrip={selectTrip}
       createTrip={protect(() => setModal({ type: "trip" }))}
       editTrip={protect((t) => setModal({ type: "trip", trip: t }))}
@@ -6768,7 +6868,40 @@ export function BNTripApp({
               </button>
             </aside>
           )}
-          {content}
+          {page === "dashboard" && (
+            <div
+              className={`pull-refresh-indicator ${refreshingDashboard ? "is-refreshing" : ""} ${pullDistance >= 68 ? "is-ready" : ""}`}
+              style={{
+                opacity: refreshingDashboard
+                  ? 1
+                  : Math.min(1, pullDistance / 42),
+                transform: `translate3d(-50%, ${Math.max(-48, pullDistance - 48)}px, 0)`,
+              }}
+              role="status"
+              aria-live="polite"
+            >
+              <RefreshCw size={17} />
+              <span>
+                {label(
+                  refreshingDashboard
+                    ? "กำลังอัปเดต…"
+                    : pullDistance >= 68
+                      ? "ปล่อยเพื่อรีเฟรช"
+                      : "ดึงลงเพื่อรีเฟรช",
+                )}
+              </span>
+            </div>
+          )}
+          <div
+            className={`route-content ${page === "dashboard" ? "dashboard-pull-content" : ""} ${page === "dashboard" && pullDistance > 0 && !refreshingDashboard ? "is-pulling" : ""}`}
+            style={
+              page === "dashboard" && pullDistance > 0
+                ? { transform: `translate3d(0, ${pullDistance}px, 0)` }
+                : undefined
+            }
+          >
+            {content}
+          </div>
         </main>
         {modalContent}
         {confirmation && (

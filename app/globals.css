@@ -1371,6 +1371,69 @@ button:disabled {
   min-width: 0;
   animation: screen-in 320ms ease-out both;
 }
+
+.route-content {
+  min-width: 0;
+}
+
+.dashboard-pull-content {
+  will-change: transform;
+  transition: transform 240ms var(--ease-ios);
+}
+
+.dashboard-pull-content.is-pulling {
+  transition: none;
+}
+
+.pull-refresh-indicator {
+  position: fixed;
+  z-index: 26;
+  top: calc(var(--header-height) + env(safe-area-inset-top) + 8px);
+  left: 50%;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 0.5px solid rgba(255, 107, 0, 0.2);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--orange);
+  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+  box-shadow: var(--shadow-sm);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform 180ms var(--ease-ios);
+}
+
+.pull-refresh-indicator span {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pull-refresh-indicator.is-ready {
+  color: white;
+  border-color: transparent;
+  background: var(--brand-gradient);
+}
+
+.pull-refresh-indicator.is-refreshing svg {
+  animation: pull-refresh-spin 720ms linear infinite;
+}
+
+@keyframes pull-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dashboard-pull-content:not([style]) {
+  will-change: auto;
+}
+
 @keyframes screen-in {
   from {
     opacity: 0;
