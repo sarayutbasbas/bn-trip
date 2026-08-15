@@ -27,7 +27,7 @@ export async function GET(request:Request){
       const row=existing.rows[0]
         ?(await client.query<{id:string;email:string;display_name:string;avatar_url:string|null}>("UPDATE users SET email=$1,google_sub=$2,display_name=CASE WHEN google_sub IS NULL THEN $3 ELSE display_name END,avatar_url=$4,updated_at=now() WHERE id=$5 RETURNING id,email,display_name,avatar_url",[email,payload.sub,displayName,avatarUrl,existing.rows[0].id])).rows[0]
         :(await client.query<{id:string;email:string;display_name:string;avatar_url:string|null}>("INSERT INTO users(email,google_sub,display_name,avatar_url) VALUES($1,$2,$3,$4) RETURNING id,email,display_name,avatar_url",[email,payload.sub,displayName,avatarUrl])).rows[0];
-      await client.query("UPDATE trip_collaborators SET user_id=$1 WHERE lower(email)=$2",[row.id,email]);return row;
+      return row;
     });
     const token=await createSession({userId:user.id,email:user.email,displayName:user.display_name,avatarUrl:user.avatar_url});const response=NextResponse.redirect(getAppUrl(request));
     response.cookies.set(SESSION_COOKIE,token,{httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production",path:"/",maxAge:60*60*24*30});for(const name of ["bn_oauth_state","bn_oauth_nonce","bn_oauth_verifier"])response.cookies.delete(name);return response;

@@ -221,6 +221,23 @@ button:disabled { cursor: not-allowed; opacity: 0.44; }
 .welcome-all-btn { min-height: 48px; padding: 0 16px; border: 0.5px solid rgba(255,255,255,.45); border-radius: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: #7a2b00; background: rgba(255,255,255,.72); box-shadow: 0 8px 24px rgba(141,50,0,.14); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); font-size: 13px; font-weight: 650; transition: transform 160ms var(--ease-ios),opacity 160ms ease; }
 .welcome-all-btn:active { transform: scale(.97); opacity: .82; }
 
+.trip-invitations { margin-top: 22px; }
+.trip-invitations .section-head { margin-bottom: 10px; }
+.trip-invitation-list { display: grid; gap: 9px; }
+.trip-invitation-card { min-width: 0; padding: 9px; border: 0.5px solid rgba(255,107,0,.2); border-radius: 20px; display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 10px; color: var(--ink); background: linear-gradient(135deg,rgba(255,91,20,.1),rgba(255,174,74,.06)),var(--surface); box-shadow: var(--shadow-sm); }
+.trip-invitation-cover { width: 74px; min-height: 88px; border-radius: 14px; background-color: var(--surface-3); background-position: center; background-size: cover; }
+.trip-invitation-copy { min-width: 0; align-self: center; }
+.trip-invitation-copy h3 { margin: 0; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.trip-invitation-copy > p { margin: 3px 0 7px; overflow: hidden; display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.trip-invitation-copy > small { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 8px; }
+.trip-invitation-copy .account-avatar-small { width: 25px; height: 25px; flex: 0 0 25px; }
+.trip-invitation-copy > small span { min-width: 0; display: grid; }
+.trip-invitation-copy > small b { overflow: hidden; color: var(--ink); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.trip-invitation-actions { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0,1fr) 44px; gap: 8px; }
+.trip-invitation-actions button { min-height: 42px; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; font-weight: 650; }
+.invitation-accept { color: #fff; background: var(--brand-gradient); box-shadow: 0 7px 18px rgba(255,93,15,.2); }
+.invitation-decline { border: 0.5px solid var(--line); color: var(--muted); background: var(--surface-2); }
+
 .eyebrow,
 .mini-kicker,
 .section-kicker { color: var(--orange); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }

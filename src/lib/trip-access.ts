@@ -26,7 +26,7 @@ export async function tripCardIdsAreMembers(tripId:string,cardIds:string[]){
 export const tripAccessSql=(alias="trips")=>`(${alias}.owner_id=$1 OR EXISTS (SELECT 1 FROM trip_collaborators access_member WHERE access_member.trip_id=${alias}.id AND access_member.user_id=$1))`;
 export const tripRoleSql=(alias="trips")=>`CASE WHEN ${alias}.owner_id=$1 THEN 'owner' ELSE 'collaborator' END AS access_role`;
 export const tripMembersSql=(alias="trips")=>`CASE
-  WHEN EXISTS (SELECT 1 FROM trip_collaborators shared_check WHERE shared_check.trip_id=${alias}.id)
+  WHEN EXISTS (SELECT 1 FROM trip_collaborators shared_check WHERE shared_check.trip_id=${alias}.id AND shared_check.user_id IS NOT NULL)
   THEN (
     SELECT COALESCE(
       jsonb_agg(
@@ -51,7 +51,7 @@ export const tripMembersSql=(alias="trips")=>`CASE
              'collaborator'::text, 0, collaborator.created_at
       FROM trip_collaborators collaborator
       LEFT JOIN users member ON member.id=collaborator.user_id
-      WHERE collaborator.trip_id=${alias}.id
+      WHERE collaborator.trip_id=${alias}.id AND collaborator.user_id IS NOT NULL
     ) shared_member
   )
   ELSE '[]'::jsonb
