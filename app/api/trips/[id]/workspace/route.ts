@@ -62,8 +62,8 @@ export async function GET(
     ),
     query(
       `SELECT member.id,member.email,member.display_name,member.avatar_url,member.role FROM (
-      SELECT owner.id,owner.email,owner.display_name,owner.avatar_url,'owner'::text AS role,0 AS sort_order FROM trips trip JOIN users owner ON owner.id=trip.owner_id WHERE trip.id=$1
-      UNION ALL SELECT user_account.id,user_account.email,user_account.display_name,user_account.avatar_url,'collaborator'::text,1 FROM trip_collaborators collaborator JOIN users user_account ON user_account.id=collaborator.user_id WHERE collaborator.trip_id=$1
+      SELECT owner.id,owner.email,owner.display_name,owner.avatar_url,'owner'::text AS role,1 AS sort_order FROM trips trip JOIN users owner ON owner.id=trip.owner_id WHERE trip.id=$1
+      UNION ALL SELECT user_account.id,user_account.email,user_account.display_name,user_account.avatar_url,'collaborator'::text,0 FROM trip_collaborators collaborator JOIN users user_account ON user_account.id=collaborator.user_id WHERE collaborator.trip_id=$1
     ) member ORDER BY member.sort_order,member.display_name`,
       [id],
     ),

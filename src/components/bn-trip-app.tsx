@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TripWorkspace } from "@/src/components/trip-workspace";
 import {
@@ -641,6 +642,8 @@ Object.assign(EN_TEXT, {
   จัดหมวดหมู่และรายการสำหรับใช้ซ้ำในทุกทริป:
     "Organize reusable packing lists for every trip",
   "เลือกจาก Master": "Choose from Master",
+  "ค้นหา Checklist": "Search checklist",
+  "ไม่พบ Checklist ที่ค้นหา": "No matching checklist",
   "จัดการ Master": "Manage Master",
   "พิมพ์ Checklist เอง (จะบันทึกเข้า Master ด้วย)":
     "Type a checklist item (also saved to Master)",
@@ -805,7 +808,7 @@ const itineraryCache = new Map<string, Itinerary[]>();
 
 function Brand() {
   return (
-    <div className="brand">
+    <Link className="brand" href="/" aria-label="BN Trip · หน้าแรก">
       <Image
         src="/bn-trip-icon-orange-512.png"
         alt="BN Trip"
@@ -816,7 +819,7 @@ function Brand() {
       <div>
         BN Trip<small>our tiny trip club</small>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -900,6 +903,12 @@ function SharedTripAvatars({
   );
 }
 
+const ownerLastTripMembers = (members: TripMember[]) =>
+  [...members].sort(
+    (left, right) =>
+      Number(left.role === "owner") - Number(right.role === "owner"),
+  );
+
 function CollaboratorAvatar({ item }: { item: Collaborator }) {
   const label = (item.display_name || item.email || "?").trim();
   return (
@@ -950,6 +959,7 @@ function CardBrandLogo({
 const ExpenseTripMembersContext = createContext<TripMember[]>([]);
 function CashPaymentIcon({ className = "" }: { className?: string }) {
   const members = useContext(ExpenseTripMembersContext);
+  const orderedMembers = ownerLastTripMembers(members);
   if (className.includes("expense-cash-mark") && members.length)
     return (
       <span
@@ -959,7 +969,7 @@ function CashPaymentIcon({ className = "" }: { className?: string }) {
           .filter(Boolean)
           .join(", ")}
       >
-        {members.map((member) => {
+        {orderedMembers.map((member) => {
           const label = (member.display_name || member.email || "?").trim();
           return (
             <span
@@ -1680,7 +1690,7 @@ function Dashboard({
         <h2>{t(title)}</h2>
         <p>{description ? t(description) : t(`${count} ทริป`)}</p>
       </div>
-      {count > 0 && (
+      {count > 0 && status !== "ongoing" && (
         <button className="section-view-all" onClick={() => viewAll(status)}>
           {t("ดูทั้งหมด")}
           <ArrowRight size={14} />
@@ -5656,9 +5666,6 @@ function ModalForm({
                       </option>
                     ))}
                   </select>
-                  <small className="field-hint">
-                    {t("ใช้คำนวณวันปัจจุบัน เวลา Timeline และสถานะทริป")}
-                  </small>
                 </div>
               </div>
               <div className="field">

@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  ArrowUp,
   Check,
   ChevronRight,
   Circle,
@@ -103,6 +104,20 @@ const EMPTY: Workspace = {
   documentUsageBytes: 0,
 };
 const offlineKey = (tripId: string) => `bn-trip-offline-documents:${tripId}`;
+const tripCategoryValue = (name: string) => `trip:${name}`;
+const checklistCategoryPayload = (value: string) =>
+  value.startsWith("trip:")
+    ? { categoryName: value.slice(5) }
+    : { categoryId: value };
+const defaultChecklistCategory = (workspace: Workspace) =>
+  workspace.masterCategories[0]?.id ||
+  (workspace.checklist[0]?.category_name
+    ? tripCategoryValue(workspace.checklist[0].category_name)
+    : "");
+const ownerLast = (members: Member[]) =>
+  [...members].sort(
+    (left, right) => Number(left.role === "owner") - Number(right.role === "owner"),
+  );
 
 export function TripWorkspace({
   tripId,
@@ -117,12 +132,14 @@ export function TripWorkspace({
 }) {
   const router = useRouter();
   const [data, setData] = useState<Workspace>(EMPTY);
+  const orderedMembers = ownerLast(data.members);
   const [tab, setTab] = useState<"checklist" | "documents" | "history">(
     initialTab,
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [showBackTop, setShowBackTop] = useState(false);
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [assignee, setAssignee] = useState("");
@@ -131,6 +148,7 @@ export function TripWorkspace({
   const [masterOpen, setMasterOpen] = useState(false);
   const [checklistSheetOpen, setChecklistSheetOpen] = useState(false);
   const [documentSheetOpen, setDocumentSheetOpen] = useState(false);
+  const [checklistSearch, setChecklistSearch] = useState("");
   const [documentSearch, setDocumentSearch] = useState("");
   const [documentTitle, setDocumentTitle] = useState("");
   const [documentFileName, setDocumentFileName] = useState("");
@@ -153,6 +171,7 @@ export function TripWorkspace({
   const assignmentTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
+  const knownChecklistCategoriesRef = useRef<Set<string>>(new Set());
   const completedCategoriesRef = useRef<Set<string>>(new Set());
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -165,6 +184,22 @@ export function TripWorkspace({
       toastTimer.current = null;
     }, 2200);
   }
+  function syncCollapsedChecklistCategories(workspace: Workspace) {
+    const categoryNames = new Set(
+      workspace.checklist.map((item) => item.category_name || "อื่น ๆ"),
+    );
+    setCollapsedCategories((current) => {
+      const next = new Set(
+        [...current].filter((category) => categoryNames.has(category)),
+      );
+      for (const category of categoryNames) {
+        if (!knownChecklistCategoriesRef.current.has(category))
+          next.add(category);
+      }
+      return next;
+    });
+    knownChecklistCategoriesRef.current = categoryNames;
+  }
   async function load() {
     setLoading(true);
     setError("");
@@ -173,8 +208,9 @@ export function TripWorkspace({
       const body = await response.json();
       if (!response.ok) throw new Error(body.error);
       setData(body);
+      syncCollapsedChecklistCategories(body);
       setCategoryId(
-        (current) => current || body.masterCategories?.[0]?.id || "",
+        (current) => current || defaultChecklistCategory(body),
       );
       setOfflineIds(
         JSON.parse(localStorage.getItem(offlineKey(tripId)) || "[]"),
@@ -189,6 +225,7 @@ export function TripWorkspace({
   }
   useEffect(() => {
     let active = true;
+    knownChecklistCategoriesRef.current = new Set();
     void (async () => {
       try {
         const response = await fetch(`/api/trips/${tripId}/workspace`);
@@ -196,7 +233,8 @@ export function TripWorkspace({
         if (!response.ok) throw new Error(body.error);
         if (active) {
           setData(body);
-          setCategoryId(body.masterCategories?.[0]?.id || "");
+          syncCollapsedChecklistCategories(body);
+          setCategoryId(defaultChecklistCategory(body));
           setOfflineIds(
             JSON.parse(localStorage.getItem(offlineKey(tripId)) || "[]"),
           );
@@ -244,7 +282,7 @@ export function TripWorkspace({
           method: editingItem ? "PATCH" : "POST",
           body: JSON.stringify({
             title: title.trim(),
-            categoryId,
+            ...checklistCategoryPayload(categoryId),
             assignedUserId: assignee || null,
           }),
         },
@@ -397,13 +435,10 @@ export function TripWorkspace({
     category: string,
     categoryItems: Checklist[],
   ) {
-    const ownedItems = categoryItems.filter(
-      (item) => item.created_by === data.currentUserId,
-    );
-    if (!ownedItems.length) return;
+    if (!categoryItems.length) return;
     setBusy(`category:${category}`);
     setError("");
-    const removedIds = new Set(ownedItems.map((item) => item.id));
+    const removedIds = new Set(categoryItems.map((item) => item.id));
     setData((current) => ({
       ...current,
       checklist: current.checklist.filter((item) => !removedIds.has(item.id)),
@@ -418,7 +453,7 @@ export function TripWorkspace({
     } catch (reason) {
       setData((current) => ({
         ...current,
-        checklist: [...current.checklist, ...ownedItems].sort(
+        checklist: [...current.checklist, ...categoryItems].sort(
           (a, b) =>
             data.checklist.findIndex((item) => item.id === a.id) -
             data.checklist.findIndex((item) => item.id === b.id),
@@ -748,6 +783,12 @@ export function TripWorkspace({
     },
     [],
   );
+  useEffect(() => {
+    const onScroll = () => setShowBackTop(window.scrollY > 520);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   const canUndo = (activity: Activity) =>
     data.role === "owner" &&
     activity.can_undo &&
@@ -755,7 +796,31 @@ export function TripWorkspace({
     (activity.entity_type === "itinerary" ||
       activity.entity_type === "checklist" ||
       (activity.entity_type === "document" && activity.action === "create") ||
-      (activity.entity_type === "trip" && activity.action === "update"));
+    (activity.entity_type === "trip" && activity.action === "update"));
+  const checklistKeyword = checklistSearch.trim().toLocaleLowerCase("th");
+  const checklistMatchesSearch = (item: Checklist) =>
+    !checklistKeyword ||
+    `${item.title} ${item.category_name}`
+      .toLocaleLowerCase("th")
+      .includes(checklistKeyword);
+  const allChecklistCategories = [
+    ...new Set(
+      data.checklist.map((item) => item.category_name || "อื่น ๆ"),
+    ),
+  ];
+  const checklistCategories = allChecklistCategories.filter((category) =>
+    data.checklist.some(
+      (item) =>
+        (item.category_name || "อื่น ๆ") === category &&
+        checklistMatchesSearch(item),
+    ),
+  );
+  const personalCategoryNames = new Set(
+    data.masterCategories.map((category) => category.name.toLocaleLowerCase()),
+  );
+  const sharedOnlyCategories = allChecklistCategories.filter(
+    (category) => !personalCategoryNames.has(category.toLocaleLowerCase()),
+  );
   const usagePercent = Math.min(
     100,
     data.documentQuotaBytes
@@ -858,6 +923,25 @@ export function TripWorkspace({
       ) : tab === "checklist" ? (
         <div className="workspace-panel workspace-fab-panel">
           <div className="checklist-master-actions">
+            <label className="document-search checklist-search">
+              <Search size={18} aria-hidden="true" />
+              <input
+                type="search"
+                value={checklistSearch}
+                onChange={(event) => setChecklistSearch(event.target.value)}
+                placeholder={label("ค้นหา Checklist")}
+                aria-label={label("ค้นหา Checklist")}
+              />
+              {checklistSearch && (
+                <button
+                  type="button"
+                  onClick={() => setChecklistSearch("")}
+                  aria-label={label("ล้างการค้นหา")}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </label>
             <button
               type="button"
               className="checklist-master-trigger"
@@ -868,17 +952,16 @@ export function TripWorkspace({
               }}
             >
               <ListChecks size={15} />
-              {label("เลือกจาก Master")}
+              {label("Master")}
             </button>
           </div>
           <div className="checklist-groups">
-            {[
-              ...new Set(
-                data.checklist.map((item) => item.category_name || "อื่น ๆ"),
-              ),
-            ].map((category) => {
+            {checklistCategories.map((category) => {
               const categoryItems = data.checklist.filter(
                 (item) => (item.category_name || "อื่น ๆ") === category,
+              );
+              const visibleCategoryItems = categoryItems.filter(
+                checklistMatchesSearch,
               );
               const collapsed = collapsedCategories.has(category);
               const completedCount = categoryItems.filter(
@@ -887,10 +970,7 @@ export function TripWorkspace({
               const progress = Math.round(
                 (completedCount / categoryItems.length) * 100,
               );
-              const canDeleteCategory = categoryItems.some(
-                (item) => item.created_by === data.currentUserId,
-              );
-              const assignedMembers = data.members.filter((member) =>
+              const assignedMembers = orderedMembers.filter((member) =>
                 categoryItems.some(
                   (item) => item.assigned_user_id === member.id,
                 ),
@@ -955,27 +1035,25 @@ export function TripWorkspace({
                         </small>
                       </div>
                     </button>
-                    {canDeleteCategory && (
-                      <button
-                        type="button"
-                        className="checklist-category-delete"
-                        onClick={() =>
-                          setDeleteTarget({
-                            kind: "category",
-                            category,
-                            items: categoryItems,
-                          })
-                        }
-                        disabled={busy === `category:${category}`}
-                        aria-label={label(`ลบหมวด ${category}`)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="checklist-category-delete"
+                      onClick={() =>
+                        setDeleteTarget({
+                          kind: "category",
+                          category,
+                          items: categoryItems,
+                        })
+                      }
+                      disabled={busy === `category:${category}`}
+                      aria-label={label(`ลบหมวด ${category}`)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                   {!collapsed && (
                     <div className="checklist-list">
-                      {categoryItems.map((item) => (
+                      {visibleCategoryItems.map((item) => (
                         <article
                           className={item.completed_at ? "done" : ""}
                           key={item.id}
@@ -1044,39 +1122,39 @@ export function TripWorkspace({
                               <UserPlus size={15} />
                             )}
                           </button>
-                          {item.created_by === data.currentUserId && (
-                            <>
-                              <button
-                                type="button"
-                                className="checklist-edit"
-                                onClick={() => {
-                                  const itemCategory = data.masterCategories.find(
-                                    (category) =>
-                                      category.name === item.category_name,
-                                  );
-                                  setError("");
-                                  setTitle(item.title);
-                                  setCategoryId(itemCategory?.id || "");
-                                  setAssignee(item.assigned_user_id || "");
-                                  setEditingItemId(item.id);
-                                  setChecklistSheetOpen(true);
-                                }}
-                                aria-label={label(`แก้ไข ${item.title}`)}
-                              >
-                                <Pencil size={15} />
-                              </button>
-                              <button
-                                type="button"
-                                className="workspace-delete"
-                                onClick={() =>
-                                  setDeleteTarget({ kind: "item", item })
-                                }
-                                aria-label={label("ลบ")}
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </>
-                          )}
+                          <button
+                            type="button"
+                            className="checklist-edit"
+                            onClick={() => {
+                              const itemCategory = data.masterCategories.find(
+                                (category) =>
+                                  category.name.toLocaleLowerCase() ===
+                                  item.category_name.toLocaleLowerCase(),
+                              );
+                              setError("");
+                              setTitle(item.title);
+                              setCategoryId(
+                                itemCategory?.id ||
+                                  tripCategoryValue(item.category_name),
+                              );
+                              setAssignee(item.assigned_user_id || "");
+                              setEditingItemId(item.id);
+                              setChecklistSheetOpen(true);
+                            }}
+                            aria-label={label(`แก้ไข ${item.title}`)}
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="workspace-delete"
+                            onClick={() =>
+                              setDeleteTarget({ kind: "item", item })
+                            }
+                            aria-label={label("ลบ")}
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         </article>
                       ))}
                     </div>
@@ -1084,8 +1162,14 @@ export function TripWorkspace({
                 </section>
               );
             })}
-            {!data.checklist.length && (
-              <p className="workspace-empty">{label("ยังไม่มี Checklist")}</p>
+            {!checklistCategories.length && (
+              <p className="workspace-empty">
+                {label(
+                  checklistKeyword
+                    ? "ไม่พบ Checklist ที่ค้นหา"
+                    : "ยังไม่มี Checklist",
+                )}
+              </p>
             )}
           </div>
           <button
@@ -1156,8 +1240,17 @@ export function TripWorkspace({
                 <div className="document-list-copy">
                   <strong>{item.title}</strong>
                   <small>
-                    {item.original_filename} ·{" "}
-                    {(Number(item.file_size) / 1024 / 1024).toFixed(1)} MB
+                    {(Number(item.file_size) / 1024 / 1024).toFixed(1)} MB ·{" "}
+                    {item.original_filename}
+                  </small>
+                  <small className="document-meta">
+                    {label("เพิ่มโดย")} {item.uploaded_by_name || label("สมาชิกทริป")}
+                  </small>
+                  <small className="document-meta document-created-at">
+                    {new Date(item.created_at).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
                   </small>
                 </div>
                 <button
@@ -1264,6 +1357,17 @@ export function TripWorkspace({
           </button>
         </div>
       )}
+      {showBackTop && (
+        <button
+          type="button"
+          className={`expense-back-top workspace-back-top ${tab === "history" ? "without-fab" : ""}`}
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          title={label("กลับด้านบน")}
+          aria-label={label("กลับด้านบน")}
+        >
+          <ArrowUp size={20} />
+        </button>
+      )}
       {assigningItem && (
         <div
           className="modal-backdrop"
@@ -1307,7 +1411,7 @@ export function TripWorkspace({
                 </span>
                 {!assigningItem.assigned_user_id && <Check size={17} />}
               </button>
-              {data.members.map((member) => {
+              {orderedMembers.map((member) => {
                 const selected = assigningItem.assigned_user_id === member.id;
                 const memberName =
                   member.display_name || member.email || "Member";
@@ -1550,6 +1654,14 @@ export function TripWorkspace({
                         {category.name}
                       </option>
                     ))}
+                    {sharedOnlyCategories.map((category) => (
+                      <option
+                        key={tripCategoryValue(category)}
+                        value={tripCategoryValue(category)}
+                      >
+                        {category}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="field">
@@ -1564,7 +1676,7 @@ export function TripWorkspace({
                     >
                       <UserPlus size={16} />
                     </button>
-                    {data.members.map((member) => {
+                    {orderedMembers.map((member) => {
                       const memberName =
                         member.display_name || member.email || "Member";
                       return (
@@ -1855,7 +1967,7 @@ export function TripWorkspace({
                   ? `ลบ “${deleteTarget.item.title}” ออกจาก Checklist?`
                   : deleteTarget.kind === "document"
                     ? `ลบไฟล์ “${deleteTarget.item.title}” ออกจากทริปนี้?`
-                    : `ลบหมวด “${deleteTarget.category}” และ ${deleteTarget.items.filter((item) => item.created_by === data.currentUserId).length} รายการที่คุณเพิ่มออกจากทริปนี้?`,
+                    : `ลบหมวด “${deleteTarget.category}” และ ${deleteTarget.items.length} รายการออกจากทริปนี้?`,
               )}
             </p>
             <div className="confirm-actions">

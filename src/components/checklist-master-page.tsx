@@ -1,10 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowUp,
   Check,
   ChevronRight,
   House,
@@ -51,6 +53,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [showBackTop, setShowBackTop] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function api(url: string, options?: RequestInit) {
@@ -71,9 +74,8 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     const nextCategories = (data.categories || []) as Category[];
     setCategories(nextCategories);
     setItems(data.items || []);
-    setOpen((current) =>
-      current.length ? current : nextCategories.slice(0, 1).map(({ id }) => id),
-    );
+    const categoryIds = new Set(nextCategories.map(({ id }) => id));
+    setOpen((current) => current.filter((id) => categoryIds.has(id)));
   }
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
         const nextCategories = (data.categories || []) as Category[];
         setCategories(nextCategories);
         setItems(data.items || []);
-        setOpen(nextCategories.slice(0, 1).map(({ id }) => id));
+        setOpen([]);
       })
       .catch((reason) => {
         if (active)
@@ -110,6 +112,13 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     },
     [],
   );
+
+  useEffect(() => {
+    const onScroll = () => setShowBackTop(window.scrollY > 520);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   function notify(value: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -274,7 +283,11 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
       )}
       <main>
         <header className="mobile-head flow-header">
-          <div className="brand master-brand">
+          <Link
+            className="brand master-brand"
+            href="/"
+            aria-label="BN Trip · หน้าแรก"
+          >
             <Image
               src="/bn-trip-icon-orange-512.png"
               alt="BN Trip"
@@ -285,7 +298,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
             <div>
               BN Trip<small>our tiny trip club</small>
             </div>
-          </div>
+          </Link>
           <nav className="mobile-actions">
             <button
               className="icon-btn"
@@ -479,6 +492,17 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
           <Plus size={22} />
           เพิ่ม Checklist
         </button>
+        {showBackTop && (
+          <button
+            type="button"
+            className="expense-back-top workspace-back-top"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            title="กลับด้านบน"
+            aria-label="กลับด้านบน"
+          >
+            <ArrowUp size={20} />
+          </button>
+        )}
       </main>
 
       {itemSheetOpen && (

@@ -7,11 +7,16 @@ import { logTripActivity } from "@/src/lib/activity";
 
 const schema = z.union([
   z.object({ masterItemIds: z.array(z.string().uuid()).min(1).max(200) }),
-  z.object({
-    title: z.string().trim().min(1).max(240),
-    categoryId: z.string().uuid(),
-    assignedUserId: z.string().uuid().nullable().optional(),
-  }),
+  z
+    .object({
+      title: z.string().trim().min(1).max(240),
+      categoryId: z.string().uuid().optional(),
+      categoryName: z.string().trim().min(1).max(120).optional(),
+      assignedUserId: z.string().uuid().nullable().optional(),
+    })
+    .refine((input) => input.categoryId || input.categoryName, {
+      message: "กรุณาเลือกหมวดหมู่",
+    }),
 ]);
 
 export async function POST(
@@ -80,19 +85,41 @@ export async function POST(
         );
     }
     const result = await transaction(async (client) => {
-      const category = await client.query<{ name: string }>(
-        "SELECT name FROM checklist_master_categories WHERE id=$1 AND user_id=$2",
-        [input.categoryId, session.userId],
-      );
+      let category = input.categoryId
+        ? await client.query<{ id: string; name: string }>(
+            "SELECT id,name FROM checklist_master_categories WHERE id=$1 AND user_id=$2",
+            [input.categoryId, session.userId],
+          )
+        : await client.query<{ id: string; name: string }>(
+            "SELECT id,name FROM checklist_master_categories WHERE user_id=$1 AND lower(name)=lower($2)",
+            [session.userId, input.categoryName],
+          );
+      if (!category.rowCount && input.categoryName) {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+          `master-category:${session.userId}:${input.categoryName.toLocaleLowerCase()}`,
+        ]);
+        category = await client.query<{ id: string; name: string }>(
+          "SELECT id,name FROM checklist_master_categories WHERE user_id=$1 AND lower(name)=lower($2)",
+          [session.userId, input.categoryName],
+        );
+        if (!category.rowCount)
+          category = await client.query<{ id: string; name: string }>(
+            `INSERT INTO checklist_master_categories (user_id,name,sort_order)
+             VALUES ($1,$2,COALESCE((SELECT max(sort_order)+1 FROM checklist_master_categories WHERE user_id=$1),0))
+             RETURNING id,name`,
+            [session.userId, input.categoryName],
+          );
+      }
       if (!category.rowCount) throw new Error("category_not_found");
+      const personalCategoryId = category.rows[0].id;
       let master = await client.query<{ id: string }>(
         "SELECT id FROM checklist_master_items WHERE user_id=$1 AND category_id=$2 AND lower(title)=lower($3)",
-        [session.userId, input.categoryId, input.title],
+        [session.userId, personalCategoryId, input.title],
       );
       if (!master.rowCount)
         master = await client.query<{ id: string }>(
           `INSERT INTO checklist_master_items (user_id,category_id,title,sort_order) VALUES ($1,$2,$3,COALESCE((SELECT max(sort_order)+1 FROM checklist_master_items WHERE category_id=$2),0)) RETURNING id`,
-          [session.userId, input.categoryId, input.title],
+          [session.userId, personalCategoryId, input.title],
         );
       const inserted = await client.query(
         `INSERT INTO trip_checklist_items (trip_id,title,master_item_id,category_name,assigned_user_id,sort_order,created_by)
@@ -160,8 +187,12 @@ export async function DELETE(
     const { categoryName } = deleteCategorySchema.parse(await request.json());
     const removed = await transaction(async (client) => {
       const matches = await client.query(
-        `SELECT item.* FROM trip_checklist_items item LEFT JOIN checklist_master_items master_item ON master_item.id=item.master_item_id LEFT JOIN checklist_master_categories master_category ON master_category.id=master_item.category_id WHERE item.trip_id=$1 AND item.created_by=$2 AND COALESCE(master_category.name,item.category_name)=$3 FOR UPDATE OF item`,
-        [id, session.userId, categoryName],
+        `SELECT item.* FROM trip_checklist_items item
+         LEFT JOIN checklist_master_items master_item ON master_item.id=item.master_item_id
+         LEFT JOIN checklist_master_categories master_category ON master_category.id=master_item.category_id
+         WHERE item.trip_id=$1 AND COALESCE(master_category.name,item.category_name)=$2
+         FOR UPDATE OF item`,
+        [id, categoryName],
       );
       if (!matches.rowCount) return [];
       await client.query(
@@ -172,7 +203,7 @@ export async function DELETE(
     });
     if (!removed.length)
       return NextResponse.json(
-        { error: "ไม่พบรายการที่คุณลบได้ในหมวดนี้" },
+        { error: "ไม่พบรายการในหมวดนี้" },
         { status: 404 },
       );
     await logTripActivity({

@@ -190,12 +190,15 @@
   max-width: 520px;
 }
 .checklist-master-actions {
+  position: sticky;
+  top: calc(var(--header-height) + env(safe-area-inset-top) + 48px);
+  z-index: 28;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
-.checklist-master-actions button {
+.checklist-master-actions > button {
   width: 100%;
   min-width: 0;
   min-height: 46px;
@@ -209,12 +212,20 @@
   font-weight: 700;
 }
 .checklist-master-actions .checklist-master-trigger {
-  min-height: 60px;
-  color: var(--orange);
-  border: 0.5px solid rgba(255, 107, 0, 0.28);
-  background: color-mix(in srgb, var(--surface) 90%, var(--brand-soft));
-  box-shadow: var(--shadow-sm);
-  font-size: 14px;
+  width: auto;
+  min-height: 48px;
+  padding: 0 13px;
+  color: #fff;
+  border: 0;
+  background: var(--brand-gradient);
+  box-shadow: 0 8px 20px rgba(255, 95, 12, 0.24);
+  font-size: 11px;
+}
+.checklist-master-actions .checklist-search {
+  position: relative;
+  top: auto;
+  z-index: auto;
+  min-width: 0;
 }
 .checklist-master-actions .checklist-add-trigger {
   color: #fff;
@@ -365,6 +376,7 @@
 }
 .checklist-category-head {
   min-width: 0;
+  min-height: 60px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -375,7 +387,7 @@
 }
 .checklist-category-toggle {
   width: 100%;
-  min-height: 48px;
+  min-height: 60px;
   padding: 8px 12px;
   display: flex;
   align-items: center;
@@ -517,6 +529,7 @@
   font-size: 9px;
 }
 .document-quota {
+  min-height: 60px;
   padding: 11px 12px;
   border: 0.5px solid var(--line);
   border-radius: 16px;
@@ -595,6 +608,11 @@
   gap: 9px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+}
+.activity-list article {
+  min-height: 60px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 .checklist-list article {
   border: 0;
@@ -790,7 +808,7 @@
   height: 36px;
   flex: 0 0 36px;
   overflow: hidden;
-  border: 2px solid color-mix(in srgb, var(--line-strong) 72%, #fff);
+  border: 1px solid color-mix(in srgb, var(--line-strong) 52%, #fff);
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -804,8 +822,9 @@
 }
 .new-checklist-assignees button.active {
   color: var(--orange);
-  border-color: var(--orange);
-  box-shadow: 0 0 0 2px var(--brand-soft);
+  border-color: color-mix(in srgb, var(--orange) 58%, #fff);
+  background-color: color-mix(in srgb, var(--brand-soft) 70%, var(--surface-solid));
+  box-shadow: inset 0 0 0 1px rgba(255, 107, 0, 0.08);
 }
 .document-list a {
   color: inherit;
@@ -826,8 +845,7 @@
   flex: 1;
 }
 .document-list article {
-  min-height: 90px;
-  padding: 16px 14px;
+  padding: 9px 11px;
   gap: 10px;
 }
 .document-list strong {
@@ -839,6 +857,14 @@
   margin-top: 3px;
   font-size: 11px;
   line-height: 1.55;
+}
+.document-list .document-meta {
+  margin-top: 1px;
+  color: var(--muted-2);
+  font-size: 10px;
+}
+.document-list .document-created-at {
+  margin-top: 2px;
 }
 .document-edit-button {
   color: var(--muted) !important;
@@ -1306,6 +1332,7 @@ button:disabled {
   font-weight: 680;
   line-height: 1;
   letter-spacing: -0.025em;
+  text-decoration: none;
 }
 .brand > div {
   display: flex;
@@ -1484,11 +1511,15 @@ button:disabled {
   align-items: center;
   gap: 8px;
 }
+.welcome .primary-btn,
 .welcome-all-btn {
-  min-height: 48px;
-  padding: 0 16px;
+  min-height: 44px;
+  padding: 0 19px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.welcome-all-btn {
   border: 0.5px solid rgba(255, 255, 255, 0.45);
-  border-radius: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2181,6 +2212,9 @@ button:disabled {
 }
 .expense-back-top:active {
   transform: scale(0.92);
+}
+.workspace-back-top.without-fab {
+  bottom: calc(20px + env(safe-area-inset-bottom));
 }
 @keyframes back-top-in {
   from {
@@ -3266,7 +3300,7 @@ button:disabled {
   letter-spacing: -0.03em;
 }
 .plan-expenses {
-  padding-top: 8px;
+  padding: 8px 0 calc(156px + env(safe-area-inset-bottom));
 }
 .plan-expense-total {
   grid-template-columns: 1fr;
@@ -5774,15 +5808,22 @@ button:disabled {
 }
 .collaborator-row {
   min-height: 64px;
-  padding: 9px 10px;
+  padding: 9px 12px 9px 10px;
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  grid-template-columns: 40px minmax(0, 1fr) 42px;
   align-items: center;
   gap: 10px;
   border-bottom: 0.5px solid var(--line);
 }
 .collaborator-row:last-child {
   border-bottom: 0;
+}
+.collaborator-row .delete-record-btn {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  justify-self: center;
 }
 .collaborator-avatar {
   width: 40px;
@@ -6106,9 +6147,10 @@ html.sheet-open body {
   .welcome .primary-btn,
   .welcome-all-btn {
     width: 100%;
-    min-height: 38px;
-    padding: 0 10px;
-    font-size: 11px;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: 12px;
   }
   .welcome-actions {
     width: 100%;
