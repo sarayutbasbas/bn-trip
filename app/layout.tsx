@@ -10,6 +10,7 @@ import "@fontsource/ibm-plex-sans/latin-500.css";
 import "@fontsource/ibm-plex-sans/latin-600.css";
 import "@fontsource/ibm-plex-sans/latin-700.css";
 import "./globals.css";
+import { PwaRuntime } from "@/src/components/pwa-runtime";
 
 export const metadata: Metadata = {
   title: { default: "BN Trip", template: "%s · BN Trip" },
@@ -49,7 +50,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="th" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
-      <body>{children}</body>
+      <body>{children}<PwaRuntime/></body>
     </html>
   );
 }

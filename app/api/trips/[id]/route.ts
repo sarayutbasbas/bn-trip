@@ -3,6 +3,7 @@ import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
 import { getDemoTrip } from "@/src/lib/demo-data";
 import { getTripRole,tripMembersSql,tripRoleSql } from "@/src/lib/trip-access";
+import { logTripActivity } from "@/src/lib/activity";
 
 const demoDenied=()=>NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
 
@@ -22,8 +23,9 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   const googlePhotosUrl=typeof body.googlePhotosUrl==="string"?body.googlePhotosUrl.trim():"";
   if(googlePhotosUrl){try{const url=new URL(googlePhotosUrl);if(url.protocol!=="https:"||(url.hostname!=="photos.app.goo.gl"&&url.hostname!=="photos.google.com"))throw new Error()}catch{return NextResponse.json({error:"Invalid Google Photos URL"},{status:400})}}
   const totalDays=Math.floor((new Date(`${body.returnDate}T00:00:00`).getTime()-new Date(`${body.outboundDate}T00:00:00`).getTime())/86400000)+1;
-  const result=await query(`UPDATE trips SET name=COALESCE($1,name),destination=COALESCE($2,destination),start_date=$3,total_days=$4,budget_thb=COALESCE($5,budget_thb),shopping_budget_thb=COALESCE($6,shopping_budget_thb),outbound_departure_at=$7,return_departure_at=$8,cover_image_url=COALESCE($9,cover_image_url),google_photos_url=$10,updated_at=now() WHERE id=$11 RETURNING *,CASE WHEN owner_id=$12 THEN 'owner' ELSE 'collaborator' END AS access_role`,[body.name??null,body.destination??null,body.outboundDate,totalDays,body.budgetThb??null,body.shoppingBudgetThb??null,`${body.outboundDate} ${body.outboundTime}:00`,`${body.returnDate} ${body.returnTime}:00`,body.coverImageUrl??null,googlePhotosUrl||null,id,session.userId]);
-  return result.rows[0]?NextResponse.json(result.rows[0]):NextResponse.json({error:"Not found"},{status:404});
+  const timezone=typeof body.timezone==="string"?body.timezone:"Asia/Bangkok";try{new Intl.DateTimeFormat("en-US",{timeZone:timezone}).format()}catch{return NextResponse.json({error:"Invalid timezone"},{status:400})}
+  const before=await query("SELECT * FROM trips WHERE id=$1",[id]);const result=await query(`UPDATE trips SET name=COALESCE($1,name),destination=COALESCE($2,destination),start_date=$3,total_days=$4,budget_thb=COALESCE($5,budget_thb),shopping_budget_thb=COALESCE($6,shopping_budget_thb),outbound_departure_at=$7,return_departure_at=$8,cover_image_url=COALESCE($9,cover_image_url),google_photos_url=$10,timezone=$11,updated_at=now() WHERE id=$12 RETURNING *,CASE WHEN owner_id=$13 THEN 'owner' ELSE 'collaborator' END AS access_role`,[body.name??null,body.destination??null,body.outboundDate,totalDays,body.budgetThb??null,body.shoppingBudgetThb??null,`${body.outboundDate} ${body.outboundTime}:00`,`${body.returnDate} ${body.returnTime}:00`,body.coverImageUrl??null,googlePhotosUrl||null,timezone,id,session.userId]);
+  if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await logTripActivity({tripId:id,actorUserId:session.userId,entityType:"trip",entityId:id,action:"update",summary:"แก้ไขข้อมูลทริป",before:before.rows[0],after:result.rows[0]});return NextResponse.json(result.rows[0]);
 }
 
 export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){

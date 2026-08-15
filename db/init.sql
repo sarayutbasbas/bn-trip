@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS trips (
   traveller_count INTEGER NOT NULL DEFAULT 2 CHECK (traveller_count > 0),
   budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0, shopping_budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0,
   outbound_departure_at TIMESTAMP, return_departure_at TIMESTAMP,
-  cover_image_url TEXT, google_photos_url TEXT,
+  cover_image_url TEXT, google_photos_url TEXT, timezone VARCHAR(80) NOT NULL DEFAULT 'Asia/Bangkok',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS collaborator_contacts (
 );
 
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS google_photos_url TEXT;
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS timezone VARCHAR(80) NOT NULL DEFAULT 'Asia/Bangkok';
 
 CREATE TABLE IF NOT EXISTS itineraries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -79,6 +80,52 @@ CREATE TABLE IF NOT EXISTS lounges (
   visit_at TIMESTAMPTZ, notes TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS trip_checklist_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  title VARCHAR(240) NOT NULL, assigned_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  completed_at TIMESTAMPTZ, completed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0, created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS checklist_master_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(120) NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS checklist_master_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category_id UUID NOT NULL REFERENCES checklist_master_categories(id) ON DELETE CASCADE,
+  title VARCHAR(240) NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS checklist_master_category_name_unique_idx ON checklist_master_categories(user_id,lower(name));
+CREATE UNIQUE INDEX IF NOT EXISTS checklist_master_item_title_unique_idx ON checklist_master_items(user_id,category_id,lower(title));
+CREATE INDEX IF NOT EXISTS checklist_master_category_sort_idx ON checklist_master_categories(user_id,sort_order,created_at);
+CREATE INDEX IF NOT EXISTS checklist_master_item_sort_idx ON checklist_master_items(user_id,category_id,sort_order,created_at);
+ALTER TABLE trip_checklist_items ADD COLUMN IF NOT EXISTS master_item_id UUID REFERENCES checklist_master_items(id) ON DELETE SET NULL;
+ALTER TABLE trip_checklist_items ADD COLUMN IF NOT EXISTS category_name VARCHAR(120) NOT NULL DEFAULT 'อื่น ๆ';
+CREATE INDEX IF NOT EXISTS trip_checklist_master_item_idx ON trip_checklist_items(master_item_id);
+CREATE UNIQUE INDEX IF NOT EXISTS trip_checklist_trip_master_unique_idx ON trip_checklist_items(trip_id,master_item_id) WHERE master_item_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS trip_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  title VARCHAR(180) NOT NULL, stored_filename TEXT NOT NULL, blob_url TEXT, original_filename TEXT NOT NULL,
+  mime_type VARCHAR(120) NOT NULL, file_size BIGINT NOT NULL CHECK (file_size >= 0),
+  uploaded_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE trip_documents ADD COLUMN IF NOT EXISTS blob_url TEXT;
+
+CREATE TABLE IF NOT EXISTS trip_activity_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL, entity_type VARCHAR(40) NOT NULL,
+  entity_id UUID, action VARCHAR(20) NOT NULL, summary TEXT NOT NULL, before_data JSONB, after_data JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), undone_at TIMESTAMPTZ, undone_by UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
 CREATE INDEX IF NOT EXISTS trips_owner_idx ON trips(owner_id);
 CREATE INDEX IF NOT EXISTS trip_collaborators_user_idx ON trip_collaborators(user_id);
 CREATE INDEX IF NOT EXISTS trip_collaborators_email_idx ON trip_collaborators(lower(email));
@@ -87,6 +134,9 @@ CREATE INDEX IF NOT EXISTS credit_cards_user_sort_idx ON credit_cards(user_id,so
 CREATE INDEX IF NOT EXISTS itinerary_trip_day_idx ON itineraries(trip_id, day_number, sort_order);
 CREATE INDEX IF NOT EXISTS expenses_trip_date_idx ON expenses(trip_id, spent_at);
 CREATE INDEX IF NOT EXISTS flights_trip_idx ON flights(trip_id);
+CREATE INDEX IF NOT EXISTS trip_checklist_trip_sort_idx ON trip_checklist_items(trip_id,sort_order,created_at);
+CREATE INDEX IF NOT EXISTS trip_documents_trip_created_idx ON trip_documents(trip_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS trip_activity_trip_created_idx ON trip_activity_logs(trip_id,created_at DESC);
 
 -- LOCAL_DEMO_SEED: the cloud setup script intentionally stops before this marker.
 INSERT INTO users (email, display_name)

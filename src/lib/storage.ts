@@ -1,6 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { get, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 
 export type StorageBackend = "local" | "blob";
 
@@ -39,10 +39,10 @@ export async function saveUpload(filename: string, data: Buffer, contentType: st
   return `/api/uploads/${filename}`;
 }
 
-export async function readUpload(filename: string, ifNoneMatch?: string) {
+export async function readUpload(filename: string, ifNoneMatch?: string, directBlobUrl?: string | null) {
   if (getStorageBackend() === "blob") {
     requireBlobCredentials();
-    const result = await get(blobPath(filename), {
+    const result = await get(directBlobUrl || blobPath(filename), {
       access: "private",
       ifNoneMatch,
     });
@@ -66,4 +66,13 @@ export async function readUpload(filename: string, ifNoneMatch?: string) {
   } catch {
     return null;
   }
+}
+
+export async function deleteUpload(filename:string,directBlobUrl?:string|null){
+  if(getStorageBackend()==="blob"){
+    requireBlobCredentials();
+    await del(directBlobUrl||blobPath(filename));
+    return;
+  }
+  try{await unlink(path.join(uploadDir,filename))}catch{}
 }

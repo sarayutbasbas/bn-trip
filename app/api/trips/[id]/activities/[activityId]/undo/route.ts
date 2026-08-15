@@ -1,0 +1,27 @@
+import { NextResponse } from "next/server";
+import { getSession } from "@/src/lib/auth";
+import { transaction } from "@/src/lib/db";
+import { getTripRole } from "@/src/lib/trip-access";
+import { deleteUpload } from "@/src/lib/storage";
+
+type Activity={id:string;trip_id:string;entity_type:string;entity_id:string|null;action:string;before_data:Record<string,unknown>|null;after_data:Record<string,unknown>|null;created_at:string;undone_at:string|null};
+
+export async function POST(_:Request,{params}:{params:Promise<{id:string;activityId:string}>}){
+  const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
+  const {id,activityId}=await params;if(await getTripRole(id,session.userId)!=="owner")return NextResponse.json({error:"เฉพาะเจ้าของทริปที่ย้อนคืนประวัติได้"},{status:403});
+  try{const deletedFile=await transaction(async client=>{let fileToDelete:{filename:string;blobUrl:string|null}|null=null;const found=await client.query<Activity>(`SELECT * FROM trip_activity_logs activity WHERE id=$1 AND trip_id=$2 AND created_at>=now()-interval '180 days'
+      AND (SELECT COUNT(*) FROM trip_activity_logs newer WHERE newer.trip_id=activity.trip_id AND newer.created_at>activity.created_at)<500 FOR UPDATE`,[activityId,id]);const activity=found.rows[0];if(!activity||activity.undone_at)throw new Error("undo_unavailable");const before=activity.before_data;const after=activity.after_data;const entityId=activity.entity_id;
+    if(activity.entity_type==="itinerary"&&entityId){
+      if(activity.action==="create")await client.query("DELETE FROM itineraries WHERE id=$1 AND trip_id=$2",[entityId,id]);
+      else if(activity.action==="update"&&before)await client.query(`UPDATE itineraries SET day_number=$1,time_slot=$2,start_time=$3,place_name=$4,address=$5,image_url=$6,transport_mode=$7,transport_note=$8,cost_items=$9::jsonb,sort_order=$10,updated_at=now() WHERE id=$11 AND trip_id=$12`,[before.day_number,before.time_slot,before.start_time,before.place_name,before.address,before.image_url,before.transport_mode,before.transport_note,JSON.stringify(before.cost_items||[]),before.sort_order,entityId,id]);
+      else if(activity.action==="delete"&&before)await client.query(`INSERT INTO itineraries (id,trip_id,day_number,time_slot,start_time,place_name,address,image_url,transport_mode,transport_note,cost_items,sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12)`,[entityId,id,before.day_number,before.time_slot,before.start_time,before.place_name,before.address,before.image_url,before.transport_mode,before.transport_note,JSON.stringify(before.cost_items||[]),before.sort_order]);
+    }else if(activity.entity_type==="checklist"&&entityId){
+      if(activity.action==="create")await client.query("DELETE FROM trip_checklist_items WHERE id=$1 AND trip_id=$2",[entityId,id]);
+      else if(activity.action==="update"&&before)await client.query(`UPDATE trip_checklist_items SET title=$1,master_item_id=$2,category_name=$3,assigned_user_id=$4,completed_at=$5,completed_by=$6,sort_order=$7,updated_at=now() WHERE id=$8 AND trip_id=$9`,[before.title,before.master_item_id||null,before.category_name||"อื่น ๆ",before.assigned_user_id,before.completed_at,before.completed_by,before.sort_order,entityId,id]);
+      else if(activity.action==="delete"&&before)await client.query(`INSERT INTO trip_checklist_items (id,trip_id,title,master_item_id,category_name,assigned_user_id,completed_at,completed_by,sort_order,created_by,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[entityId,id,before.title,before.master_item_id||null,before.category_name||"อื่น ๆ",before.assigned_user_id,before.completed_at,before.completed_by,before.sort_order,before.created_by,before.created_at,before.updated_at]);
+    }else if(activity.entity_type==="document"&&activity.action==="create"&&entityId){const removed=await client.query<{stored_filename:string;blob_url:string|null}>("DELETE FROM trip_documents WHERE id=$1 AND trip_id=$2 RETURNING stored_filename,blob_url",[entityId,id]);const row=removed.rows[0];const filename=row?.stored_filename||String(after?.stored_filename||"");if(filename)fileToDelete={filename,blobUrl:row?.blob_url||String(after?.blob_url||"")||null}}
+    else if(activity.entity_type==="trip"&&activity.action==="update"&&before)await client.query(`UPDATE trips SET name=$1,destination=$2,start_date=$3,total_days=$4,budget_thb=$5,shopping_budget_thb=$6,outbound_departure_at=$7,return_departure_at=$8,cover_image_url=$9,google_photos_url=$10,timezone=$11,updated_at=now() WHERE id=$12`,[before.name,before.destination,before.start_date,before.total_days,before.budget_thb,before.shopping_budget_thb,before.outbound_departure_at,before.return_departure_at,before.cover_image_url,before.google_photos_url,before.timezone||"Asia/Bangkok",id]);
+    else throw new Error("undo_unavailable");
+    await client.query("UPDATE trip_activity_logs SET undone_at=now(),undone_by=$1 WHERE id=$2",[session.userId,activityId]);return fileToDelete;
+  });if(deletedFile)await deleteUpload(deletedFile.filename,deletedFile.blobUrl);return NextResponse.json({ok:true});}catch(error){return NextResponse.json({error:error instanceof Error&&error.message==="undo_unavailable"?"รายการนี้หมดระยะ Undo หรือไม่สามารถย้อนคืนได้":"ย้อนคืนรายการไม่สำเร็จ"},{status:409})}
+}
