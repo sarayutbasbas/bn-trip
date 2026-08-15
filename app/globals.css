@@ -2719,6 +2719,15 @@ button:disabled {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+.plan-day-strip.is-short {
+  justify-content: center;
+  padding-right: 10px;
+  padding-left: 10px;
+}
+.plan-day-strip.is-short .day-pill {
+  flex: 0 1 66px;
+  min-width: 0;
+}
 .day-pill {
   flex: 0 0 66px;
   min-height: 74px;
@@ -6156,6 +6165,13 @@ html.sheet-open,
 html.confirm-open {
   overflow-y: hidden;
 }
+html.sheet-open .flow-header,
+html.confirm-open .flow-header,
+html:has(.modal-backdrop) .flow-header,
+html:has(.confirm-backdrop) .flow-header {
+  z-index: 0;
+  pointer-events: none;
+}
 html.sheet-open,
 html.sheet-open body {
   background: var(--surface-solid);
@@ -6189,6 +6205,10 @@ html.sheet-open body {
     margin-left: calc(50% - 50vw);
     margin-right: calc(50% - 50vw);
     padding-left: 24px;
+  }
+  .plan-day-strip.is-short {
+    padding-right: 10px;
+    padding-left: 10px;
   }
   .timeline-heading {
     margin-left: 10px;

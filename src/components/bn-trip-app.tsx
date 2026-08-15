@@ -2615,7 +2615,10 @@ function TripHub({
       <div className="trip-hub-body">
         {view === "plan" ? (
           <>
-            <div ref={dayStripRef} className="day-strip plan-day-strip">
+            <div
+              ref={dayStripRef}
+              className={`day-strip plan-day-strip ${trip.total_days < 6 ? "is-short" : ""}`}
+            >
               {Array.from(
                 { length: trip.total_days },
                 (_, index) => index + 1,
@@ -2875,7 +2878,10 @@ function TimelineScreen({
   return (
     <div className="screen timeline-screen">
       <TripHeader trip={trip} back={back} />
-      <div ref={dayStripRef} className="day-strip plan-day-strip">
+      <div
+        ref={dayStripRef}
+        className={`day-strip plan-day-strip ${trip.total_days < 6 ? "is-short" : ""}`}
+      >
         {Array.from({ length: trip.total_days }, (_, i) => i + 1).map((n) => {
           const date = new Date(`${baseDate}T00:00:00`);
           date.setDate(date.getDate() + n - 1);
