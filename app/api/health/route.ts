@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { query } from "@/src/lib/db";
+import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await ensureLatestDatabaseSchema();
     await query("SELECT 1");
 
     const hasGoogleAuth = Boolean(
