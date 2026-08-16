@@ -951,6 +951,26 @@ function useT() {
   return (value: string) => (lang === "EN" ? translateUiText(value) : value);
 }
 let tripListCache: Trip[] | null = null;
+const tripReviewSummaryCache = new Map<
+  string,
+  { average: number; count: number }
+>();
+
+function applyCachedTripReviewSummary(trip: Trip): Trip {
+  const summary = tripReviewSummaryCache.get(trip.id);
+  return summary
+    ? {
+        ...trip,
+        review_average: summary.average,
+        review_count: summary.count,
+      }
+    : trip;
+}
+
+function applyCachedTripReviewSummaries(trips: Trip[]): Trip[] {
+  if (!tripReviewSummaryCache.size) return trips;
+  return trips.map(applyCachedTripReviewSummary);
+}
 const itineraryCache = new Map<string, Itinerary[]>();
 
 function Brand() {
@@ -2347,7 +2367,9 @@ function TripsDirectory({
   const [sort, setSort] = useState<TripSort>(() =>
     validSort(initialFilters.sort),
   );
-  const [items, setItems] = useState<Trip[]>(initialData?.items || []);
+  const [items, setItems] = useState<Trip[]>(() =>
+    applyCachedTripReviewSummaries(initialData?.items || []),
+  );
   const [years, setYears] = useState<number[]>(initialData?.years || []);
   const [total, setTotal] = useState(initialData?.total || 0);
   const [hasMore, setHasMore] = useState(Boolean(initialData?.hasMore));
@@ -2355,6 +2377,18 @@ function TripsDirectory({
   const [loadingMore, setLoadingMore] = useState(false);
   const [now] = useState(() => Date.now());
   const skipInitialFetch = useRef(Boolean(initialData));
+  useEffect(() => {
+    const syncCachedReviews = () => {
+      setItems((current) => applyCachedTripReviewSummaries(current));
+    };
+    window.addEventListener("pageshow", syncCachedReviews);
+    window.addEventListener("popstate", syncCachedReviews);
+    syncCachedReviews();
+    return () => {
+      window.removeEventListener("pageshow", syncCachedReviews);
+      window.removeEventListener("popstate", syncCachedReviews);
+    };
+  }, []);
   useEffect(() => {
     if (skipInitialFetch.current) {
       skipInitialFetch.current = false;
@@ -2389,7 +2423,11 @@ function TripsDirectory({
           });
           const data = await response.json();
           if (!response.ok) throw new Error(data.error);
-          setItems(Array.isArray(data.items) ? data.items : []);
+          setItems(
+            applyCachedTripReviewSummaries(
+              Array.isArray(data.items) ? data.items : [],
+            ),
+          );
           setYears(Array.isArray(data.years) ? data.years : []);
           setTotal(Number(data.total || 0));
           setHasMore(Boolean(data.hasMore));
@@ -5456,6 +5494,7 @@ function ReviewsSheet({
       setCount(Number(data.count || 0));
       onSaved(Number(data.average || 0), Number(data.count || 0));
       notify("บันทึกรีวิวแล้ว");
+      close();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("บันทึกรีวิวไม่สำเร็จ"));
     } finally {
@@ -6698,20 +6737,24 @@ export function BNTripApp({
   initialTripDirectory?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
 }) {
   const initialDashboardTrips = initialDashboard
-    ? [
+    ? applyCachedTripReviewSummaries([
         ...initialDashboard.ongoing,
         ...initialDashboard.upcoming,
         ...initialDashboard.past,
-      ]
+      ])
     : null;
-  const cachedSelected = tripId
+  const initialSelected = tripId
     ? initialTrip || tripListCache?.find((trip) => trip.id === tripId) || null
+    : null;
+  const cachedSelected = initialSelected
+    ? applyCachedTripReviewSummary(initialSelected)
     : null;
   const router = useRouter();
   const [dark, setDark] = useState(false);
   const [lang, setLang] = useState<Lang>("TH");
   const [trips, setTrips] = useState<Trip[]>(() =>
-    initialDashboardTrips || (initialTrip ? [initialTrip] : tripListCache || []),
+    initialDashboardTrips ||
+      (cachedSelected ? [cachedSelected] : tripListCache || []),
   );
   const [selected, setSelected] = useState<Trip | null>(cachedSelected);
   const [itineraries, setItineraries] = useState<Itinerary[]>(() =>
@@ -6738,21 +6781,38 @@ export function BNTripApp({
   const [refreshingDashboard, setRefreshingDashboard] = useState(false);
   const pullDistanceRef = useRef(0);
   useEffect(() => {
-    if (initialDashboard)
-      tripListCache = [
+    if (initialDashboard) {
+      tripListCache = applyCachedTripReviewSummaries([
         ...initialDashboard.ongoing,
         ...initialDashboard.upcoming,
         ...initialDashboard.past,
-      ];
+      ]);
+    }
     if (tripId && initialTrip) {
+      const nextInitialTrip = applyCachedTripReviewSummary(initialTrip);
       tripListCache = [
-        initialTrip,
+        nextInitialTrip,
         ...(tripListCache || []).filter((trip) => trip.id !== initialTrip.id),
       ];
     }
     if (tripId && initialItineraries)
       itineraryCache.set(tripId, initialItineraries);
   }, [initialDashboard, initialItineraries, initialTrip, tripId]);
+  useEffect(() => {
+    const syncCachedReviews = () => {
+      setTrips((current) => applyCachedTripReviewSummaries(current));
+      setSelected((current) =>
+        current ? applyCachedTripReviewSummary(current) : current,
+      );
+    };
+    window.addEventListener("pageshow", syncCachedReviews);
+    window.addEventListener("popstate", syncCachedReviews);
+    syncCachedReviews();
+    return () => {
+      window.removeEventListener("pageshow", syncCachedReviews);
+      window.removeEventListener("popstate", syncCachedReviews);
+    };
+  }, []);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setDark(document.documentElement.classList.contains("dark"));
@@ -7269,16 +7329,14 @@ export function BNTripApp({
     });
   }
   function updateTripReviewSummary(id: string, average: number, count: number) {
+    tripReviewSummaryCache.set(id, { average, count });
     const update = (trip: Trip) =>
       trip.id === id
         ? { ...trip, review_average: average, review_count: count }
         : trip;
+    if (tripListCache) tripListCache = tripListCache.map(update);
     setSelected((current) => (current ? update(current) : current));
-    setTrips((old) => {
-      const next = old.map(update);
-      if (tripListCache) tripListCache = tripListCache.map(update);
-      return next;
-    });
+    setTrips((old) => old.map(update));
   }
   const selectTrip = (trip: Trip, origin?: string) =>
     router.push(
