@@ -21,6 +21,7 @@ import {
   clearOfflineDocuments,
   clearPrivateOfflineData,
 } from "@/src/components/pwa-runtime";
+import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
   clearCurrentAccount,
   getCurrentAccount,
@@ -30,6 +31,7 @@ import { optimizedCanvasFile } from "@/src/lib/client-image-compression";
 import {
   TRIP_COUNTRIES,
   countryByCode,
+  formatTripDestination,
   inferTripCountry,
   tripCity,
 } from "@/src/lib/countries";
@@ -951,6 +953,7 @@ function useT() {
   return (value: string) => (lang === "EN" ? translateUiText(value) : value);
 }
 let tripListCache: Trip[] | null = null;
+const NAVIGATION_TOAST_KEY = "bn-trip-navigation-toast";
 const tripReviewSummaryCache = new Map<
   string,
   { average: number; count: number }
@@ -972,6 +975,25 @@ function applyCachedTripReviewSummaries(trips: Trip[]): Trip[] {
   return trips.map(applyCachedTripReviewSummary);
 }
 const itineraryCache = new Map<string, Itinerary[]>();
+
+function TripCountryFlag({ trip }: { trip: Trip }) {
+  const country =
+    countryByCode(trip.country_code) ||
+    inferTripCountry(
+      [trip.destination, trip.country_name].filter(Boolean).join(", "),
+      trip.timezone,
+    );
+  return (
+    <span
+      className="trip-country-flag"
+      role="img"
+      aria-label={country.nameEn}
+      title={country.nameEn}
+    >
+      {country.flag}
+    </span>
+  );
+}
 
 function Brand() {
   return (
@@ -1655,16 +1677,12 @@ function TripCard({
   past,
   now,
   selectTrip,
-  editTrip,
-  deleteTrip,
   priority = false,
 }: {
   trip: Trip;
   past?: boolean;
   now: number;
   selectTrip: (t: Trip) => void;
-  editTrip: (t: Trip) => void;
-  deleteTrip: (t: Trip) => void;
   priority?: boolean;
 }) {
   const t = useT();
@@ -1703,24 +1721,18 @@ function TripCard({
             {countdownLabel}
           </b>
         )}
-        <div className="trip-actions">
-          <button onClick={() => editTrip(trip)} aria-label={t("แก้ไข")}>
-            <Pencil size={15} />
-          </button>
-          {trip.access_role !== "collaborator" && (
-            <button onClick={() => deleteTrip(trip)} aria-label={t("ลบ")}>
-              <Trash2 size={15} />
-            </button>
-          )}
-        </div>
         <SharedTripAvatars members={trip.members} limit={3} />
         {past && <TripRatingBadge trip={trip} />}
       </div>
       <div className="trip-body">
         <h3>{trip.name}</h3>
         <p>
-          <MapPin size={12} />
-          {trip.destination}
+          <TripCountryFlag trip={trip} />
+          {formatTripDestination(
+            trip.destination,
+            trip.country_code,
+            trip.country_name,
+          )}
         </p>
         <span className="trip-duration">{tripRangeLabel(trip)}</span>
         <div className="trip-meta">
@@ -1875,8 +1887,6 @@ function Dashboard({
   revision,
   selectTrip,
   createTrip,
-  editTrip,
-  deleteTrip,
   viewAll,
   viewAnalytics,
   onInvitationChanged,
@@ -1888,8 +1898,6 @@ function Dashboard({
   revision: number;
   selectTrip: (t: Trip) => void;
   createTrip: () => void;
-  editTrip: (t: Trip) => void;
-  deleteTrip: (t: Trip) => void;
   viewAll: (status: TripStatus) => void;
   viewAnalytics: () => void;
   onInvitationChanged: () => void;
@@ -1929,8 +1937,6 @@ function Dashboard({
           past={isPast}
           now={now}
           selectTrip={selectTrip}
-          editTrip={editTrip}
-          deleteTrip={deleteTrip}
           priority={prioritizeFirst && index === 0}
         />
       ))}
@@ -2265,15 +2271,11 @@ function CompactTripCard({
   trip,
   now,
   selectTrip,
-  editTrip,
-  deleteTrip,
   priority = false,
 }: {
   trip: Trip;
   now: number;
   selectTrip: (trip: Trip) => void;
-  editTrip: (trip: Trip) => void;
-  deleteTrip: (trip: Trip) => void;
   priority?: boolean;
 }) {
   const t = useT();
@@ -2308,24 +2310,20 @@ function CompactTripCard({
         <span className="compact-trip-status">{status}</span>
         <h3>{trip.name}</h3>
         <p>
-          <MapPin size={12} />
-          <span>{trip.destination}</span>
+          <TripCountryFlag trip={trip} />
+          <span>
+            {formatTripDestination(
+              trip.destination,
+              trip.country_code,
+              trip.country_name,
+            )}
+          </span>
         </p>
         <small>{tripRangeLabel(trip)}</small>
         <div className="compact-trip-meta">
           <span>{t(`${trip.total_days} วัน`)}</span>
           <span>฿{Number(trip.budget_thb).toLocaleString()}</span>
         </div>
-      </div>
-      <div className="compact-trip-actions">
-        <button onClick={() => editTrip(trip)} aria-label={t("แก้ไข")}>
-          <Pencil size={15} />
-        </button>
-        {trip.access_role !== "collaborator" && (
-          <button onClick={() => deleteTrip(trip)} aria-label={t("ลบ")}>
-            <Trash2 size={15} />
-          </button>
-        )}
       </div>
       <SharedTripAvatars members={trip.members} variant="compact" limit={3} />
     </article>
@@ -2338,16 +2336,12 @@ function TripsDirectory({
   revision,
   selectTrip,
   createTrip,
-  editTrip,
-  deleteTrip,
 }: {
   initialFilters: TripFilters;
   initialData?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
   revision: number;
   selectTrip: (trip: Trip) => void;
   createTrip: () => void;
-  editTrip: (trip: Trip) => void;
-  deleteTrip: (trip: Trip) => void;
 }) {
   const t = useT();
   const router = useRouter();
@@ -2562,8 +2556,6 @@ function TripsDirectory({
                 now={now}
                 priority={index < 3}
                 selectTrip={selectTrip}
-                editTrip={editTrip}
-                deleteTrip={deleteTrip}
               />
             ))}
           </div>
@@ -2638,7 +2630,14 @@ function TripHeader({
         className={`trip-cover-copy ${trip.members?.length ? "has-collaborators" : ""}`}
       >
         {ended && <b className="trip-history-badge">{t("ที่ผ่านมาแล้ว")}</b>}
-        <span className="eyebrow">{trip.destination}</span>
+        <span className="eyebrow">
+          <TripCountryFlag trip={trip} />
+          {formatTripDestination(
+            trip.destination,
+            trip.country_code,
+            trip.country_name,
+          )}
+        </span>
         <h1 className="page-title">{trip.name}</h1>
         <p className="page-sub">{tripHeaderRangeLabel(trip)}</p>
       </div>
@@ -2849,6 +2848,7 @@ function TripHub({
   setDay,
   back,
   editTrip,
+  deleteTrip,
   openReviews,
   manageCollaborators,
   leaveTrip,
@@ -2865,6 +2865,7 @@ function TripHub({
   setDay: (day: number) => void;
   back: () => void;
   editTrip: () => void;
+  deleteTrip: () => void;
   openReviews: () => void;
   manageCollaborators: () => void;
   leaveTrip: () => void;
@@ -3028,6 +3029,12 @@ function TripHub({
                 <Pencil size={18} />
                 <span>{t("แก้ไข")}</span>
               </button>
+              {trip.access_role === "owner" && (
+                <button type="button" onClick={deleteTrip}>
+                  <Trash2 size={18} />
+                  <span>{t("ลบทริป")}</span>
+                </button>
+              )}
             </>
           }
         />
@@ -4142,6 +4149,9 @@ function CardSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { formRef, hasChanges, checkForChanges } = useFormDirty(
+    card?.id || "new-card",
+  );
   useEffect(() => {
     const root = document.documentElement;
     root.classList.add("sheet-open");
@@ -4179,7 +4189,12 @@ function CardSheet({
         if (event.target === event.currentTarget) close();
       }}
     >
-      <form className="modal card-sheet" onSubmit={submit}>
+      <form
+        ref={formRef}
+        className="modal card-sheet"
+        onChange={checkForChanges}
+        onSubmit={submit}
+      >
         <div className="modal-head">
           <h2>{t(card ? "แก้ไขบัตร" : "เพิ่มบัตร")}</h2>
           <button
@@ -4254,7 +4269,7 @@ function CardSheet({
         </div>
         {error && <p className="login-error">{error}</p>}
         <div className="modal-submit-actions">
-          <button className="primary-btn" disabled={saving}>
+          <button className="primary-btn" disabled={saving || !hasChanges}>
             {t(saving ? "กำลังบันทึกบัตร…" : "บันทึกบัตร")}
           </button>
           {card && (
@@ -5720,7 +5735,10 @@ function CollaboratorsSheet({
                 required
               />
             </div>
-            <button className="primary-btn" disabled={saving}>
+            <button
+              className="primary-btn"
+              disabled={saving || !email.trim()}
+            >
               <UserPlus size={16} />
               {t(saving ? "กำลังเพิ่ม…" : "เพิ่มผู้ร่วมทริป")}
             </button>
@@ -5852,6 +5870,9 @@ function CostSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { formRef, hasChanges, checkForChanges } = useFormDirty(
+    `${modal.item?.id || "new"}:${modal.costIndex ?? "cost"}`,
+  );
   useEffect(() => {
     const root = document.documentElement;
     root.classList.add("sheet-open");
@@ -5952,7 +5973,12 @@ function CostSheet({
         if (event.target === event.currentTarget) close();
       }}
     >
-      <form className="modal cost-sheet" onSubmit={handle}>
+      <form
+        ref={formRef}
+        className="modal cost-sheet"
+        onChange={checkForChanges}
+        onSubmit={handle}
+      >
         <div className="modal-head">
           <div>
             <h2>{t(existing ? "แก้ไขค่าใช้จ่าย" : "เพิ่มค่าใช้จ่าย")}</h2>
@@ -5978,6 +6004,7 @@ function CostSheet({
             <div className="field">
               <label>{t("วันที่")}</label>
               <select
+                name="dayNumber"
                 value={selectedDay}
                 onChange={(event) => {
                   const nextDay = Number(event.target.value);
@@ -6003,6 +6030,7 @@ function CostSheet({
             <div className="field">
               <label>{t("จุดใน Timeline")}</label>
               <select
+                name="targetId"
                 value={targetId}
                 onChange={(event) => setTargetId(event.target.value)}
                 required
@@ -6121,7 +6149,7 @@ function CostSheet({
         <div className="modal-submit-actions">
           <button
             className="primary-btn"
-            disabled={saving || rateLoading || !targetId}
+            disabled={saving || rateLoading || !targetId || !hasChanges}
           >
             {t(saving ? "กำลังบันทึก…" : "บันทึกค่าใช้จ่าย")}
           </button>
@@ -6280,6 +6308,14 @@ function ModalForm({
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
+  const formDirtyKey =
+    modal.type === "trip"
+      ? `trip:${modal.trip?.id || "new"}`
+      : `place:${modal.item?.id || modal.duplicateOf?.id || "new"}`;
+  const { formRef, hasChanges, checkForChanges } = useFormDirty(
+    formDirtyKey,
+    modal.type === "place" && Boolean(modal.duplicateOf),
+  );
   const initialCountry =
     modal.type === "trip"
       ? countryByCode(modal.trip?.country_code) ||
@@ -6411,7 +6447,12 @@ function ModalForm({
         if (e.target === e.currentTarget) close();
       }}
     >
-      <form className="modal" onSubmit={handle}>
+      <form
+        ref={formRef}
+        className="modal"
+        onChange={checkForChanges}
+        onSubmit={handle}
+      >
         <div className="modal-head">
           <h2>{title}</h2>
           <button
@@ -6428,7 +6469,10 @@ function ModalForm({
             <>
               <CoverImagePicker
                 existingUrl={modal.trip?.cover_image_url}
-                onChange={setCoverFile}
+                onChange={(file) => {
+                  setCoverFile(file);
+                  checkForChanges();
+                }}
               />
               <div className="field">
                 <label>{t("ชื่อทริป")}</label>
@@ -6643,7 +6687,10 @@ function ModalForm({
         </div>
         {error && <p className="login-error">{t(error)}</p>}
         <div className="modal-submit-actions">
-          <button className="primary-btn" disabled={saving}>
+          <button
+            className="primary-btn"
+            disabled={saving || (!hasChanges && !coverFile)}
+          >
             {t(saving ? "กำลังบันทึก…" : "บันทึก")}
           </button>
           {canDelete &&
@@ -6823,6 +6870,17 @@ export function BNTripApp({
       }
     });
     return () => cancelAnimationFrame(frame);
+  }, []);
+  useEffect(() => {
+    const message = sessionStorage.getItem(NAVIGATION_TOAST_KEY);
+    if (!message) return;
+    sessionStorage.removeItem(NAVIGATION_TOAST_KEY);
+    const frame = requestAnimationFrame(() => setToast(message));
+    const timer = window.setTimeout(() => setToast(""), 2400);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
   }, []);
   useEffect(() => {
     activeLang = lang;
@@ -7218,8 +7276,12 @@ export function BNTripApp({
     setTripRevision((value) => value + 1);
     itineraryCache.delete(trip.id);
     if (selected?.id === trip.id) setSelected(null);
-    flash("ลบทริปสำเร็จแล้ว");
-    if (page !== "trips") router.push("/");
+    if (page !== "trips") {
+      sessionStorage.setItem(NAVIGATION_TOAST_KEY, "ลบทริปสำเร็จแล้ว");
+      router.push("/");
+    } else {
+      flash("ลบทริปสำเร็จแล้ว");
+    }
   }
   function confirmLeaveTrip(trip: Trip) {
     setConfirmation({
@@ -7310,13 +7372,6 @@ export function BNTripApp({
       throw error;
     }
   }
-  const askDeleteTrip = (trip: Trip) =>
-    setConfirmation({
-      title: `ลบทริป “${trip.name}”?`,
-      description: "แผนเที่ยว ค่าใช้จ่าย และข้อมูลทั้งหมดในทริปนี้จะถูกลบถาวร",
-      confirmLabel: "ลบทริป",
-      onConfirm: () => removeTrip(trip),
-    });
   async function refreshTripMembers(id: string) {
     const fresh: Trip = await request(`/api/trips/${id}`);
     setSelected((current) => (current?.id === id ? fresh : current));
@@ -7370,8 +7425,6 @@ export function BNTripApp({
       revision={tripRevision + dashboardRefreshToken}
       selectTrip={selectTrip}
       createTrip={protect(() => setModal({ type: "trip" }))}
-      editTrip={protect((t) => setModal({ type: "trip", trip: t }))}
-      deleteTrip={protect(askDeleteTrip)}
       viewAll={(status) =>
         router.push(status === "all" ? "/trips" : `/trips?status=${status}`)
       }
@@ -7391,8 +7444,6 @@ export function BNTripApp({
         selectTrip(trip, `${window.location.pathname}${window.location.search}`)
       }
       createTrip={protect(() => setModal({ type: "trip" }))}
-      editTrip={protect((t) => setModal({ type: "trip", trip: t }))}
-      deleteTrip={protect(askDeleteTrip)}
     />
   ) : page === "trip" && selected ? (
     <TripHub
@@ -7403,6 +7454,15 @@ export function BNTripApp({
       setDay={setActiveDay}
       back={() => router.push(returnTo || "/")}
       editTrip={protect(() => setModal({ type: "trip", trip: selected }))}
+      deleteTrip={protect(() =>
+        setConfirmation({
+          title: `ลบทริป “${selected.name}”?`,
+          description:
+            "แผนเที่ยว ค่าใช้จ่าย และข้อมูลทั้งหมดในทริปนี้จะถูกลบถาวร",
+          confirmLabel: "ลบทริป",
+          onConfirm: () => removeTrip(selected),
+        }),
+      )}
       openReviews={() => setModal({ type: "reviews", trip: selected })}
       manageCollaborators={protect(() =>
         setModal({ type: "collaborators", trip: selected }),

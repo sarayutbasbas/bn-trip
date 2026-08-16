@@ -5,7 +5,7 @@ import { query } from "@/src/lib/db";
 import { tripAccessSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { getDemoTrips } from "@/src/lib/demo-data";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
-import { countryByCode } from "@/src/lib/countries";
+import { countryByCode,formatTripDestination } from "@/src/lib/countries";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const countryCodeSchema=z.string().length(2).transform(value=>value.toUpperCase()).refine(value=>Boolean(countryByCode(value)),{message:"Invalid country"});
@@ -61,8 +61,9 @@ export async function POST(request:Request) {
   try {
     const input = tripSchema.parse(await request.json());
     const country=countryByCode(input.countryCode)!;
+    const destination=formatTripDestination(input.destination,country.code,country.nameEn);
     const totalDays=Math.floor((new Date(`${input.returnDate}T00:00:00`).getTime()-new Date(`${input.outboundDate}T00:00:00`).getTime())/86400000)+1;
-    const result = await query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,google_photos_url,timezone) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *",[session.userId,input.name,input.destination,country.code,country.nameEn,input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.googlePhotosUrl||null,country.timezone]);
+    const result = await query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,google_photos_url,timezone) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *",[session.userId,input.name,destination,country.code,country.nameEn,input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.googlePhotosUrl||null,country.timezone]);
     const trip = {
       ...result.rows[0],
       access_role:"owner",

@@ -2273,6 +2273,26 @@ button:disabled {
   align-items: center;
   gap: 7px;
 }
+.trip-country-flag {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  font-size: 14px;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: 0;
+  text-shadow: none;
+}
+.trip-detail-head .trip-country-flag {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+  font-size: 16px;
+}
 .section-kicker,
 .mini-kicker {
   display: block;
@@ -2737,28 +2757,6 @@ button:disabled {
   background: var(--surface-2);
   font-size: 9px;
 }
-.compact-trip-actions {
-  position: absolute;
-  z-index: 3;
-  top: 10px;
-  right: 10px;
-  display: flex;
-  flex-direction: row;
-  gap: 6px;
-}
-.compact-trip-actions button {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0.5px solid var(--line);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--surface-solid) 86%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-}
 .load-more-btn {
   width: 100%;
   min-height: 48px;
@@ -2912,36 +2910,13 @@ button:disabled {
 .trip-cover::after {
   z-index: 1;
 }
-.trip-actions {
-  position: absolute;
-  z-index: 4;
-  top: 10px;
-  right: 10px;
-  display: flex;
-  gap: 7px;
-}
-.trip-actions button {
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: 0.5px solid rgba(255, 255, 255, 0.24);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: white;
-  background: rgba(20, 20, 22, 0.44);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
-}
-.trip-actions button:active {
-  transform: scale(0.9);
-}
 .countdown-badge,
 .past-badge {
   position: absolute;
   z-index: 4;
   top: 11px;
-  left: 11px;
+  right: 11px;
+  left: auto;
   padding: 7px 10px;
   border: 0.5px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;

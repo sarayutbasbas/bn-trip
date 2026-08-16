@@ -5,7 +5,7 @@ import { getDemoTrip } from "@/src/lib/demo-data";
 import { getTripRole,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
-import { countryByCode } from "@/src/lib/countries";
+import { countryByCode,formatTripDestination } from "@/src/lib/countries";
 
 const demoDenied=()=>NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
 
@@ -28,7 +28,8 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   if(googlePhotosUrl){try{const url=new URL(googlePhotosUrl);if(url.protocol!=="https:"||(url.hostname!=="photos.app.goo.gl"&&url.hostname!=="photos.google.com"))throw new Error()}catch{return NextResponse.json({error:"Invalid Google Photos URL"},{status:400})}}
   const totalDays=Math.floor((new Date(`${body.returnDate}T00:00:00`).getTime()-new Date(`${body.outboundDate}T00:00:00`).getTime())/86400000)+1;
   const country=countryByCode(typeof body.countryCode==="string"?body.countryCode:"");if(!country)return NextResponse.json({error:"Invalid country"},{status:400});
-  const before=await query("SELECT * FROM trips WHERE id=$1",[id]);const result=await query(`UPDATE trips SET name=COALESCE($1,name),destination=COALESCE($2,destination),country_code=$3,country_name=$4,start_date=$5,total_days=$6,budget_thb=COALESCE($7,budget_thb),shopping_budget_thb=COALESCE($8,shopping_budget_thb),outbound_departure_at=$9,return_departure_at=$10,cover_image_url=COALESCE($11,cover_image_url),google_photos_url=$12,timezone=$13,updated_at=now() WHERE id=$14 RETURNING *,CASE WHEN owner_id=$15 THEN 'owner' ELSE 'collaborator' END AS access_role`,[body.name??null,body.destination??null,country.code,country.nameEn,body.outboundDate,totalDays,body.budgetThb??null,body.shoppingBudgetThb??null,`${body.outboundDate} ${body.outboundTime}:00`,`${body.returnDate} ${body.returnTime}:00`,body.coverImageUrl??null,googlePhotosUrl||null,country.timezone,id,session.userId]);
+  const destination=formatTripDestination(typeof body.destination==="string"?body.destination:"",country.code,country.nameEn);
+  const before=await query("SELECT * FROM trips WHERE id=$1",[id]);const result=await query(`UPDATE trips SET name=COALESCE($1,name),destination=COALESCE($2,destination),country_code=$3,country_name=$4,start_date=$5,total_days=$6,budget_thb=COALESCE($7,budget_thb),shopping_budget_thb=COALESCE($8,shopping_budget_thb),outbound_departure_at=$9,return_departure_at=$10,cover_image_url=COALESCE($11,cover_image_url),google_photos_url=$12,timezone=$13,updated_at=now() WHERE id=$14 RETURNING *,CASE WHEN owner_id=$15 THEN 'owner' ELSE 'collaborator' END AS access_role`,[body.name??null,destination||null,country.code,country.nameEn,body.outboundDate,totalDays,body.budgetThb??null,body.shoppingBudgetThb??null,`${body.outboundDate} ${body.outboundTime}:00`,`${body.returnDate} ${body.returnTime}:00`,body.coverImageUrl??null,googlePhotosUrl||null,country.timezone,id,session.userId]);
   if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await logTripActivity({tripId:id,actorUserId:session.userId,entityType:"trip",entityId:id,action:"update",summary:"แก้ไขข้อมูลทริป",before:before.rows[0],after:result.rows[0]});return NextResponse.json(result.rows[0]);
 }
 

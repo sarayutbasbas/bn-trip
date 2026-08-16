@@ -53,3 +53,16 @@ export function inferTripCountry(destination?: string | null, timezone?: string 
 export function tripCity(destination?: string | null) {
   return (destination || "").split(",")[0]?.trim() || "";
 }
+
+export function formatTripDestination(
+  destination?: string | null,
+  countryCode?: string | null,
+  countryName?: string | null,
+) {
+  const city = tripCity(destination);
+  const country = countryByCode(countryCode)?.nameEn || countryName?.trim() || "";
+  if (!city || !country || city.toLowerCase() === country.toLowerCase()) {
+    return city || country;
+  }
+  return `${city}, ${country}`;
+}

@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
   MAX_SOURCE_IMAGE_BYTES,
   prepareDocumentFile,
@@ -190,6 +191,27 @@ export function TripWorkspace({
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const editDocumentFileRef = useRef<HTMLInputElement>(null);
+  const {
+    formRef: checklistFormRef,
+    hasChanges: checklistHasChanges,
+    checkForChanges: checkChecklistChanges,
+  } = useFormDirty(
+    `${checklistSheetOpen}:${editingItemId || "new"}`,
+  );
+  const {
+    formRef: documentEditFormRef,
+    hasChanges: documentEditHasChanges,
+    checkForChanges: checkDocumentEditChanges,
+  } = useFormDirty(
+    `document-edit:${editingDocument?.id || "closed"}`,
+  );
+  const {
+    formRef: documentCreateFormRef,
+    hasChanges: documentCreateHasChanges,
+    checkForChanges: checkDocumentCreateChanges,
+  } = useFormDirty(
+    `document-create:${documentSheetOpen}`,
+  );
   function notify(value: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(value);
@@ -1619,10 +1641,12 @@ export function TripWorkspace({
           }}
         >
           <form
+            ref={checklistFormRef}
             className="modal checklist-add-sheet"
             role="dialog"
             aria-modal="true"
             aria-labelledby="checklist-sheet-title"
+            onChange={checkChecklistChanges}
             onSubmit={addChecklist}
           >
             <div className="modal-head">
@@ -1657,6 +1681,7 @@ export function TripWorkspace({
                 </label>
                 <input
                   id="trip-checklist-title"
+                  name="title"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder={label(
@@ -1674,6 +1699,7 @@ export function TripWorkspace({
                   </label>
                   <select
                     id="trip-checklist-category"
+                    name="categoryId"
                     value={categoryId}
                     onChange={(event) => setCategoryId(event.target.value)}
                     required
@@ -1697,10 +1723,14 @@ export function TripWorkspace({
                 <div className="field">
                   <label>{label("มอบหมายให้")}</label>
                   <div className="new-checklist-assignees">
+                    <input type="hidden" name="assignee" value={assignee} />
                     <button
                       type="button"
                       className={!assignee ? "active" : ""}
-                      onClick={() => setAssignee("")}
+                      onClick={() => {
+                        setAssignee("");
+                        checkChecklistChanges();
+                      }}
                       aria-label={label("ยังไม่มอบหมาย")}
                       title={label("ยังไม่มอบหมาย")}
                     >
@@ -1714,7 +1744,10 @@ export function TripWorkspace({
                           type="button"
                           className={assignee === member.id ? "active" : ""}
                           key={member.id}
-                          onClick={() => setAssignee(member.id)}
+                          onClick={() => {
+                            setAssignee(member.id);
+                            checkChecklistChanges();
+                          }}
                           aria-label={`${label("มอบหมายให้")} ${memberName}`}
                           title={memberName}
                           style={
@@ -1740,7 +1773,8 @@ export function TripWorkspace({
                 disabled={
                   busy === (editingItem?.id || "checklist") ||
                   !title.trim() ||
-                  !categoryId
+                  !categoryId ||
+                  !checklistHasChanges
                 }
               >
                 {label(
@@ -1780,10 +1814,12 @@ export function TripWorkspace({
           }}
         >
           <form
+            ref={documentEditFormRef}
             className="modal document-upload-sheet document-edit-sheet"
             role="dialog"
             aria-modal="true"
             aria-labelledby="document-edit-title"
+            onChange={checkDocumentEditChanges}
             onSubmit={saveDocumentEdit}
           >
             <div className="modal-head">
@@ -1837,6 +1873,7 @@ export function TripWorkspace({
               <label htmlFor="document-edit-name">{label("ชื่อไฟล์")}</label>
               <input
                 id="document-edit-name"
+                name="title"
                 value={editingDocumentTitle}
                 onChange={(event) =>
                   setEditingDocumentTitle(event.target.value)
@@ -1856,7 +1893,8 @@ export function TripWorkspace({
                 className="primary-btn"
                 disabled={
                   busy === `document:${editingDocument.id}` ||
-                  !editingDocumentTitle.trim()
+                  !editingDocumentTitle.trim() ||
+                  !documentEditHasChanges
                 }
               >
                 {label(
@@ -1891,10 +1929,12 @@ export function TripWorkspace({
           }}
         >
           <form
+            ref={documentCreateFormRef}
             className="modal document-upload-sheet"
             role="dialog"
             aria-modal="true"
             aria-labelledby="document-upload-title"
+            onChange={checkDocumentCreateChanges}
             onSubmit={uploadDocument}
           >
             <div className="modal-head">
@@ -1961,6 +2001,7 @@ export function TripWorkspace({
                 busy === "document" ||
                 !documentTitle.trim() ||
                 !documentFileName ||
+                !documentCreateHasChanges ||
                 usagePercent >= 100
               }
             >

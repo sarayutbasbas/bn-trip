@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
   startTransition,
   useDeferredValue,
@@ -62,6 +63,13 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   const [toast, setToast] = useState("");
   const [showBackTop, setShowBackTop] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const {
+    formRef: itemFormRef,
+    hasChanges: itemHasChanges,
+    checkForChanges: checkItemChanges,
+  } = useFormDirty(
+    `${itemSheetOpen}:${editingItemId || "new"}`,
+  );
 
   async function api(url: string, options?: RequestInit) {
     const response = await fetch(url, {
@@ -528,10 +536,12 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
           }}
         >
           <form
+            ref={itemFormRef}
             className="modal checklist-add-sheet master-item-sheet"
             role="dialog"
             aria-modal="true"
             aria-labelledby="master-item-sheet-title"
+            onChange={checkItemChanges}
             onSubmit={saveItem}
           >
             <div className="modal-head">
@@ -556,6 +566,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                 <label htmlFor="master-item-title">ชื่อ Checklist</label>
                 <input
                   id="master-item-title"
+                  name="title"
                   value={itemTitle}
                   onChange={(event) => setItemTitle(event.target.value)}
                   placeholder="พิมพ์ Checklist"
@@ -574,6 +585,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                   <label htmlFor="master-item-category">หมวดหมู่</label>
                   <select
                     id="master-item-category"
+                    name="categoryId"
                     value={itemCategoryId}
                     onChange={(event) => {
                       setItemCategoryId(event.target.value);
@@ -595,6 +607,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                     <label htmlFor="master-new-category">ชื่อหมวดหมู่ใหม่</label>
                     <input
                       id="master-new-category"
+                      name="newCategoryName"
                       value={newCategoryName}
                       onChange={(event) => setNewCategoryName(event.target.value)}
                       placeholder="เช่น เอกสารสำคัญ"
@@ -614,7 +627,8 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                   !itemTitle.trim() ||
                   !itemCategoryId ||
                   (itemCategoryId === NEW_CATEGORY &&
-                    !newCategoryName.trim())
+                    !newCategoryName.trim()) ||
+                  !itemHasChanges
                 }
               >
                 {busy ? "กำลังบันทึก…" : "บันทึก Checklist"}
