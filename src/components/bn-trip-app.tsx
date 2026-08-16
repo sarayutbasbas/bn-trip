@@ -1952,8 +1952,11 @@ function Dashboard({
     <div className="section-head">
       <div>
         <span className="section-kicker">{kicker}</span>
-        <h2>{t(title)}</h2>
-        <p>{description ? t(description) : t(`${count} ทริป`)}</p>
+        <div className="section-title-row">
+          <h2>{t(title)}</h2>
+          <span className="section-trip-count">{t(`${count} ทริป`)}</span>
+        </div>
+        {description && <p>{t(description)}</p>}
       </div>
       {count > 0 && status !== "ongoing" && (
         <button className="section-view-all" onClick={() => viewAll(status)}>
@@ -3042,39 +3045,41 @@ function TripHub({
       <div className="trip-hub-body">
         {view === "plan" ? (
           <>
-            <div
-              ref={dayStripRef}
-              className={`day-strip plan-day-strip ${trip.total_days < 6 ? "is-short" : ""}`}
-            >
-              {Array.from(
-                { length: trip.total_days },
-                (_, index) => index + 1,
-              ).map((number) => {
-                const date = new Date(`${baseDate}T00:00:00`);
-                date.setDate(date.getDate() + number - 1);
-                const isToday = tripDay === number;
-                const isPast = tripDay !== null && tripDay > number;
-                return (
-                  <button
-                    key={number}
-                    data-day={number}
-                    className={`day-pill ${day === number ? "active" : ""} ${isToday ? "today" : ""} ${isPast ? "past-day" : ""}`}
-                    onClick={() => startTransition(() => setDay(number))}
-                  >
-                    <small>DAY</small>
-                    <strong>{number}</strong>
-                    <small>
-                      {isToday
-                        ? t("วันนี้")
-                        : date.toLocaleDateString(
-                            lang === "EN" ? "en-US" : "th-TH",
-                            { weekday: "short" },
-                          )}
-                    </small>
-                  </button>
-                );
-              })}
-            </div>
+            {trip.total_days > 1 && (
+              <div
+                ref={dayStripRef}
+                className={`day-strip plan-day-strip ${trip.total_days < 6 ? "is-short" : ""}`}
+              >
+                {Array.from(
+                  { length: trip.total_days },
+                  (_, index) => index + 1,
+                ).map((number) => {
+                  const date = new Date(`${baseDate}T00:00:00`);
+                  date.setDate(date.getDate() + number - 1);
+                  const isToday = tripDay === number;
+                  const isPast = tripDay !== null && tripDay > number;
+                  return (
+                    <button
+                      key={number}
+                      data-day={number}
+                      className={`day-pill ${day === number ? "active" : ""} ${isToday ? "today" : ""} ${isPast ? "past-day" : ""}`}
+                      onClick={() => startTransition(() => setDay(number))}
+                    >
+                      <small>DAY</small>
+                      <strong>{number}</strong>
+                      <small>
+                        {isToday
+                          ? t("วันนี้")
+                          : date.toLocaleDateString(
+                              lang === "EN" ? "en-US" : "th-TH",
+                              { weekday: "short" },
+                            )}
+                      </small>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="section-head timeline-heading timeline-heading-search">
               <div>
                 <h2>{t(`แผนวันที่ ${day}`)}</h2>
