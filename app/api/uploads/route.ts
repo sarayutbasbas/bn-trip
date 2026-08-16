@@ -15,7 +15,12 @@ export async function POST(request:Request){
     if(!(file instanceof File))return NextResponse.json({error:"กรุณาเลือกไฟล์รูป"},{status:400});
     if(!supportedTypes.has(file.type))return NextResponse.json({error:"รองรับเฉพาะ JPG, PNG และ WebP"},{status:400});
     if(file.size>8*1024*1024)return NextResponse.json({error:"รูปต้องมีขนาดไม่เกิน 8 MB"},{status:400});
-    const optimized=await sharp(Buffer.from(await file.arrayBuffer()))
+    const input=Buffer.from(await file.arrayBuffer());
+    const metadata=await sharp(input).metadata();
+    const isOptimizedCover=file.type==="image/webp"&&
+      Number(metadata.width||0)<=1600&&Number(metadata.height||0)<=900&&
+      file.size<=1200*1024;
+    const optimized=isOptimizedCover?input:await sharp(input)
       .rotate()
       .resize({width:1920,height:1080,fit:"inside",withoutEnlargement:true})
       .webp({quality:82,effort:4})

@@ -25,6 +25,7 @@ import {
   getCurrentAccount,
   updateCurrentAccount,
 } from "@/src/lib/client-account";
+import { optimizedCanvasFile } from "@/src/lib/client-image-compression";
 import {
   AlertTriangle,
   ArrowRight,
@@ -742,6 +743,8 @@ Object.assign(EN_TEXT, {
   พื้นที่เอกสาร: "Document storage",
   "รูปภาพสูงสุด 3 MB · PDF สูงสุด 10 MB · เลือกเก็บออฟไลน์ภายหลังได้":
     "Images up to 3 MB · PDFs up to 10 MB · optionally save offline",
+  "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 10 MB · เลือกเก็บออฟไลน์ภายหลังได้":
+    "Images are optimized before upload · PDFs up to 10 MB · optionally save offline",
   "พื้นที่ใกล้เต็มมาก กรุณาลบไฟล์ที่ไม่ใช้":
     "Storage is almost full. Remove unused files.",
   "พื้นที่เหลือน้อย กรุณาตรวจสอบไฟล์":
@@ -769,6 +772,12 @@ Object.assign(EN_TEXT, {
   ไฟล์ปัจจุบัน: "Current file",
   "ไม่เลือกไฟล์ใหม่ ระบบจะแก้เฉพาะชื่อ · รูปสูงสุด 3 MB · PDF สูงสุด 10 MB":
     "Without a new file, only the name changes · Images up to 3 MB · PDFs up to 10 MB",
+  "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 10 MB":
+    "Images are optimized before upload · PDFs up to 10 MB",
+  "รูปต้นฉบับต้องมีขนาดไม่เกิน 20 MB":
+    "The source image must be 20 MB or smaller",
+  "ไม่สามารถลดรูปให้ต่ำกว่า 3 MB ได้ กรุณาเลือกรูปอื่น":
+    "Could not optimize this image below 3 MB. Please choose another image",
   ลบไฟล์นี้: "Delete this file",
   แก้ไขไฟล์แล้ว: "File updated",
   แก้ไขเอกสารไม่สำเร็จ: "Could not update document",
@@ -4827,18 +4836,19 @@ function CoverImagePicker({
   async function applyCrop() {
     const canvas = canvasRef.current;
     if (!canvas || !source) return;
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.88),
-    );
-    if (!blob) {
+    let croppedFile: File;
+    try {
+      croppedFile = await optimizedCanvasFile(canvas, source.file.name, {
+        quality: 0.86,
+        minQuality: 0.74,
+        targetBytes: 900 * 1024,
+        suffix: "cover",
+      });
+    } catch {
       setError("ไม่สามารถ Crop รูปได้");
       return;
     }
-    const baseName = source.file.name.replace(/\.[^.]+$/, "") || "trip-cover";
-    const croppedFile = new File([blob], `${baseName}-cover.jpg`, {
-      type: "image/jpeg",
-    });
-    const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(croppedFile);
     objectUrls.current.push(url);
     setPreview(url);
     setCropping(false);

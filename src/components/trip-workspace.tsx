@@ -12,6 +12,10 @@ import {
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
+  MAX_SOURCE_IMAGE_BYTES,
+  prepareDocumentFile,
+} from "@/src/lib/client-image-compression";
+import {
   AlertTriangle,
   ArrowUp,
   Check,
@@ -474,27 +478,36 @@ export function TripWorkspace({
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const file = fileRef.current?.files?.[0];
+    const sourceFile = fileRef.current?.files?.[0];
     const documentTitle = String(form.get("title") || "").trim();
-    if (!file) return;
-    const limit =
-      file.type === "application/pdf" ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
-    if (file.size > limit) {
+    if (!sourceFile) return;
+    const sourceLimit =
+      sourceFile.type === "application/pdf"
+        ? 10 * 1024 * 1024
+        : MAX_SOURCE_IMAGE_BYTES;
+    if (sourceFile.size > sourceLimit) {
       setError(
-        file.type === "application/pdf"
+        sourceFile.type === "application/pdf"
           ? "PDF ต้องมีขนาดไม่เกิน 10 MB"
-          : "รูปภาพต้องมีขนาดไม่เกิน 3 MB",
+          : "รูปต้นฉบับต้องมีขนาดไม่เกิน 20 MB",
       );
       return;
     }
-    if (data.documentUsageBytes + file.size > data.documentQuotaBytes) {
-      setError("พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)");
-      return;
-    }
-    form.set("file", file);
     setBusy("document");
     setError("");
     try {
+      const file = await prepareDocumentFile(sourceFile);
+      const limit =
+        file.type === "application/pdf" ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
+      if (file.size > limit)
+        throw new Error(
+          file.type === "application/pdf"
+            ? "PDF ต้องมีขนาดไม่เกิน 10 MB"
+            : "ไม่สามารถลดรูปให้ต่ำกว่า 3 MB ได้ กรุณาเลือกรูปอื่น",
+        );
+      if (data.documentUsageBytes + file.size > data.documentQuotaBytes)
+        throw new Error("พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)");
+      form.set("file", file);
       if (data.documentUploadMode === "client") {
         const extension =
           file.name
@@ -568,29 +581,42 @@ export function TripWorkspace({
   async function saveDocumentEdit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editingDocument || !editingDocumentTitle.trim()) return;
-    const file = editDocumentFileRef.current?.files?.[0];
-    if (file) {
-      const limit =
-        file.type === "application/pdf" ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
-      if (file.size > limit) {
+    const sourceFile = editDocumentFileRef.current?.files?.[0];
+    if (sourceFile) {
+      const sourceLimit =
+        sourceFile.type === "application/pdf"
+          ? 10 * 1024 * 1024
+          : MAX_SOURCE_IMAGE_BYTES;
+      if (sourceFile.size > sourceLimit) {
         setError(
-          file.type === "application/pdf"
+          sourceFile.type === "application/pdf"
             ? "PDF ต้องมีขนาดไม่เกิน 10 MB"
-            : "รูปภาพต้องมีขนาดไม่เกิน 3 MB",
+            : "รูปต้นฉบับต้องมีขนาดไม่เกิน 20 MB",
         );
-        return;
-      }
-      if (
-        data.documentUsageBytes - Number(editingDocument.file_size) + file.size >
-        data.documentQuotaBytes
-      ) {
-        setError("พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)");
         return;
       }
     }
     setBusy(`document:${editingDocument.id}`);
     setError("");
     try {
+      const file = sourceFile
+        ? await prepareDocumentFile(sourceFile)
+        : undefined;
+      if (file) {
+        const limit =
+          file.type === "application/pdf" ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
+        if (file.size > limit)
+          throw new Error(
+            file.type === "application/pdf"
+              ? "PDF ต้องมีขนาดไม่เกิน 10 MB"
+              : "ไม่สามารถลดรูปให้ต่ำกว่า 3 MB ได้ กรุณาเลือกรูปอื่น",
+          );
+        if (
+          data.documentUsageBytes - Number(editingDocument.file_size) + file.size >
+          data.documentQuotaBytes
+        )
+          throw new Error("พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)");
+      }
       if (file && data.documentUploadMode === "client") {
         const extension =
           file.name
@@ -1821,7 +1847,7 @@ export function TripWorkspace({
             </div>
             <small className="document-upload-note">
               {label(
-                "ไม่เลือกไฟล์ใหม่ ระบบจะแก้เฉพาะชื่อ · รูปสูงสุด 3 MB · PDF สูงสุด 10 MB",
+                "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 10 MB",
               )}
             </small>
             {error && <p className="login-error">{label(error)}</p>}
@@ -1925,7 +1951,7 @@ export function TripWorkspace({
             </div>
             <small className="document-upload-note">
               {label(
-                "รูปภาพสูงสุด 3 MB · PDF สูงสุด 10 MB · เลือกเก็บออฟไลน์ภายหลังได้",
+                "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 10 MB · เลือกเก็บออฟไลน์ภายหลังได้",
               )}
             </small>
             {error && <p className="login-error">{label(error)}</p>}
