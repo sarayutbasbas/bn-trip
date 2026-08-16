@@ -2349,12 +2349,14 @@ function TripsDirectory({
   revision,
   selectTrip,
   createTrip,
+  refreshEnabled,
 }: {
   initialFilters: TripFilters;
   initialData?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
   revision: number;
   selectTrip: (trip: Trip) => void;
   createTrip: () => void;
+  refreshEnabled: boolean;
 }) {
   const t = useT();
   const router = useRouter();
@@ -2382,18 +2384,41 @@ function TripsDirectory({
   const [hasMore, setHasMore] = useState(Boolean(initialData?.hasMore));
   const [loading, setLoading] = useState(!initialData);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
   const [now] = useState(() => Date.now());
   const skipInitialFetch = useRef(Boolean(initialData));
+  const hasContentRef = useRef(Boolean(initialData));
+  const pullDistanceRef = useRef(0);
+  const lastRestoreRefreshRef = useRef(0);
   useEffect(() => {
-    const syncCachedReviews = () => {
-      setItems((current) => applyCachedTripReviewSummaries(current));
+    const restoreLatestTrips = () => {
+      if (tripListCache?.length) {
+        const cachedById = new Map(
+          tripListCache.map((trip) => [trip.id, trip]),
+        );
+        setItems((current) =>
+          applyCachedTripReviewSummaries(
+            current.map((trip) => cachedById.get(trip.id) || trip),
+          ),
+        );
+      } else {
+        setItems((current) => applyCachedTripReviewSummaries(current));
+      }
+      const now = Date.now();
+      if (now - lastRestoreRefreshRef.current < 180) return;
+      lastRestoreRefreshRef.current = now;
+      setRefreshToken((value) => value + 1);
     };
-    window.addEventListener("pageshow", syncCachedReviews);
-    window.addEventListener("popstate", syncCachedReviews);
-    syncCachedReviews();
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) restoreLatestTrips();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("popstate", restoreLatestTrips);
     return () => {
-      window.removeEventListener("pageshow", syncCachedReviews);
-      window.removeEventListener("popstate", syncCachedReviews);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("popstate", restoreLatestTrips);
     };
   }, []);
   useEffect(() => {
@@ -2404,7 +2429,8 @@ function TripsDirectory({
     const controller = new AbortController();
     const timer = window.setTimeout(
       async () => {
-        setLoading(true);
+        const showInitialLoading = !hasContentRef.current;
+        if (showInitialLoading) setLoading(true);
         const params = new URLSearchParams({
           mode: "list",
           status,
@@ -2427,25 +2453,39 @@ function TripsDirectory({
         try {
           const response = await fetch(`/api/trips?${params}`, {
             signal: controller.signal,
+            cache: "no-store",
           });
           const data = await response.json();
           if (!response.ok) throw new Error(data.error);
-          setItems(
-            applyCachedTripReviewSummaries(
-              Array.isArray(data.items) ? data.items : [],
-            ),
+          const nextItems = applyCachedTripReviewSummaries(
+            Array.isArray(data.items) ? data.items : [],
           );
+          const nextIds = new Set(nextItems.map((trip) => trip.id));
+          tripListCache = [
+            ...nextItems,
+            ...(tripListCache || []).filter((trip) => !nextIds.has(trip.id)),
+          ];
+          setItems(nextItems);
           setYears(Array.isArray(data.years) ? data.years : []);
           setTotal(Number(data.total || 0));
           setHasMore(Boolean(data.hasMore));
+          hasContentRef.current = true;
         } catch (error) {
-          if ((error as Error).name !== "AbortError") {
+          if (
+            (error as Error).name !== "AbortError" &&
+            !hasContentRef.current
+          ) {
             setItems([]);
             setTotal(0);
             setHasMore(false);
           }
         } finally {
-          if (!controller.signal.aborted) setLoading(false);
+          if (!controller.signal.aborted) {
+            setLoading(false);
+            setRefreshing(false);
+            pullDistanceRef.current = 0;
+            setPullDistance(0);
+          }
         }
       },
       queryText === initialFilters.q ? 0 : 250,
@@ -2454,7 +2494,66 @@ function TripsDirectory({
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [status, year, queryText, sort, revision, router, initialFilters.q]);
+  }, [
+    status,
+    year,
+    queryText,
+    sort,
+    revision,
+    refreshToken,
+    router,
+    initialFilters.q,
+  ]);
+  useEffect(() => {
+    if (!refreshEnabled || refreshing) return;
+    let startY: number | null = null;
+    let pulling = false;
+    const updateDistance = (distance: number) => {
+      pullDistanceRef.current = distance;
+      setPullDistance(distance);
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || window.scrollY > 0) return;
+      startY = event.touches[0].clientY;
+      pulling = true;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!pulling || startY === null || event.touches.length !== 1) return;
+      if (window.scrollY > 0) {
+        pulling = false;
+        startY = null;
+        updateDistance(0);
+        return;
+      }
+      const delta = event.touches[0].clientY - startY;
+      if (delta <= 0) {
+        updateDistance(0);
+        return;
+      }
+      event.preventDefault();
+      updateDistance(Math.min(92, delta * 0.44));
+    };
+    const onTouchEnd = () => {
+      if (!pulling) return;
+      pulling = false;
+      startY = null;
+      if (pullDistanceRef.current >= 68) {
+        setRefreshing(true);
+        updateDistance(54);
+        setRefreshToken((value) => value + 1);
+      } else updateDistance(0);
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [refreshEnabled, refreshing]);
   async function loadMore() {
     setLoadingMore(true);
     const params = new URLSearchParams({
@@ -2486,7 +2585,35 @@ function TripsDirectory({
     ["past", "ที่ผ่านมาแล้ว"],
   ];
   return (
-    <div className="screen trips-directory">
+    <>
+      <div
+        className={`pull-refresh-indicator ${refreshing ? "is-refreshing" : ""} ${pullDistance >= 68 ? "is-ready" : ""}`}
+        style={{
+          opacity: refreshing ? 1 : Math.min(1, pullDistance / 42),
+          transform: `translate3d(-50%, ${Math.max(-48, pullDistance - 48)}px, 0)`,
+        }}
+        role="status"
+        aria-live="polite"
+      >
+        <RefreshCw size={17} />
+        <span>
+          {t(
+            refreshing
+              ? "กำลังอัปเดต…"
+              : pullDistance >= 68
+                ? "ปล่อยเพื่อรีเฟรช"
+                : "ดึงลงเพื่อรีเฟรช",
+          )}
+        </span>
+      </div>
+      <div
+        className={`screen trips-directory dashboard-pull-content ${pullDistance > 0 && !refreshing ? "is-pulling" : ""}`}
+        style={
+          pullDistance > 0
+            ? { transform: `translate3d(0, ${pullDistance}px, 0)` }
+            : undefined
+        }
+      >
       <div className="directory-title">
         <div>
           <span className="section-kicker">TRIP LIBRARY</span>
@@ -2599,7 +2726,8 @@ function TripsDirectory({
         <Plus size={22} />
         <span>{t("สร้างทริปใหม่")}</span>
       </button>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -7354,7 +7482,10 @@ export function BNTripApp({
         const next: Trip[] = modal.trip
           ? old.map((t) => (t.id === saved.id ? saved : t))
           : [saved, ...old];
-        tripListCache = next;
+        const cached = tripListCache || old;
+        tripListCache = modal.trip
+          ? cached.map((trip) => (trip.id === saved.id ? saved : trip))
+          : [saved, ...cached.filter((trip) => trip.id !== saved.id)];
         return next;
       });
       setTripRevision((value) => value + 1);
@@ -7369,9 +7500,10 @@ export function BNTripApp({
         page === "trips"
           ? `${window.location.pathname}${window.location.search}`
           : returnTo;
-      router.push(
-        `/trips/${saved.id}${origin ? `?returnTo=${encodeURIComponent(origin)}` : ""}`,
-      );
+      if (!modal.trip)
+        router.push(
+          `/trips/${saved.id}${origin ? `?returnTo=${encodeURIComponent(origin)}` : ""}`,
+        );
     }
     if (modal.type === "place" && selected) {
       const editing = modal.item;
@@ -7652,6 +7784,7 @@ export function BNTripApp({
         selectTrip(trip, `${window.location.pathname}${window.location.search}`)
       }
       createTrip={protect(() => setModal({ type: "trip" }))}
+      refreshEnabled={!modal && !confirmation}
     />
   ) : page === "trip" && selected ? (
     <TripHub
