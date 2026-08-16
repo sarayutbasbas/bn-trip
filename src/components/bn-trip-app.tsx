@@ -16,6 +16,7 @@ import Image, { type ImageLoaderProps } from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import type { TravelAnalyticsPayload } from "@/src/lib/trip-loaders";
 import {
   clearOfflineDocuments,
   clearPrivateOfflineData,
@@ -27,11 +28,18 @@ import {
 } from "@/src/lib/client-account";
 import { optimizedCanvasFile } from "@/src/lib/client-image-compression";
 import {
+  TRIP_COUNTRIES,
+  countryByCode,
+  inferTripCountry,
+  tripCity,
+} from "@/src/lib/countries";
+import {
   AlertTriangle,
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
   CalendarDays,
+  ChartNoAxesColumnIncreasing,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -45,6 +53,7 @@ import {
   Database,
   FolderOpen,
   Gem,
+  Globe2,
   ImagePlus,
   Images,
   GripVertical,
@@ -63,11 +72,11 @@ import {
   Search,
   Settings2,
   Sparkles,
+  Star,
   Sun,
   TrainFront,
   Trash2,
   UserPlus,
-  Users,
   X,
 } from "lucide-react";
 
@@ -81,6 +90,7 @@ const TripWorkspace = dynamic(
 
 type Screen =
   | "dashboard"
+  | "analytics"
   | "trips"
   | "trip"
   | "timeline"
@@ -129,6 +139,8 @@ export type Trip = {
   id: string;
   name: string;
   destination: string;
+  country_code?: string | null;
+  country_name?: string | null;
   start_date: string;
   total_days: number;
   budget_thb: string;
@@ -140,6 +152,19 @@ export type Trip = {
   timezone?: string;
   access_role?: "owner" | "collaborator";
   members?: TripMember[];
+  review_average?: number;
+  review_count?: number;
+};
+type TripReview = {
+  user_id: string;
+  email: string | null;
+  display_name: string;
+  avatar_url: string | null;
+  role: "owner" | "collaborator";
+  rating: string | null;
+  review: string | null;
+  updated_at: string | null;
+  is_current_user: boolean;
 };
 type Collaborator = {
   id: string;
@@ -194,6 +219,7 @@ type Modal =
   | { type: "place"; item?: Itinerary; duplicateOf?: Itinerary }
   | { type: "cost"; item?: Itinerary; costIndex?: number; defaultDay?: number }
   | { type: "collaborators"; trip: Trip }
+  | { type: "reviews"; trip: Trip }
   | null;
 type Confirmation = {
   title: string;
@@ -302,25 +328,6 @@ const CURRENCY_OPTIONS = [
   { value: "AED", label: "เดอร์แฮมสหรัฐอาหรับเอมิเรตส์ (AED)" },
   { value: "INR", label: "รูปีอินเดีย (INR)" },
 ] as const;
-const TIMEZONE_OPTIONS = [
-  "Asia/Bangkok",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Asia/Shanghai",
-  "Asia/Hong_Kong",
-  "Asia/Singapore",
-  "Asia/Taipei",
-  "Asia/Ho_Chi_Minh",
-  "Asia/Kuala_Lumpur",
-  "Asia/Jakarta",
-  "Asia/Dubai",
-  "Europe/London",
-  "Europe/Paris",
-  "America/New_York",
-  "America/Los_Angeles",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
 let activeLang: Lang = "TH";
 const EN_TEXT: Record<string, string> = {
   เก็บทุกเส้นทาง: "Keep every journey",
@@ -333,6 +340,23 @@ const EN_TEXT: Record<string, string> = {
   ยังไม่กำหนดวัน: "Dates not set",
   กำลังเดินทาง: "Ongoing",
   ที่ผ่านมาแล้ว: "Completed",
+  รีวิวทริป: "Trip reviews",
+  รีวิว: "reviews",
+  คะแนนเฉลี่ย: "Average rating",
+  รีวิวของแต่ละคน: "Reviews from each traveler",
+  "ให้คะแนน 1.0–5.0 และบันทึกความรู้สึกหลังจบทริป":
+    "Rate 1.0–5.0 and save your thoughts after the trip",
+  รีวิวของคุณ: "Your review",
+  เขียนรีวิวของคุณ: "Write your review",
+  "เล่าความประทับใจ สิ่งที่ชอบ หรือสิ่งที่อยากปรับในทริปหน้า":
+    "Share highlights, favorites, or what you would change next time",
+  บันทึกรีวิว: "Save review",
+  บันทึกรีวิวแล้ว: "Review saved",
+  ยังไม่ได้รีวิว: "Not reviewed yet",
+  เลือกคะแนน: "Choose rating",
+  กำลังโหลดรีวิว: "Loading reviews",
+  "โหลดรีวิวไม่สำเร็จ": "Could not load reviews",
+  "บันทึกรีวิวไม่สำเร็จ": "Could not save review",
   แก้ไข: "Edit",
   ลบ: "Delete",
   เรื่องราวระหว่างทาง: "Stories along the way",
@@ -660,6 +684,32 @@ Object.assign(EN_TEXT, {
   ออกจากทริปสำเร็จแล้ว: "You left the trip",
   ใช้ร่วมกันในทริป: "Shared cash for this trip",
   ยินดีต้อนรับกลับมา: "Welcome back",
+  สถิติ: "Insights",
+  สถิติการเดินทาง: "Travel insights",
+  "ภาพรวมจากทริปที่ผ่านมาแล้วเท่านั้น":
+    "An overview of completed trips only",
+  ทริปที่ผ่านมา: "Past trips",
+  ประเทศที่เคยไป: "Countries visited",
+  ค่าใช้จ่ายเฉลี่ยต่อทริป: "Average spend per trip",
+  ค่าใช้จ่ายทั้งหมด: "Total expenses",
+  "ไม่รวมค่า Shopping": "Excluding shopping",
+  ค่าใช้จ่ายทริปเฉลี่ย: "Average trip expenses",
+  "ค่า Shopping เฉลี่ย": "Average shopping spend",
+  ทริปในแต่ละปี: "Trips by year",
+  "จำนวนทริปและค่าใช้จ่ายรวมในปีนั้น":
+    "Trip count and total expenses for each year",
+  ประเทศและจำนวนครั้งที่ไป: "Countries and visit count",
+  "เรียงจากประเทศที่ไปบ่อยที่สุด": "Sorted by most visited",
+  "ยังไม่มีทริปที่ผ่านมาให้สรุป": "No completed trips to summarize yet",
+  "เมื่อทริปจบแล้ว สถิติจะปรากฏที่หน้านี้โดยอัตโนมัติ":
+    "Completed trips will automatically appear here",
+  เมือง: "City",
+  ประเทศ: "Country",
+  เวลาอัตโนมัติ: "Automatic timezone",
+  เรื่องราวการเดินทางของคุณ: "Your travel story",
+  "ทุกประเทศ ทุกทริป และทุกความทรงจำในภาพเดียว":
+    "Every country, trip, and memory in one view",
+  ครั้ง: "visits",
   แก้ไขชื่อที่แสดง: "Edit display name",
   บันทึกชื่อแล้ว: "Name saved",
   "กรุณากรอกชื่ออย่างน้อย 2 ตัวอักษร": "Enter at least 2 characters",
@@ -951,14 +1001,18 @@ function AccountAvatar({
 function SharedTripAvatars({
   members = [],
   variant = "card",
-  limit = 4,
+  limit = 3,
+  onClick,
+  actionLabel,
 }: {
   members?: TripMember[];
   variant?: "card" | "compact" | "header";
   limit?: number;
+  onClick?: () => void;
+  actionLabel?: string;
 }) {
   const t = useT();
-  if (members.length < 2) return null;
+  if (!members.length) return null;
   const owner = members.find((member) => member.role === "owner");
   const collaborators = members.filter((member) => member.role !== "owner");
   const visibleCollaborators = collaborators.slice(
@@ -986,17 +1040,88 @@ function SharedTripAvatars({
       </span>
     );
   };
-  return (
-    <div
-      className={`shared-trip-avatars shared-trip-avatars-${variant}`}
-      aria-label={t(`แชร์ทริปกับ ${members.length - 1} คน`)}
-    >
+  const content = (
+    <>
       {visibleCollaborators.map(avatar)}
       {hidden > 0 && (
         <span className="shared-trip-avatar shared-trip-more">+{hidden}</span>
       )}
       {owner && avatar(owner)}
+    </>
+  );
+  const label =
+    actionLabel ||
+    (members.length > 1
+      ? t(`แชร์ทริปกับ ${members.length - 1} คน`)
+      : t("เจ้าของทริป"));
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={`shared-trip-avatars shared-trip-avatars-${variant} is-interactive`}
+        onClick={onClick}
+        aria-label={label}
+        title={label}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div
+      className={`shared-trip-avatars shared-trip-avatars-${variant}`}
+      aria-label={label}
+    >
+      {content}
     </div>
+  );
+}
+
+function TripRatingBadge({
+  trip,
+  variant = "cover",
+  showEmpty = false,
+  onClick,
+}: {
+  trip: Trip;
+  variant?: "cover" | "compact" | "header";
+  showEmpty?: boolean;
+  onClick?: () => void;
+}) {
+  const t = useT();
+  const average = Number(trip.review_average || 0);
+  const count = Number(trip.review_count || 0);
+  if ((!count || average <= 0) && !showEmpty) return null;
+  const score = count && average > 0 ? average.toFixed(1) : "-";
+  const label = `${t("รีวิวทริป")} ${score} (${count})`;
+  const content = (
+    <>
+      <Star size={13} fill="currentColor" />
+      <b>{score}</b>
+      <small>({count})</small>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={`trip-rating-badge trip-rating-badge-${variant} is-interactive`}
+        onClick={onClick}
+        aria-label={label}
+        title={label}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <span
+      className={`trip-rating-badge trip-rating-badge-${variant}`}
+      aria-label={label}
+      title={label}
+    >
+      {content}
+    </span>
   );
 }
 
@@ -1569,6 +1694,7 @@ function TripCard({
           )}
         </div>
         <SharedTripAvatars members={trip.members} limit={3} />
+        <TripRatingBadge trip={trip} />
       </div>
       <div className="trip-body">
         <h3>{trip.name}</h3>
@@ -1732,6 +1858,7 @@ function Dashboard({
   editTrip,
   deleteTrip,
   viewAll,
+  viewAnalytics,
   onInvitationChanged,
   notify,
   confirmAction,
@@ -1744,6 +1871,7 @@ function Dashboard({
   editTrip: (t: Trip) => void;
   deleteTrip: (t: Trip) => void;
   viewAll: (status: TripStatus) => void;
+  viewAnalytics: () => void;
   onInvitationChanged: () => void;
   notify: (message: string) => void;
   confirmAction: (confirmation: Confirmation) => void;
@@ -1813,15 +1941,26 @@ function Dashboard({
     <div className="screen">
       <section className="welcome">
         <div className="welcome-content">
-          {profile && (
-            <div className="welcome-profile">
-              <AccountAvatar profile={profile} size="small" />
-              <div>
-                <small>{t("ยินดีต้อนรับกลับมา")}</small>
-                <strong>{profile.display_name}</strong>
+          <div className="welcome-topline">
+            {profile && (
+              <div className="welcome-profile">
+                <AccountAvatar profile={profile} size="small" />
+                <div>
+                  <small>{t("ยินดีต้อนรับกลับมา")}</small>
+                  <strong>{profile.display_name}</strong>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              className="welcome-insights-btn"
+              onClick={viewAnalytics}
+              aria-label={t("สถิติการเดินทาง")}
+            >
+              <ChartNoAxesColumnIncreasing size={15} />
+              <span>{t("สถิติ")}</span>
+            </button>
+          </div>
           <div className="welcome-copy">
             <span className="eyebrow">
               <Sparkles size={13} /> OUR TRAVEL JOURNAL
@@ -1894,18 +2033,228 @@ function Dashboard({
   );
 }
 
+function AnalyticsYearTrend({
+  years,
+  money,
+  tripLabel,
+}: {
+  years: TravelAnalyticsPayload["years"];
+  money: (value: number) => string;
+  tripLabel: string;
+}) {
+  const chronological = [...years].reverse();
+  const width = 320;
+  const chartTop = 22;
+  const chartBottom = 112;
+  const maxTrips = Math.max(1, ...chronological.map((item) => item.trips));
+  const step = chronological.length > 1 ? 272 / (chronological.length - 1) : 0;
+  const points = chronological.map((item, index) => ({
+    ...item,
+    x: chronological.length > 1 ? 24 + index * step : width / 2,
+    y: chartBottom - (item.trips / maxTrips) * (chartBottom - chartTop),
+  }));
+  const line = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const area = points.length
+    ? `M ${points[0].x} ${chartBottom} L ${points.map((point) => `${point.x} ${point.y}`).join(" L ")} L ${points.at(-1)!.x} ${chartBottom} Z`
+    : "";
+  return (
+    <div className="analytics-trend" role="img" aria-label="Trips by year">
+      <svg viewBox={`0 0 ${width} 132`} preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="analytics-area-gradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ff6b16" stopOpacity="0.28" />
+            <stop offset="1" stopColor="#ffb05a" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[42, 77, 112].map((y) => (
+          <line key={y} x1="16" x2="304" y1={y} y2={y} className="analytics-trend-grid" />
+        ))}
+        <path d={area} fill="url(#analytics-area-gradient)" />
+        <polyline points={line} className="analytics-trend-line" />
+        {points.map((point) => (
+          <g key={point.year}>
+            <circle cx={point.x} cy={point.y} r="6" className="analytics-trend-point-ring" />
+            <circle cx={point.x} cy={point.y} r="3.5" className="analytics-trend-point" />
+          </g>
+        ))}
+      </svg>
+      <div className="analytics-trend-labels">
+        {points.map((point) => (
+          <div key={point.year}>
+            <b>{point.year}</b>
+            <span>{point.trips} {tripLabel}</span>
+            <small>{money(point.totalExpense)}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TravelAnalyticsDashboard({ data }: { data: TravelAnalyticsPayload }) {
+  const t = useT();
+  const money = (value: number) => `฿${bahtFormat(value)}`;
+  const maxCountryTrips = Math.max(
+    1,
+    ...data.countries.map((item) => item.trips),
+  );
+  const expenseTotal = data.totals.travelExpense + data.totals.shoppingExpense;
+  const travelShare = expenseTotal
+    ? (data.totals.travelExpense / expenseTotal) * 100
+    : 0;
+
+  if (!data.totals.trips)
+    return (
+      <div className="screen analytics-screen">
+        <header className="analytics-heading">
+          <span className="section-kicker">JOURNEY INSIGHTS</span>
+          <h1>{t("สถิติการเดินทาง")}</h1>
+          <p>{t("ภาพรวมจากทริปที่ผ่านมาแล้วเท่านั้น")}</p>
+        </header>
+        <article className="card analytics-empty">
+          <ChartNoAxesColumnIncreasing size={28} />
+          <h2>{t("ยังไม่มีทริปที่ผ่านมาให้สรุป")}</h2>
+          <p>
+            {t("เมื่อทริปจบแล้ว สถิติจะปรากฏที่หน้านี้โดยอัตโนมัติ")}
+          </p>
+        </article>
+      </div>
+    );
+
+  return (
+    <div className="screen analytics-screen">
+      <header className="analytics-hero">
+        <div className="analytics-hero-copy">
+          <span className="section-kicker">JOURNEY INSIGHTS</span>
+          <h1>{t("เรื่องราวการเดินทางของคุณ")}</h1>
+          <p>{t("ทุกประเทศ ทุกทริป และทุกความทรงจำในภาพเดียว")}</p>
+          <div>
+            <b>{data.totals.trips}</b>
+            <span>{t("ทริปที่ผ่านมา")}</span>
+          </div>
+        </div>
+        <div className="analytics-hero-art" aria-hidden="true">
+          <Cloud className="analytics-cloud analytics-cloud-one" />
+          <Cloud className="analytics-cloud analytics-cloud-two" />
+          <span className="analytics-sun" />
+          <span className="analytics-flight-path" />
+          <Plane className="analytics-plane" />
+          <span className="analytics-land analytics-land-one" />
+          <span className="analytics-land analytics-land-two" />
+        </div>
+      </header>
+
+      <section className="analytics-kpis" aria-label={t("สถิติการเดินทาง")}>
+        <article className="analytics-kpi">
+          <span><CalendarDays size={17} /></span>
+          <small>{t("ทริปที่ผ่านมา")}</small>
+          <strong>{data.totals.trips}</strong>
+        </article>
+        <article className="analytics-kpi">
+          <span><Globe2 size={17} /></span>
+          <small>{t("ประเทศที่เคยไป")}</small>
+          <strong>{data.totals.countries}</strong>
+        </article>
+        <article className="analytics-kpi analytics-kpi-wide">
+          <span><ReceiptText size={17} /></span>
+          <small>{t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}</small>
+          <strong>{money(data.totals.averageExpense)}</strong>
+        </article>
+      </section>
+
+      <section className="card analytics-expense-card">
+        <div className="analytics-section-head">
+          <div>
+            <h2>{t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}</h2>
+            <p>{t("ค่าใช้จ่ายทั้งหมด")}: {money(data.totals.expense)}</p>
+          </div>
+          <strong>{money(data.totals.averageExpense)}</strong>
+        </div>
+        <div className="analytics-expense-summary">
+          <div
+            className="analytics-expense-route"
+            role="img"
+            aria-label={`${t("ค่าใช้จ่ายทริปเฉลี่ย")} ${travelShare.toFixed(0)}%`}
+          >
+            <span style={{ width: `${travelShare}%` }}><Plane size={14} /></span>
+            <span style={{ width: `${100 - travelShare}%` }}><Sparkles size={13} /></span>
+          </div>
+          <div className="analytics-expense-split">
+            <div className="analytics-expense-kind is-travel">
+              <i><Plane size={15} /></i>
+              <span>
+                <small>{t("ค่าใช้จ่ายทริปเฉลี่ย")}</small>
+                <strong>{money(data.totals.averageTravelExpense)}</strong>
+              </span>
+              <b>{travelShare.toFixed(0)}%</b>
+            </div>
+            <div className="analytics-expense-kind is-shopping">
+              <i><Sparkles size={15} /></i>
+              <span>
+                <small>{t("ค่า Shopping เฉลี่ย")}</small>
+                <strong>{money(data.totals.averageShoppingExpense)}</strong>
+              </span>
+              <b>{(100 - travelShare).toFixed(0)}%</b>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="card analytics-chart-card">
+        <div className="analytics-section-head">
+          <div>
+            <h2>{t("ทริปในแต่ละปี")}</h2>
+            <p>{t("จำนวนทริปและค่าใช้จ่ายรวมในปีนั้น")}</p>
+          </div>
+        </div>
+        <AnalyticsYearTrend years={data.years} money={money} tripLabel={t("ทริป")} />
+      </section>
+
+      <section className="card analytics-country-card">
+        <div className="analytics-section-head">
+          <div>
+            <h2>{t("ประเทศและจำนวนครั้งที่ไป")}</h2>
+            <p>{t("เรียงจากประเทศที่ไปบ่อยที่สุด")}</p>
+          </div>
+        </div>
+        <div className="analytics-country-list">
+          {data.countries.map((item) => (
+            <div className="analytics-country-row" key={item.country}>
+              <b className="analytics-country-flag">
+                {countryByCode(item.countryCode)?.flag || "🌍"}
+              </b>
+              <div>
+                <strong>{item.country}</strong>
+                <span>
+                  <i style={{ width: `${(item.trips / maxCountryTrips) * 100}%` }} />
+                </span>
+              </div>
+              <small>
+                <b>{item.trips} {t("ครั้ง")}</b>
+                <span>{money(item.totalExpense)}</span>
+              </small>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function CompactTripCard({
   trip,
   now,
   selectTrip,
   editTrip,
   deleteTrip,
+  priority = false,
 }: {
   trip: Trip;
   now: number;
   selectTrip: (trip: Trip) => void;
   editTrip: (trip: Trip) => void;
   deleteTrip: (trip: Trip) => void;
+  priority?: boolean;
 }) {
   const t = useT();
   const temporal = tripTemporalStatus(trip, now);
@@ -1930,8 +2279,10 @@ function CompactTripCard({
           src={trip.cover_image_url || DEFAULT_TRIP_COVER}
           alt={`รูปปก ${trip.name}`}
           sizes="(max-width: 600px) 42vw, 180px"
+          priority={priority}
           className="compact-trip-cover-image"
         />
+        <TripRatingBadge trip={trip} variant="compact" />
       </div>
       <div className="compact-trip-body">
         <span className="compact-trip-status">{status}</span>
@@ -2166,11 +2517,12 @@ function TripsDirectory({
       ) : items.length ? (
         <>
           <div className="compact-trip-grid">
-            {items.map((trip) => (
+            {items.map((trip, index) => (
               <CompactTripCard
                 key={trip.id}
                 trip={trip}
                 now={now}
+                priority={index < 3}
                 selectTrip={selectTrip}
                 editTrip={editTrip}
                 deleteTrip={deleteTrip}
@@ -2212,23 +2564,38 @@ function TripHeader({
   trip,
   back,
   actions,
+  openReviews,
+  manageMembers,
 }: {
   trip: Trip;
   back: () => void;
   actions?: ReactNode;
+  openReviews?: () => void;
+  manageMembers?: () => void;
 }) {
   const t = useT();
   const coverUrl = trip.cover_image_url || DEFAULT_TRIP_COVER;
   const ended = tripHasEnded(trip, new Date());
   return (
     <div className="trip-detail-head has-cover">
-      <TripCoverImage
-        src={coverUrl}
-        alt={`รูปปก ${trip.name}`}
-        sizes="100vw"
-        priority
-        className="trip-detail-cover-image"
-      />
+      <div className="trip-menu-safe-area" aria-hidden="true">
+        <TripCoverImage
+          src={coverUrl}
+          alt=""
+          sizes="100vw"
+          priority
+          className="trip-menu-safe-image"
+        />
+      </div>
+      <div className="trip-detail-image-frame">
+        <TripCoverImage
+          src={coverUrl}
+          alt={`รูปปก ${trip.name}`}
+          sizes="100vw"
+          priority
+          className="trip-detail-cover-image"
+        />
+      </div>
       <button
         className="back-btn trip-cover-back"
         onClick={back}
@@ -2246,7 +2613,23 @@ function TripHeader({
         <h1 className="page-title">{trip.name}</h1>
         <p className="page-sub">{tripHeaderRangeLabel(trip)}</p>
       </div>
-      <SharedTripAvatars members={trip.members} variant="header" />
+      <SharedTripAvatars
+        members={trip.members}
+        variant="header"
+        limit={3}
+        onClick={manageMembers}
+        actionLabel={
+          trip.access_role === "collaborator"
+            ? t("ออกจากทริป")
+            : t("จัดการผู้ร่วมทริป")
+        }
+      />
+      <TripRatingBadge
+        trip={trip}
+        variant="header"
+        showEmpty
+        onClick={openReviews}
+      />
     </div>
   );
 }
@@ -2435,6 +2818,7 @@ function TripHub({
   setDay,
   back,
   editTrip,
+  openReviews,
   manageCollaborators,
   leaveTrip,
   addPlace,
@@ -2450,6 +2834,7 @@ function TripHub({
   setDay: (day: number) => void;
   back: () => void;
   editTrip: () => void;
+  openReviews: () => void;
   manageCollaborators: () => void;
   leaveTrip: () => void;
   addPlace: (day: number) => void;
@@ -2562,6 +2947,12 @@ function TripHub({
         <TripHeader
           trip={trip}
           back={back}
+          openReviews={openReviews}
+          manageMembers={
+            trip.access_role === "collaborator"
+              ? leaveTrip
+              : manageCollaborators
+          }
           actions={
             <>
               {trip.google_photos_url && (
@@ -2576,20 +2967,14 @@ function TripHub({
                   <span>{t("เปิด Google Photos")}</span>
                 </a>
               )}
-              {trip.access_role !== "collaborator" ? (
-                <button type="button" onClick={manageCollaborators}>
-                  <Users size={18} />
-                  <span>{t("ผู้ร่วมทริป")}</span>
-                </button>
-              ) : (
-                <button type="button" onClick={leaveTrip}>
-                  <LogOut size={18} />
-                  <span>{t("ออกจากทริป")}</span>
-                </button>
-              )}
-              <button type="button" onClick={editTrip}>
-                <Pencil size={18} />
-                <span>{t("แก้ไข")}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  selectView(view === "workspace" ? "plan" : "workspace")
+                }
+              >
+                <FolderOpen size={18} />
+                <span>{t(view === "workspace" ? "แพลน" : "เตรียมทริป")}</span>
               </button>
               <button
                 type="button"
@@ -2597,25 +2982,12 @@ function TripHub({
                   selectView(view === "expenses" ? "plan" : "expenses")
                 }
               >
-                {view === "expenses" ? (
-                  <Navigation size={18} />
-                ) : (
-                  <ReceiptText size={18} />
-                )}
+                <ReceiptText size={18} />
                 <span>{t(view === "expenses" ? "แพลน" : "ค่าใช้จ่าย")}</span>
               </button>
-              <button
-                type="button"
-                onClick={() =>
-                  selectView(view === "workspace" ? "plan" : "workspace")
-                }
-              >
-                {view === "workspace" ? (
-                  <Navigation size={18} />
-                ) : (
-                  <FolderOpen size={18} />
-                )}
-                <span>{t(view === "workspace" ? "แพลน" : "เตรียมทริป")}</span>
+              <button type="button" onClick={editTrip}>
+                <Pencil size={18} />
+                <span>{t("แก้ไข")}</span>
               </button>
             </>
           }
@@ -4954,20 +5326,228 @@ function CoverImagePicker({
   );
 }
 
+function ReviewMemberAvatar({ item }: { item: TripReview }) {
+  const label = (item.display_name || item.email || "?").trim();
+  return (
+    <span
+      className={`review-member-avatar ${item.role === "owner" ? "is-owner" : ""}`}
+      style={item.avatar_url ? { backgroundImage: `url("${item.avatar_url}")` } : undefined}
+      aria-label={label}
+    >
+      {!item.avatar_url && label.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+function ReviewStars({ value, editable = false, onChange }: { value: number; editable?: boolean; onChange?: (value: number) => void }) {
+  return (
+    <span className={`review-stars ${editable ? "is-editable" : ""}`} aria-label={`${value.toFixed(1)} / 5`}>
+      {Array.from({ length: 5 }, (_, index) => index + 1).map((star) => (
+        <button
+          type="button"
+          key={star}
+          disabled={!editable}
+          onClick={() => onChange?.(star)}
+          aria-label={`${star} ดาว`}
+        >
+          <span className="review-star-glyph">
+            <Star size={21} />
+            <span
+              style={{
+                width: `${Math.max(0, Math.min(1, value - (star - 1))) * 100}%`,
+              }}
+            >
+              <Star size={21} fill="currentColor" />
+            </span>
+          </span>
+        </button>
+      ))}
+    </span>
+  );
+}
+
+function ReviewsSheet({
+  trip,
+  close,
+  notify,
+  onSaved,
+  loginRequired,
+}: {
+  trip: Trip;
+  close: () => void;
+  notify: (message: string) => void;
+  onSaved: (average: number, count: number) => void;
+  loginRequired: () => void;
+}) {
+  const t = useT();
+  const [items, setItems] = useState<TripReview[]>([]);
+  const [average, setAverage] = useState(Number(trip.review_average || 0));
+  const [count, setCount] = useState(Number(trip.review_count || 0));
+  const [rating, setRating] = useState(0);
+  const [review, setReview] = useState("");
+  const [originalRating, setOriginalRating] = useState(0);
+  const [originalReview, setOriginalReview] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("sheet-open");
+    return () => root.classList.remove("sheet-open");
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`/api/trips/${trip.id}/reviews`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        const rows = Array.isArray(data.items) ? data.items : [];
+        setItems(rows);
+        setAverage(Number(data.average || 0));
+        setCount(Number(data.count || 0));
+        const own = rows.find((item: TripReview) => item.is_current_user);
+        const savedRating = own?.rating ? Number(own.rating) : 0;
+        const savedReview = own?.review || "";
+        setRating(savedRating);
+        setReview(savedReview);
+        setOriginalRating(savedRating);
+        setOriginalReview(savedReview);
+      })
+      .catch((reason) => {
+        if ((reason as Error).name !== "AbortError") setError("โหลดรีวิวไม่สำเร็จ");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [trip.id]);
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/trips/${trip.id}/reviews`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          rating,
+          review,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (data.loginRequired) {
+          loginRequired();
+          return;
+        }
+        throw new Error(data.error);
+      }
+      const rows = Array.isArray(data.items) ? data.items : [];
+      const own = rows.find((item: TripReview) => item.is_current_user);
+      const savedRating = own?.rating ? Number(own.rating) : rating;
+      const savedReview = own?.review || "";
+      setItems(rows);
+      setRating(savedRating);
+      setReview(savedReview);
+      setOriginalRating(savedRating);
+      setOriginalReview(savedReview);
+      setAverage(Number(data.average || 0));
+      setCount(Number(data.count || 0));
+      onSaved(Number(data.average || 0), Number(data.count || 0));
+      notify("บันทึกรีวิวแล้ว");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("บันทึกรีวิวไม่สำเร็จ"));
+    } finally {
+      setSaving(false);
+    }
+  }
+  const hasChanges =
+    rating >= 1 &&
+    rating <= 5 &&
+    (rating !== originalRating || review !== originalReview);
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <section className="modal reviews-sheet">
+        <div className="modal-head">
+          <div>
+            <h2>{t("รีวิวทริป")}</h2>
+            <p>{t("ให้คะแนน 1.0–5.0 และบันทึกความรู้สึกหลังจบทริป")}</p>
+          </div>
+          <button type="button" className="icon-btn" onClick={close} aria-label={t("ยกเลิก")}>
+            <X size={18} />
+          </button>
+        </div>
+        <div className="review-average-card">
+          <span><Star size={23} fill="currentColor" /></span>
+          <div><small>{t("คะแนนเฉลี่ย")}</small><strong>{count ? average.toFixed(1) : "—"}</strong></div>
+          <b>{count} {t("รีวิว")}</b>
+        </div>
+        {loading ? (
+          <div className="review-loading">{t("กำลังโหลดรีวิว")}</div>
+        ) : (
+          <div className="review-member-list">
+            {items.map((item) => {
+              const itemRating = item.is_current_user
+                ? rating
+                : Number(item.rating || 0);
+              if (item.is_current_user)
+                return (
+                  <form className="review-member-card is-current" key={item.user_id} onSubmit={save}>
+                    <div className="review-member-head">
+                      <ReviewMemberAvatar item={item} />
+                      <div><strong>{item.display_name}</strong><small>{t("รีวิวของคุณ")}</small></div>
+                      <b className={`review-selected-score ${rating ? "has-rating" : ""}`}>
+                        {rating ? `${rating} / 5` : t("เลือกคะแนน")}
+                      </b>
+                    </div>
+                    <ReviewStars
+                      value={itemRating}
+                      editable
+                      onChange={setRating}
+                    />
+                    <div className="field review-text-field">
+                      <label htmlFor={`trip-review-${item.user_id}`}>{t("เขียนรีวิวของคุณ")}</label>
+                      <textarea id={`trip-review-${item.user_id}`} value={review} onChange={(event) => setReview(event.target.value)} maxLength={2000} rows={4} placeholder={t("เล่าความประทับใจ สิ่งที่ชอบ หรือสิ่งที่อยากปรับในทริปหน้า")} />
+                    </div>
+                    <button className="primary-btn" disabled={saving || !hasChanges}>{saving ? t("กำลังบันทึก…") : t("บันทึกรีวิว")}</button>
+                  </form>
+                );
+              return (
+                <article className="review-member-card" key={item.user_id}>
+                  <div className="review-member-head">
+                    <ReviewMemberAvatar item={item} />
+                    <div><strong>{item.display_name}</strong><small>{item.role === "owner" ? t("เจ้าของ") : item.email}</small></div>
+                    <b className="review-read-score">{item.rating ? Number(item.rating).toFixed(1) : "—"}</b>
+                  </div>
+                  {item.rating ? <><ReviewStars value={itemRating} /><p>{item.review || t("ยังไม่ได้รีวิว")}</p></> : <p className="review-empty">{t("ยังไม่ได้รีวิว")}</p>}
+                </article>
+              );
+            })}
+          </div>
+        )}
+        {error && <p className="login-error">{t(error)}</p>}
+      </section>
+    </div>
+  );
+}
+
 function CollaboratorsSheet({
   trip,
   close,
   onChanged,
   confirmRemove,
   notify,
+  requestLeave,
 }: {
   trip: Trip;
   close: () => void;
   onChanged: () => void;
   confirmRemove: (confirmation: Confirmation) => void;
   notify: (message: string) => void;
+  requestLeave: () => void;
 }) {
   const t = useT();
+  const canManage = trip.access_role !== "collaborator";
   const [items, setItems] = useState<Collaborator[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [email, setEmail] = useState("");
@@ -5068,7 +5648,11 @@ function CollaboratorsSheet({
           <div>
             <h2>{t("ผู้ร่วมทริป")}</h2>
             <p>
-              {t("เพิ่มด้วย Gmail ผู้ร่วมทริปเพิ่มและแก้ไขได้ แต่ลบไม่ได้")}
+              {t(
+                canManage
+                  ? "เพิ่มด้วย Gmail ผู้ร่วมทริปเพิ่มและแก้ไขได้ แต่ลบไม่ได้"
+                  : "ดูสมาชิกในทริป หรือเลือกออกจากทริปนี้",
+              )}
             </p>
           </div>
           <button
@@ -5080,49 +5664,54 @@ function CollaboratorsSheet({
             <X size={18} />
           </button>
         </div>
-        <form className="collaborator-form" onSubmit={add}>
-          <div className="field">
-            <label>{t("อีเมลผู้ร่วมทริป")}</label>
-            <input
-              name="email"
-              type="email"
-              inputMode="email"
-              autoCapitalize="none"
-              autoCorrect="off"
-              placeholder="friend@gmail.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-          </div>
-          <button className="primary-btn" disabled={saving}>
-            <UserPlus size={16} />
-            {t(saving ? "กำลังเพิ่ม…" : "เพิ่มผู้ร่วมทริป")}
-          </button>
-          {suggestions.length > 0 && (
-            <div className="recent-collaborators">
-              <small>{t("เลือกจากคนที่เพิ่มล่าสุด")}</small>
-              <div>
-                {suggestions.map((value) => (
-                  <button
-                    type="button"
-                    key={value}
-                    onClick={() => setEmail(value)}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
+        {canManage && (
+          <form className="collaborator-form" onSubmit={add}>
+            <div className="field">
+              <label>{t("อีเมลผู้ร่วมทริป")}</label>
+              <input
+                name="email"
+                type="email"
+                inputMode="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                placeholder="friend@gmail.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
             </div>
-          )}
-        </form>
+            <button className="primary-btn" disabled={saving}>
+              <UserPlus size={16} />
+              {t(saving ? "กำลังเพิ่ม…" : "เพิ่มผู้ร่วมทริป")}
+            </button>
+            {suggestions.length > 0 && (
+              <div className="recent-collaborators">
+                <small>{t("เลือกจากคนที่เพิ่มล่าสุด")}</small>
+                <div>
+                  {suggestions.map((value) => (
+                    <button
+                      type="button"
+                      key={value}
+                      onClick={() => setEmail(value)}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </form>
+        )}
         {error && <p className="login-error">{t(error)}</p>}
         <div className="collaborator-list">
           {loading ? (
             <p>{t("กำลังโหลด…")}</p>
           ) : items.length ? (
             items.map((item) => (
-              <div className="collaborator-row" key={item.id}>
+              <div
+                className={`collaborator-row ${canManage ? "" : "is-readonly"}`}
+                key={item.id}
+              >
                 <CollaboratorAvatar item={item} />
                 <div className="collaborator-copy">
                   <strong>{item.display_name || item.email}</strong>
@@ -5132,20 +5721,32 @@ function CollaboratorsSheet({
                       : t(item.joined ? "เข้าร่วมแล้ว" : "รอการตอบรับ")}
                   </small>
                 </div>
-                <button
-                  type="button"
-                  className="delete-record-btn"
-                  onClick={() => askRemove(item)}
-                  aria-label={t("นำผู้ร่วมทริปออก")}
-                >
-                  <Trash2 size={17} />
-                </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    className="delete-record-btn"
+                    onClick={() => askRemove(item)}
+                    aria-label={t("นำผู้ร่วมทริปออก")}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                )}
               </div>
             ))
           ) : (
             <p className="collaborator-empty">{t("ยังไม่มีผู้ร่วมทริป")}</p>
           )}
         </div>
+        {!canManage && (
+          <button
+            type="button"
+            className="primary-btn collaborator-leave-btn"
+            onClick={requestLeave}
+          >
+            <LogOut size={17} />
+            {t("ออกจากทริป")}
+          </button>
+        )}
       </section>
     </div>
   );
@@ -5634,10 +6235,17 @@ function ModalForm({
   canDelete: boolean;
 }) {
   const t = useT();
+  const lang = useContext(LanguageContext);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
+  const initialCountry =
+    modal.type === "trip"
+      ? countryByCode(modal.trip?.country_code) ||
+        inferTripCountry(modal.trip?.destination, modal.trip?.timezone)
+      : TRIP_COUNTRIES[0];
+  const [countryCode, setCountryCode] = useState(initialCountry.code);
   useEffect(() => {
     const root = document.documentElement;
     root.classList.add("sheet-open");
@@ -5703,7 +6311,7 @@ function ModalForm({
         await submit({
           name: f.get("name"),
           destination: f.get("destination"),
-          timezone: f.get("timezone"),
+          countryCode: f.get("countryCode"),
           googlePhotosUrl: String(f.get("googlePhotosUrl") || "").trim(),
           outboundDate: f.get("outboundDate"),
           outboundTime: f.get("outboundTime"),
@@ -5788,25 +6396,29 @@ function ModalForm({
               </div>
               <div className="form-row trip-destination-row">
                 <div className="field">
-                  <label>{t("เมืองหรือประเทศปลายทาง")}</label>
+                  <label>{t("เมือง")}</label>
                   <input
                     name="destination"
                     required
-                    defaultValue={modal.trip?.destination}
+                    defaultValue={tripCity(modal.trip?.destination)}
                   />
                 </div>
-                <div className="field">
-                  <label>{t("เขตเวลาของทริป")}</label>
+                <div className="field country-select-field">
+                  <label>{t("ประเทศ")}</label>
                   <select
-                    name="timezone"
-                    defaultValue={modal.trip?.timezone || "Asia/Bangkok"}
+                    name="countryCode"
+                    value={countryCode}
+                    onChange={(event) => setCountryCode(event.target.value)}
                   >
-                    {TIMEZONE_OPTIONS.map((timezone) => (
-                      <option key={timezone} value={timezone}>
-                        {timezone.replaceAll("_", " ")}
+                    {TRIP_COUNTRIES.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {country.flag} {lang === "EN" ? country.nameEn : country.nameTh}
                       </option>
                     ))}
                   </select>
+                  <small>
+                    {t("เวลาอัตโนมัติ")}: {countryByCode(countryCode)?.timezone}
+                  </small>
                 </div>
               </div>
               <div className="field">
@@ -6056,6 +6668,7 @@ export function BNTripApp({
   authError,
   workspaceTab,
   initialDashboard,
+  initialAnalytics,
   initialTrip,
   initialItineraries,
   initialTripCards,
@@ -6076,6 +6689,7 @@ export function BNTripApp({
     past: Trip[];
     counts: DashboardCounts;
   };
+  initialAnalytics?: TravelAnalyticsPayload;
   initialTrip?: Trip | null;
   initialItineraries?: Itinerary[];
   initialTripCards?: PaymentCard[];
@@ -6653,6 +7267,18 @@ export function BNTripApp({
       return next;
     });
   }
+  function updateTripReviewSummary(id: string, average: number, count: number) {
+    const update = (trip: Trip) =>
+      trip.id === id
+        ? { ...trip, review_average: average, review_count: count }
+        : trip;
+    setSelected((current) => (current ? update(current) : current));
+    setTrips((old) => {
+      const next = old.map(update);
+      if (tripListCache) tripListCache = tripListCache.map(update);
+      return next;
+    });
+  }
   const selectTrip = (trip: Trip, origin?: string) =>
     router.push(
       `/trips/${trip.id}${origin ? `?returnTo=${encodeURIComponent(origin)}` : ""}`,
@@ -6690,10 +7316,13 @@ export function BNTripApp({
       viewAll={(status) =>
         router.push(status === "all" ? "/trips" : `/trips?status=${status}`)
       }
+      viewAnalytics={() => router.push("/analytics")}
       onInvitationChanged={() => setTripRevision((value) => value + 1)}
       notify={flash}
       confirmAction={setConfirmation}
     />
+  ) : page === "analytics" && initialAnalytics ? (
+    <TravelAnalyticsDashboard data={initialAnalytics} />
   ) : page === "trips" ? (
     <TripsDirectory
       initialFilters={initialTripFilters}
@@ -6715,10 +7344,13 @@ export function BNTripApp({
       setDay={setActiveDay}
       back={() => router.push(returnTo || "/")}
       editTrip={protect(() => setModal({ type: "trip", trip: selected }))}
+      openReviews={() => setModal({ type: "reviews", trip: selected })}
       manageCollaborators={protect(() =>
         setModal({ type: "collaborators", trip: selected }),
       )}
-      leaveTrip={protect(() => confirmLeaveTrip(selected))}
+      leaveTrip={protect(() =>
+        setModal({ type: "collaborators", trip: selected }),
+      )}
       addPlace={protect((day) => {
         setActiveDay(day);
         setModal({ type: "place" });
@@ -6791,13 +7423,27 @@ export function BNTripApp({
       onClick={() => router.push("/")}
     />
   );
-  const modalContent = !modal ? null : modal.type === "collaborators" ? (
+  const modalContent = !modal ? null : modal.type === "reviews" ? (
+    <ReviewsSheet
+      trip={modal.trip}
+      close={() => setModal(null)}
+      notify={flash}
+      loginRequired={requireLogin}
+      onSaved={(average, count) =>
+        updateTripReviewSummary(modal.trip.id, average, count)
+      }
+    />
+  ) : modal.type === "collaborators" ? (
     <CollaboratorsSheet
       trip={modal.trip}
       close={() => setModal(null)}
       onChanged={() => void refreshTripMembers(modal.trip.id)}
       confirmRemove={setConfirmation}
       notify={flash}
+      requestLeave={() => {
+        setModal(null);
+        confirmLeaveTrip(modal.trip);
+      }}
     />
   ) : modal.type === "cost" ? (
     selected ? (

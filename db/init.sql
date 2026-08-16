@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS trips (
   budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0, shopping_budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0,
   outbound_departure_at TIMESTAMP, return_departure_at TIMESTAMP,
   cover_image_url TEXT, google_photos_url TEXT, timezone VARCHAR(80) NOT NULL DEFAULT 'Asia/Bangkok',
+  country_code CHAR(2), country_name VARCHAR(120),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -38,6 +39,8 @@ CREATE TABLE IF NOT EXISTS collaborator_contacts (
 
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS google_photos_url TEXT;
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS timezone VARCHAR(80) NOT NULL DEFAULT 'Asia/Bangkok';
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS country_code CHAR(2);
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS country_name VARCHAR(120);
 
 CREATE TABLE IF NOT EXISTS itineraries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -137,6 +140,15 @@ CREATE INDEX IF NOT EXISTS flights_trip_idx ON flights(trip_id);
 CREATE INDEX IF NOT EXISTS trip_checklist_trip_sort_idx ON trip_checklist_items(trip_id,sort_order,created_at);
 CREATE INDEX IF NOT EXISTS trip_documents_trip_created_idx ON trip_documents(trip_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS trip_activity_trip_created_idx ON trip_activity_logs(trip_id,created_at DESC);
+
+CREATE TABLE IF NOT EXISTS trip_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rating NUMERIC(2,1) NOT NULL CHECK (rating >= 1 AND rating <= 5), review TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(trip_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS trip_reviews_trip_idx ON trip_reviews(trip_id,updated_at DESC);
 
 -- LOCAL_DEMO_SEED: the cloud setup script intentionally stops before this marker.
 INSERT INTO users (email, display_name)

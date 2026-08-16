@@ -79,6 +79,55 @@ const migrations = [
       "CREATE UNIQUE INDEX IF NOT EXISTS trip_checklist_trip_master_unique_idx ON trip_checklist_items(trip_id,master_item_id) WHERE master_item_id IS NOT NULL",
     ],
   },
+  {
+    version: 11,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS trip_reviews (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        rating NUMERIC(2,1) NOT NULL CHECK (rating >= 1 AND rating <= 5),
+        review TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(trip_id,user_id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS trip_reviews_trip_idx ON trip_reviews(trip_id,updated_at DESC)",
+    ],
+  },
+  {
+    version: 12,
+    statements: [
+      "ALTER TABLE trips ADD COLUMN IF NOT EXISTS country_code CHAR(2)",
+      "ALTER TABLE trips ADD COLUMN IF NOT EXISTS country_name VARCHAR(120)",
+      `UPDATE trips SET
+        country_code=CASE
+          WHEN lower(destination) LIKE '%japan%' OR destination LIKE '%ญี่ปุ่น%' OR timezone='Asia/Tokyo' THEN 'JP'
+          WHEN lower(destination) LIKE '%china%' OR destination LIKE '%จีน%' OR timezone='Asia/Shanghai' THEN 'CN'
+          WHEN lower(destination) LIKE '%korea%' OR destination LIKE '%เกาหลี%' OR timezone='Asia/Seoul' THEN 'KR'
+          WHEN lower(destination) LIKE '%taiwan%' OR destination LIKE '%ไต้หวัน%' OR timezone='Asia/Taipei' THEN 'TW'
+          WHEN lower(destination) LIKE '%hong kong%' OR destination LIKE '%ฮ่องกง%' OR timezone='Asia/Hong_Kong' THEN 'HK'
+          WHEN lower(destination) LIKE '%singapore%' OR destination LIKE '%สิงคโปร์%' OR timezone='Asia/Singapore' THEN 'SG'
+          WHEN lower(destination) LIKE '%vietnam%' OR destination LIKE '%เวียดนาม%' OR timezone='Asia/Ho_Chi_Minh' THEN 'VN'
+          WHEN lower(destination) LIKE '%malaysia%' OR destination LIKE '%มาเลเซีย%' OR timezone='Asia/Kuala_Lumpur' THEN 'MY'
+          WHEN lower(destination) LIKE '%indonesia%' OR destination LIKE '%อินโดนีเซีย%' OR timezone='Asia/Jakarta' THEN 'ID'
+          WHEN lower(destination) LIKE '%thailand%' OR destination LIKE '%ไทย%' OR timezone='Asia/Bangkok' THEN 'TH'
+          ELSE country_code END,
+        country_name=CASE
+          WHEN lower(destination) LIKE '%japan%' OR destination LIKE '%ญี่ปุ่น%' OR timezone='Asia/Tokyo' THEN 'Japan'
+          WHEN lower(destination) LIKE '%china%' OR destination LIKE '%จีน%' OR timezone='Asia/Shanghai' THEN 'China'
+          WHEN lower(destination) LIKE '%korea%' OR destination LIKE '%เกาหลี%' OR timezone='Asia/Seoul' THEN 'South Korea'
+          WHEN lower(destination) LIKE '%taiwan%' OR destination LIKE '%ไต้หวัน%' OR timezone='Asia/Taipei' THEN 'Taiwan'
+          WHEN lower(destination) LIKE '%hong kong%' OR destination LIKE '%ฮ่องกง%' OR timezone='Asia/Hong_Kong' THEN 'Hong Kong'
+          WHEN lower(destination) LIKE '%singapore%' OR destination LIKE '%สิงคโปร์%' OR timezone='Asia/Singapore' THEN 'Singapore'
+          WHEN lower(destination) LIKE '%vietnam%' OR destination LIKE '%เวียดนาม%' OR timezone='Asia/Ho_Chi_Minh' THEN 'Vietnam'
+          WHEN lower(destination) LIKE '%malaysia%' OR destination LIKE '%มาเลเซีย%' OR timezone='Asia/Kuala_Lumpur' THEN 'Malaysia'
+          WHEN lower(destination) LIKE '%indonesia%' OR destination LIKE '%อินโดนีเซีย%' OR timezone='Asia/Jakarta' THEN 'Indonesia'
+          WHEN lower(destination) LIKE '%thailand%' OR destination LIKE '%ไทย%' OR timezone='Asia/Bangkok' THEN 'Thailand'
+          ELSE country_name END
+        WHERE country_code IS NULL OR country_name IS NULL`,
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

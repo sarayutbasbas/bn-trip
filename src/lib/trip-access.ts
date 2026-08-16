@@ -25,6 +25,16 @@ export async function tripCardIdsAreMembers(tripId:string,cardIds:string[]){
 
 export const tripAccessSql=(alias="trips")=>`(${alias}.owner_id=$1 OR EXISTS (SELECT 1 FROM trip_collaborators access_member WHERE access_member.trip_id=${alias}.id AND access_member.user_id=$1))`;
 export const tripRoleSql=(alias="trips")=>`CASE WHEN ${alias}.owner_id=$1 THEN 'owner' ELSE 'collaborator' END AS access_role`;
+export const tripReviewSummarySql=(alias="trips")=>`COALESCE((SELECT round(avg(review.rating),1) FROM trip_reviews review
+    WHERE review.trip_id=${alias}.id AND (review.user_id=${alias}.owner_id OR EXISTS (
+      SELECT 1 FROM trip_collaborators review_member
+      WHERE review_member.trip_id=${alias}.id AND review_member.user_id=review.user_id
+    ))),0)::float AS review_average,
+  (SELECT count(*)::int FROM trip_reviews review
+    WHERE review.trip_id=${alias}.id AND (review.user_id=${alias}.owner_id OR EXISTS (
+      SELECT 1 FROM trip_collaborators review_member
+      WHERE review_member.trip_id=${alias}.id AND review_member.user_id=review.user_id
+    ))) AS review_count`;
 export const tripMembersSql=(alias="trips")=>`CASE
   WHEN EXISTS (SELECT 1 FROM trip_collaborators shared_check WHERE shared_check.trip_id=${alias}.id AND shared_check.user_id IS NOT NULL)
   THEN (
