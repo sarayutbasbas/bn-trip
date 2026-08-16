@@ -2718,6 +2718,7 @@ function TripsDirectory({
           onClick={createTrip}
         />
       )}
+      </div>
       <button
         className="directory-fab"
         onClick={createTrip}
@@ -2726,7 +2727,6 @@ function TripsDirectory({
         <Plus size={22} />
         <span>{t("สร้างทริปใหม่")}</span>
       </button>
-      </div>
     </>
   );
 }
