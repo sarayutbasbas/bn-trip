@@ -1694,7 +1694,7 @@ function TripCard({
           )}
         </div>
         <SharedTripAvatars members={trip.members} limit={3} />
-        <TripRatingBadge trip={trip} />
+        {past && <TripRatingBadge trip={trip} />}
       </div>
       <div className="trip-body">
         <h3>{trip.name}</h3>
@@ -2282,7 +2282,7 @@ function CompactTripCard({
           priority={priority}
           className="compact-trip-cover-image"
         />
-        <TripRatingBadge trip={trip} variant="compact" />
+        {past && <TripRatingBadge trip={trip} variant="compact" />}
       </div>
       <div className="compact-trip-body">
         <span className="compact-trip-status">{status}</span>
@@ -2578,15 +2578,6 @@ function TripHeader({
   const ended = tripHasEnded(trip, new Date());
   return (
     <div className="trip-detail-head has-cover">
-      <div className="trip-menu-safe-area" aria-hidden="true">
-        <TripCoverImage
-          src={coverUrl}
-          alt=""
-          sizes="100vw"
-          priority
-          className="trip-menu-safe-image"
-        />
-      </div>
       <div className="trip-detail-image-frame">
         <TripCoverImage
           src={coverUrl}
@@ -2624,12 +2615,14 @@ function TripHeader({
             : t("จัดการผู้ร่วมทริป")
         }
       />
-      <TripRatingBadge
-        trip={trip}
-        variant="header"
-        showEmpty
-        onClick={openReviews}
-      />
+      {ended && (
+        <TripRatingBadge
+          trip={trip}
+          variant="header"
+          showEmpty
+          onClick={openReviews}
+        />
+      )}
     </div>
   );
 }
@@ -2973,7 +2966,11 @@ function TripHub({
                   selectView(view === "workspace" ? "plan" : "workspace")
                 }
               >
-                <FolderOpen size={18} />
+                {view === "workspace" ? (
+                  <Navigation size={18} />
+                ) : (
+                  <FolderOpen size={18} />
+                )}
                 <span>{t(view === "workspace" ? "แพลน" : "เตรียมทริป")}</span>
               </button>
               <button
@@ -2982,7 +2979,11 @@ function TripHub({
                   selectView(view === "expenses" ? "plan" : "expenses")
                 }
               >
-                <ReceiptText size={18} />
+                {view === "expenses" ? (
+                  <Navigation size={18} />
+                ) : (
+                  <ReceiptText size={18} />
+                )}
                 <span>{t(view === "expenses" ? "แพลน" : "ค่าใช้จ่าย")}</span>
               </button>
               <button type="button" onClick={editTrip}>

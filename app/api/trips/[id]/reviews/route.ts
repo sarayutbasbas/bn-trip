@@ -27,6 +27,16 @@ type ReviewRow = {
   is_current_user: boolean;
 };
 
+async function tripHasFinished(tripId: string) {
+  const result = await query<{ ended: boolean }>(
+    `SELECT COALESCE(return_departure_at,(start_date+total_days-1)::timestamp)
+       < (now() AT TIME ZONE COALESCE(timezone,'Asia/Bangkok')) AS ended
+     FROM trips WHERE id=$1`,
+    [tripId],
+  );
+  return result.rows[0]?.ended === true;
+}
+
 async function listReviews(tripId: string, userId: string) {
   const result = await query<ReviewRow>(
     `WITH trip_members AS (
@@ -90,6 +100,11 @@ export async function GET(
   await ensureLatestDatabaseSchema();
   if (!(await getTripRole(id, session.userId)))
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await tripHasFinished(id)))
+    return NextResponse.json(
+      { error: "รีวิวได้หลังจากทริปจบแล้วเท่านั้น" },
+      { status: 409 },
+    );
   return NextResponse.json(await listReviews(id, session.userId));
 }
 
@@ -109,6 +124,11 @@ export async function PUT(
   const { id } = await params;
   if (!(await getTripRole(id, session.userId)))
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await tripHasFinished(id)))
+    return NextResponse.json(
+      { error: "รีวิวได้หลังจากทริปจบแล้วเท่านั้น" },
+      { status: 409 },
+    );
   const parsed = reviewSchema.safeParse(await request.json());
   if (!parsed.success)
     return NextResponse.json({ error: "ข้อมูลรีวิวไม่ถูกต้อง" }, { status: 400 });

@@ -35,9 +35,7 @@ export const tripReviewSummarySql=(alias="trips")=>`COALESCE((SELECT round(avg(r
       SELECT 1 FROM trip_collaborators review_member
       WHERE review_member.trip_id=${alias}.id AND review_member.user_id=review.user_id
     ))) AS review_count`;
-export const tripMembersSql=(alias="trips")=>`CASE
-  WHEN EXISTS (SELECT 1 FROM trip_collaborators shared_check WHERE shared_check.trip_id=${alias}.id AND shared_check.user_id IS NOT NULL)
-  THEN (
+export const tripMembersSql=(alias="trips")=>`(
     SELECT COALESCE(
       jsonb_agg(
         jsonb_build_object(
@@ -63,6 +61,4 @@ export const tripMembersSql=(alias="trips")=>`CASE
       LEFT JOIN users member ON member.id=collaborator.user_id
       WHERE collaborator.trip_id=${alias}.id AND collaborator.user_id IS NOT NULL
     ) shared_member
-  )
-  ELSE '[]'::jsonb
-END AS members`;
+  ) AS members`;
