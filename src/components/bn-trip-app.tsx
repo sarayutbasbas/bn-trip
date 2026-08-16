@@ -203,6 +203,7 @@ type CostItem = {
   paymentMethod?: string;
   creditCardId?: string;
   paymentOwnerName?: string;
+  splitMemberIds?: string[];
 };
 export type Itinerary = {
   id: string;
@@ -514,6 +515,15 @@ const EN_TEXT: Record<string, string> = {
   รายการ: "Item",
   "เช่น ค่าอาหารเย็น": "e.g. Dinner",
   หมวดหมู่: "Category",
+  "หารกับ": "Split with",
+  "หารทุกคน": "Everyone",
+  "เลือกคนที่หาร": "Choose people",
+  "กรุณาเลือกผู้ร่วมทริปอย่างน้อย 1 คน":
+    "Choose at least one trip member",
+  "สรุปค่าใช้จ่ายแยกตามคน": "Expense split by person",
+  "คำนวณจากผู้ที่เลือกหารในแต่ละรายการ":
+    "Calculated from the people selected for each expense",
+  "รวมที่ต้องรับผิดชอบ": "Total share",
   อาหาร: "Food",
   เดินทาง: "Transport",
   ที่พัก: "Accommodation",
@@ -3887,6 +3897,82 @@ function PaymentMethodSummary({
   );
 }
 
+function ExpenseMemberSummary({
+  costs,
+  members,
+}: {
+  costs: CostItem[];
+  members: TripMember[];
+}) {
+  const t = useT();
+  const orderedMembers = ownerLastTripMembers(members);
+  const memberIds = new Set(orderedMembers.map((member) => member.id));
+  const totals = new Map(
+    orderedMembers.map((member) => [
+      member.id,
+      { trip: 0, shopping: 0 },
+    ]),
+  );
+  for (const cost of costs) {
+    const selected = (cost.splitMemberIds || []).filter((id) =>
+      memberIds.has(id),
+    );
+    const participants = selected.length
+      ? selected
+      : orderedMembers.map((member) => member.id);
+    if (!participants.length) continue;
+    const share = Number(cost.value || 0) / participants.length;
+    const shopping = (cost.category || "").toLowerCase() === "shopping";
+    for (const memberId of participants) {
+      const total = totals.get(memberId);
+      if (!total) continue;
+      if (shopping) total.shopping += share;
+      else total.trip += share;
+    }
+  }
+  if (!orderedMembers.length) return null;
+  return (
+    <section className="expense-member-summary">
+      <div className="expense-member-summary-head">
+        <h3>{t("สรุปค่าใช้จ่ายแยกตามคน")}</h3>
+        <p>{t("คำนวณจากผู้ที่เลือกหารในแต่ละรายการ")}</p>
+      </div>
+      <div>
+        {orderedMembers.map((member) => {
+          const label = member.display_name || member.email || "-";
+          const total = totals.get(member.id) || { trip: 0, shopping: 0 };
+          return (
+            <article key={member.id}>
+              <span
+                className="expense-member-avatar"
+                style={
+                  member.avatar_url
+                    ? { backgroundImage: `url("${member.avatar_url}")` }
+                    : undefined
+                }
+              >
+                {!member.avatar_url && label.charAt(0).toUpperCase()}
+              </span>
+              <div className="expense-member-copy">
+                <strong>{label}</strong>
+                <small>{t("รวมที่ต้องรับผิดชอบ")}</small>
+              </div>
+              <div className="expense-member-totals">
+                <span>
+                  {t("ค่าใช้จ่ายทริป")} <b>฿{bahtFormat(total.trip)}</b>
+                </span>
+                <span>
+                  {t("ค่า Shopping")} <b>฿{bahtFormat(total.shopping)}</b>
+                </span>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function PlanExpensesContent({
   trip,
   items,
@@ -3951,6 +4037,10 @@ function PlanExpensesContent({
       />
       <CategoryDonut categories={categories} total={tripTotal} />
       <PaymentMethodSummary costs={allCosts} cards={cards} />
+      <ExpenseMemberSummary
+        costs={allCosts}
+        members={trip.members || []}
+      />
       <div className="expense-days">
         {Array.from({ length: trip.total_days }, (_, index) => index + 1).map(
           (dayNumber) => {
@@ -5875,6 +5965,37 @@ function CostSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const splitMembers = ownerLastTripMembers(trip.members || []);
+  const allSplitMemberIds = splitMembers.map((member) => member.id);
+  const existingSplitMemberIds = (existing?.splitMemberIds || []).filter(
+    (id) => allSplitMemberIds.includes(id),
+  );
+  const [splitMemberIds, setSplitMemberIds] = useState<string[]>(
+    existingSplitMemberIds.length
+      ? existingSplitMemberIds
+      : allSplitMemberIds,
+  );
+  const [splitPickerOpen, setSplitPickerOpen] = useState(false);
+  const splitPickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!splitPickerOpen) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !splitPickerRef.current?.contains(event.target)
+      )
+        setSplitPickerOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSplitPickerOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [splitPickerOpen]);
   const { formRef, hasChanges, checkForChanges } = useFormDirty(
     `${modal.item?.id || "new"}:${modal.costIndex ?? "cost"}`,
   );
@@ -5930,6 +6051,10 @@ function CostSheet({
       setError("กรุณากรอกอัตราแลกเปลี่ยนให้ถูกต้อง");
       return;
     }
+    if (allSplitMemberIds.length && !splitMemberIds.length) {
+      setError("กรุณาเลือกผู้ร่วมทริปอย่างน้อย 1 คน");
+      return;
+    }
     const paymentSource = String(form.get("paymentSource") || "cash");
     const selectedCard = cards.find((card) => card.id === paymentSource);
     const cost: CostItem = {
@@ -5945,6 +6070,7 @@ function CostSheet({
         : "เงินสด",
       creditCardId: selectedCard?.id,
       paymentOwnerName: selectedCard?.owner_name,
+      splitMemberIds: splitMemberIds.length ? splitMemberIds : undefined,
       value: Math.round(foreignAmount * rate * 100) / 100,
     };
     setSaving(true);
@@ -6066,18 +6192,95 @@ function CostSheet({
               placeholder={t("เช่น ค่าอาหารเย็น")}
             />
           </div>
-          <div className="field">
-            <label>{t("หมวดหมู่")}</label>
-            <select
-              name="category"
-              defaultValue={existing?.category || "อาหาร"}
-            >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {t(category)}
-                </option>
-              ))}
-            </select>
+          <div className="form-row expense-category-split-row">
+            <div className="field">
+              <label>{t("หมวดหมู่")}</label>
+              <select
+                name="category"
+                defaultValue={existing?.category || "อาหาร"}
+              >
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {t(category)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field split-member-field" ref={splitPickerRef}>
+              <label>{t("หารกับ")}</label>
+              <button
+                type="button"
+                className={`split-member-trigger ${splitPickerOpen ? "is-open" : ""}`}
+                onClick={() => setSplitPickerOpen((value) => !value)}
+                aria-expanded={splitPickerOpen}
+              >
+                <span>
+                  {splitMemberIds.length === allSplitMemberIds.length
+                    ? t("หารทุกคน")
+                    : splitMemberIds.length === 1
+                      ? splitMembers.find(
+                          (member) => member.id === splitMemberIds[0],
+                        )?.display_name || t("1 คน")
+                      : t(`${splitMemberIds.length} คน`)}
+                </span>
+                <ChevronDown size={16} />
+              </button>
+              {splitPickerOpen && (
+                <div className="split-member-menu">
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="splitAll"
+                      checked={
+                        allSplitMemberIds.length > 0 &&
+                        splitMemberIds.length === allSplitMemberIds.length
+                      }
+                      onChange={(event) =>
+                        setSplitMemberIds(
+                          event.target.checked ? allSplitMemberIds : [],
+                        )
+                      }
+                    />
+                    <span className="split-checkmark" aria-hidden="true" />
+                    <span>{t("หารทุกคน")}</span>
+                  </label>
+                  {splitMembers.map((member) => {
+                    const label = member.display_name || member.email || "-";
+                    return (
+                      <label key={member.id}>
+                        <input
+                          type="checkbox"
+                          name="splitMember"
+                          value={member.id}
+                          checked={splitMemberIds.includes(member.id)}
+                          onChange={(event) =>
+                            setSplitMemberIds((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, member.id])]
+                                : current.filter((id) => id !== member.id),
+                            )
+                          }
+                        />
+                        <span className="split-checkmark" aria-hidden="true" />
+                        <span
+                          className="split-member-avatar"
+                          style={
+                            member.avatar_url
+                              ? {
+                                  backgroundImage: `url("${member.avatar_url}")`,
+                                }
+                              : undefined
+                          }
+                        >
+                          {!member.avatar_url && label.charAt(0).toUpperCase()}
+                        </span>
+                        <span>{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
           <div className="form-row money-currency-row">
             <div className="field">

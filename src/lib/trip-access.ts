@@ -23,6 +23,21 @@ export async function tripCardIdsAreMembers(tripId:string,cardIds:string[]){
   return Number(result.rows[0]?.count||0)===uniqueIds.length;
 }
 
+export async function tripMemberIdsAreMembers(tripId:string,userIds:string[]){
+  const uniqueIds=[...new Set(userIds)];
+  if(!uniqueIds.length)return true;
+  const result=await query<{count:number}>(`SELECT count(DISTINCT member.user_id)::int AS count
+    FROM trips trip
+    CROSS JOIN LATERAL (
+      SELECT trip.owner_id AS user_id
+      UNION ALL
+      SELECT collaborator.user_id FROM trip_collaborators collaborator
+      WHERE collaborator.trip_id=trip.id AND collaborator.user_id IS NOT NULL
+    ) member
+    WHERE trip.id=$1 AND member.user_id=ANY($2::uuid[])`,[tripId,uniqueIds]);
+  return Number(result.rows[0]?.count||0)===uniqueIds.length;
+}
+
 export const tripAccessSql=(alias="trips")=>`(${alias}.owner_id=$1 OR EXISTS (SELECT 1 FROM trip_collaborators access_member WHERE access_member.trip_id=${alias}.id AND access_member.user_id=$1))`;
 export const tripRoleSql=(alias="trips")=>`CASE WHEN ${alias}.owner_id=$1 THEN 'owner' ELSE 'collaborator' END AS access_role`;
 export const tripReviewSummarySql=(alias="trips")=>`COALESCE((SELECT round(avg(review.rating),1) FROM trip_reviews review
