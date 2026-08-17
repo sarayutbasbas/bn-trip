@@ -16,7 +16,11 @@ import Image, { type ImageLoaderProps } from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import type { TravelAnalyticsPayload } from "@/src/lib/trip-loaders";
+import type {
+  TravelAnalyticsCollection,
+  TravelAnalyticsPayload,
+  TravelAnalyticsScope,
+} from "@/src/lib/trip-loaders";
 import {
   clearOfflineDocuments,
   clearPrivateOfflineData,
@@ -750,6 +754,9 @@ Object.assign(EN_TEXT, {
   ยินดีต้อนรับกลับมา: "Welcome back",
   สถิติ: "Insights",
   สถิติการเดินทาง: "Travel insights",
+  กรองสถิติการเดินทาง: "Filter travel insights",
+  ภายในประเทศ: "Domestic",
+  ต่างประเทศ: "International",
   "ภาพรวมจากทริปที่ผ่านมาแล้วเท่านั้น":
     "An overview of completed trips only",
   ทริปที่ผ่านมา: "Past trips",
@@ -2336,8 +2343,14 @@ function AnalyticsYearTrend({
   );
 }
 
-function TravelAnalyticsDashboard({ data }: { data: TravelAnalyticsPayload }) {
+function TravelAnalyticsDashboard({
+  datasets,
+}: {
+  datasets: TravelAnalyticsCollection;
+}) {
   const t = useT();
+  const [scope, setScope] = useState<TravelAnalyticsScope>("all");
+  const data = datasets[scope];
   const money = (value: number) => `฿${bahtFormat(value)}`;
   const maxCountryTrips = Math.max(
     1,
@@ -2352,6 +2365,25 @@ function TravelAnalyticsDashboard({ data }: { data: TravelAnalyticsPayload }) {
   const maxPeriodFlights = Math.max(1, ...flightInsights.periods.map((item) => item.flights));
   const monthName = (month: number) =>
     new Intl.DateTimeFormat("th-TH", { month: "short" }).format(new Date(2026, month - 1, 1));
+  const scopeFilter = (
+    <nav className="analytics-scope-filter" aria-label={t("กรองสถิติการเดินทาง")}>
+      {([
+        ["all", "ทั้งหมด"],
+        ["domestic", "ภายในประเทศ"],
+        ["international", "ต่างประเทศ"],
+      ] as const).map(([value, label]) => (
+        <button
+          className={scope === value ? "active" : ""}
+          key={value}
+          type="button"
+          aria-pressed={scope === value}
+          onClick={() => setScope(value)}
+        >
+          {t(label)}
+        </button>
+      ))}
+    </nav>
+  );
 
   if (!data.totals.trips)
     return (
@@ -2361,6 +2393,7 @@ function TravelAnalyticsDashboard({ data }: { data: TravelAnalyticsPayload }) {
           <h1>{t("สถิติการเดินทาง")}</h1>
           <p>{t("ภาพรวมจากทริปที่ผ่านมาแล้วเท่านั้น")}</p>
         </header>
+        {scopeFilter}
         <article className="card analytics-empty">
           <ChartNoAxesColumnIncreasing size={28} />
           <h2>{t("ยังไม่มีทริปที่ผ่านมาให้สรุป")}</h2>
@@ -2393,6 +2426,8 @@ function TravelAnalyticsDashboard({ data }: { data: TravelAnalyticsPayload }) {
           <span className="analytics-land analytics-land-two" />
         </div>
       </header>
+
+      {scopeFilter}
 
       <section className="analytics-kpis" aria-label={t("สถิติการเดินทาง")}>
         <article className="analytics-kpi">
@@ -7463,7 +7498,7 @@ export function BNTripApp({
     past: Trip[];
     counts: DashboardCounts;
   };
-  initialAnalytics?: TravelAnalyticsPayload;
+  initialAnalytics?: TravelAnalyticsCollection;
   initialTrip?: Trip | null;
   initialItineraries?: Itinerary[];
   initialTripCards?: PaymentCard[];
@@ -8126,7 +8161,7 @@ export function BNTripApp({
       confirmAction={setConfirmation}
     />
   ) : page === "analytics" && initialAnalytics ? (
-    <TravelAnalyticsDashboard data={initialAnalytics} />
+    <TravelAnalyticsDashboard datasets={initialAnalytics} />
   ) : page === "trips" ? (
     <TripsDirectory
       initialFilters={initialTripFilters}

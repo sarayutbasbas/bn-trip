@@ -1770,6 +1770,44 @@ button:disabled {
   font-size: 11px;
   line-height: 1.5;
 }
+.analytics-scope-filter {
+  min-height: 44px;
+  margin: 0 0 14px;
+  padding: 4px;
+  border: 0.5px solid var(--line);
+  border-radius: 15px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  box-shadow: 0 1px 0 var(--glass-highlight) inset, var(--shadow-sm);
+}
+.analytics-scope-filter button {
+  min-width: 0;
+  height: 36px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 11px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    color 180ms var(--ease-ios),
+    background 180ms var(--ease-ios),
+    box-shadow 180ms var(--ease-ios),
+    transform 120ms var(--ease-ios);
+}
+.analytics-scope-filter button.active {
+  color: #fff;
+  background: var(--brand-gradient);
+  box-shadow: 0 6px 14px rgba(255, 94, 14, 0.2);
+}
+.analytics-scope-filter button:active {
+  transform: scale(0.97);
+}
 .analytics-kpis {
   margin-bottom: 12px;
   display: grid;

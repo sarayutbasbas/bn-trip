@@ -70,7 +70,14 @@ export type TravelAnalyticsPayload = {
   };
 };
 
+export type TravelAnalyticsScope = "all" | "domestic" | "international";
+export type TravelAnalyticsCollection = Record<
+  TravelAnalyticsScope,
+  TravelAnalyticsPayload
+>;
+
 type AnalyticsTripRow = {
+  trip_id: string;
   year: number;
   country: string;
   country_code: string | null;
@@ -218,9 +225,38 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
   };
 }
 
+function isDomesticAnalyticsTrip(row: AnalyticsTripRow) {
+  const countryCode =
+    (row.country_code || "").trim().toUpperCase() ||
+    inferTripCountry(row.country).code.toUpperCase();
+  return countryCode === "TH";
+}
+
+function aggregateTravelAnalyticsCollection(
+  tripRows: AnalyticsTripRow[],
+  flightRows: AnalyticsFlightRow[],
+): TravelAnalyticsCollection {
+  const createScope = (rows: AnalyticsTripRow[]) => {
+    const tripIds = new Set(rows.map((row) => row.trip_id));
+    const analytics = aggregateTravelAnalytics(rows);
+    analytics.flights = aggregateFlightAnalytics(
+      flightRows.filter((row) => tripIds.has(row.trip_id)),
+    );
+    return analytics;
+  };
+
+  return {
+    all: createScope(tripRows),
+    domestic: createScope(tripRows.filter(isDomesticAnalyticsTrip)),
+    international: createScope(
+      tripRows.filter((row) => !isDomesticAnalyticsTrip(row)),
+    ),
+  };
+}
+
 export async function loadTravelAnalytics(
   session: SessionUser,
-): Promise<TravelAnalyticsPayload> {
+): Promise<TravelAnalyticsCollection> {
   if (session.isDemo) {
     const dashboard = getDemoTrips(
       new URLSearchParams("mode=dashboard"),
@@ -239,6 +275,7 @@ export async function loadTravelAnalytics(
         }
       }
       return {
+        trip_id: trip.id,
         year: Number(trip.start_date.slice(0, 4)),
         country:
           inferTripCountry(trip.destination).nameEn,
@@ -247,7 +284,7 @@ export async function loadTravelAnalytics(
         shopping_expense: shoppingExpense,
       };
     });
-    return aggregateTravelAnalytics(rows);
+    return aggregateTravelAnalyticsCollection(rows, []);
   }
 
   await ensureLatestDatabaseSchema();
@@ -261,7 +298,7 @@ export async function loadTravelAnalytics(
          AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)
            < (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
      )
-     SELECT trip.year,trip.country,trip.country_code,
+     SELECT trip.id AS trip_id,trip.year,trip.country,trip.country_code,
        COALESCE(SUM(CASE WHEN lower(COALESCE(cost.item->>'category',''))<>'shopping'
          AND COALESCE(cost.item->>'value','')~'^-?[0-9]+([.][0-9]+)?$'
          THEN (cost.item->>'value')::numeric ELSE 0 END),0)::text AS travel_expense,
@@ -288,9 +325,9 @@ export async function loadTravelAnalytics(
      ORDER BY flight.scheduled_departure_at`,
     [session.userId],
   )]);
-  const analytics=aggregateTravelAnalytics(result.rows);
-  analytics.flights=aggregateFlightAnalytics(flightResult.rows);
-  return clientSafe(analytics);
+  return clientSafe(
+    aggregateTravelAnalyticsCollection(result.rows, flightResult.rows),
+  );
 }
 
 export async function loadDashboard(session: SessionUser): Promise<DashboardPayload> {
