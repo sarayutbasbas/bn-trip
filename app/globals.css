@@ -1645,18 +1645,17 @@ button:disabled {
   white-space: nowrap;
 }
 .country-highlights-scroll {
+  max-width: 100%;
   margin-inline: calc(var(--screen-padding, 0px) * -1);
   padding: 2px var(--screen-padding, 0px) 4px;
   display: flex;
   gap: 11px;
   overflow-x: auto;
-  overscroll-behavior-inline: contain;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
-  touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
-  -webkit-user-select: none;
-  user-select: none;
 }
 .country-highlights-scroll::-webkit-scrollbar {
   display: none;
@@ -1670,6 +1669,8 @@ button:disabled {
   align-items: center;
   scroll-snap-align: start;
   color: inherit;
+  background: transparent;
+  font: inherit;
   text-align: center;
   text-decoration: none;
   -webkit-touch-callout: none;
@@ -7748,6 +7749,9 @@ html.sheet-open body {
     padding-bottom: 20px;
   }
   .day-strip {
+    overscroll-behavior: auto;
+  }
+  .country-highlights-scroll {
     overscroll-behavior: auto;
   }
 }

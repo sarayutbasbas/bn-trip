@@ -2297,7 +2297,7 @@ function Dashboard({
 function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
   const t = useT();
   const lang = useContext(LanguageContext);
-  const gesture = useRef({ x: 0, y: 0, dragged: false });
+  const router = useRouter();
   return (
     <section className="country-highlights" aria-label={t("ประเทศที่ประทับใจ")}>
       <div className="country-highlights-head">
@@ -2307,36 +2307,19 @@ function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
         </div>
         <small>{t("เรียงตามคะแนนรีวิว")}</small>
       </div>
-      <div
-        className="country-highlights-scroll"
-        onPointerDownCapture={(event) => {
-          gesture.current = {
-            x: event.clientX,
-            y: event.clientY,
-            dragged: false,
-          };
-        }}
-        onPointerMoveCapture={(event) => {
-          const deltaX = event.clientX - gesture.current.x;
-          const deltaY = event.clientY - gesture.current.y;
-          if (Math.hypot(deltaX, deltaY) > 8) gesture.current.dragged = true;
-        }}
-        onClickCapture={(event) => {
-          if (!gesture.current.dragged) return;
-          event.preventDefault();
-          event.stopPropagation();
-          gesture.current.dragged = false;
-        }}
-      >
+      <div className="country-highlights-scroll">
         {items.map((item) => {
           const country =
             countryByCode(item.countryCode) || inferTripCountry(item.country);
           const name = lang === "EN" ? country.nameEn : country.nameTh;
           return (
-            <Link
+            <button
+              type="button"
               className="country-highlight-item"
               key={`${item.countryCode}:${item.country}`}
-              href={`/trips?q=${encodeURIComponent(country.nameEn)}`}
+              onClick={() =>
+                router.push(`/trips?q=${encodeURIComponent(country.nameEn)}`)
+              }
               title={`${name} · ${item.averageRating.toFixed(1)}`}
               aria-label={`${t("ดูทริปทั้งหมดใน")} ${name}`}
             >
@@ -2348,7 +2331,7 @@ function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
               </div>
               <strong>{name}</strong>
               <small>{t(`${item.trips} ทริป`)}</small>
-            </Link>
+            </button>
           );
         })}
       </div>
