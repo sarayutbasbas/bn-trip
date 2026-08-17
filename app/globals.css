@@ -2682,21 +2682,9 @@ button:disabled {
 .filter-search-row {
   display: flex;
   align-items: stretch;
-  gap: 8px;
-}
-.filter-search-row > select {
-  width: 112px;
-  min-width: 112px;
-  min-height: 46px;
-  padding: 0 28px 0 10px;
-  border: 0.5px solid var(--line);
-  border-radius: 14px;
-  color: var(--ink);
-  background: var(--surface-solid);
-  font-size: 12px;
-  font-weight: 400;
 }
 .trip-search {
+  width: 100%;
   min-width: 0;
   min-height: 46px;
   padding: 0 12px;

@@ -116,7 +116,6 @@ type Screen =
 type WorkspaceTab = "checklist" | "documents" | "history";
 type Lang = "TH" | "EN";
 type TripStatus = "all" | "ongoing" | "upcoming" | "past";
-type TripSort = "latest" | "nearest" | "oldest" | "name";
 type TripFilters = { status: string; year: string; q: string; sort: string };
 export type DashboardCounts = {
   total: number;
@@ -2715,18 +2714,12 @@ function TripsDirectory({
     ["ongoing", "upcoming", "past"].includes(value)
       ? (value as TripStatus)
       : "all";
-  const validSort = (value: string): TripSort =>
-    ["nearest", "oldest", "name"].includes(value)
-      ? (value as TripSort)
-      : "latest";
   const [status, setStatus] = useState<TripStatus>(() =>
     validStatus(initialFilters.status),
   );
   const [year, setYear] = useState(initialFilters.year || "all");
   const [queryText, setQueryText] = useState(initialFilters.q || "");
-  const [sort, setSort] = useState<TripSort>(() =>
-    validSort(initialFilters.sort),
-  );
+  const sort = "latest";
   const [items, setItems] = useState<Trip[]>(() =>
     applyCachedTripReviewSummaries(initialData?.items || []),
   );
@@ -2993,16 +2986,6 @@ function TripsDirectory({
               </button>
             )}
           </label>
-          <select
-            value={sort}
-            onChange={(event) => setSort(event.target.value as TripSort)}
-            aria-label={t("ใกล้ถึงวันเดินทาง")}
-          >
-            <option value="latest">{t("ใกล้ถึงวันเดินทาง")}</option>
-            <option value="nearest">{t("ใกล้ที่สุด")}</option>
-            <option value="oldest">{t("เก่าสุด")}</option>
-            <option value="name">{t("เรียงตามชื่อ")}</option>
-          </select>
         </div>
         <div className="status-filter">
           {statuses.map(([value, label]) => (
