@@ -6,7 +6,7 @@ import { LoginScreen } from "@/src/components/login-screen";
 import { AuthenticatedDashboard } from "@/src/components/authenticated-dashboard";
 
 export const metadata: Metadata = {
-  title: "BN Trip — วางแผนทุกโมเมนต์ด้วยกัน",
+  title: "Pack & Go+ — วางแผนทุกโมเมนต์ด้วยกัน",
   description: "สมุดท่องเที่ยวสีสดสำหรับแพลนทริป บันทึกความทรงจำ และคุมค่าใช้จ่ายของเราสองคน",
 };
 

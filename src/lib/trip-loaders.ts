@@ -54,6 +54,20 @@ export type TravelAnalyticsPayload = {
     trips: number;
     totalExpense: number;
   }>;
+  flights: {
+    totals: {
+      segments: number;
+      trips: number;
+      ticketCostThb: number;
+      averageTicketCostThb: number;
+      averageDurationHours: number;
+    };
+    airlines: Array<{ code: string; name: string; flights: number; ticketCostThb: number }>;
+    cabins: Array<{ name: string; flights: number }>;
+    periods: Array<{ key: string; label: string; flights: number }>;
+    months: Array<{ month: number; flights: number }>;
+    routes: Array<{ route: string; flights: number }>;
+  };
 };
 
 type AnalyticsTripRow = {
@@ -63,6 +77,75 @@ type AnalyticsTripRow = {
   travel_expense: string | number;
   shopping_expense: string | number;
 };
+type AnalyticsFlightRow = {
+  trip_id: string;
+  airline_code: string;
+  airline_name: string;
+  departure_airport_code: string;
+  arrival_airport_code: string;
+  cabin_class: string | null;
+  ticket_price: string | number | null;
+  ticket_exchange_rate: string | number | null;
+  departure_month: string | number;
+  departure_hour: string | number;
+  duration_hours: string | number | null;
+};
+
+const emptyFlightAnalytics = (): TravelAnalyticsPayload["flights"] => ({
+  totals: { segments: 0, trips: 0, ticketCostThb: 0, averageTicketCostThb: 0, averageDurationHours: 0 },
+  airlines: [], cabins: [], periods: [], months: [], routes: [],
+});
+
+function aggregateFlightAnalytics(rows: AnalyticsFlightRow[]): TravelAnalyticsPayload["flights"] {
+  const airlines = new Map<string,{code:string;name:string;flights:number;ticketCostThb:number}>();
+  const cabins = new Map<string,number>();
+  const months = new Map<number,number>();
+  const routes = new Map<string,number>();
+  const periods = new Map<string,{label:string;flights:number}>([
+    ["morning",{label:"เช้า · 05:00–11:59",flights:0}],
+    ["afternoon",{label:"บ่าย · 12:00–16:59",flights:0}],
+    ["evening",{label:"เย็น · 17:00–21:59",flights:0}],
+    ["night",{label:"กลางคืน · 22:00–04:59",flights:0}],
+  ]);
+  const tripIds = new Set<string>();
+  let ticketCostThb = 0;
+  let pricedSegments = 0;
+  let durationHours = 0;
+  let durationSegments = 0;
+  for (const row of rows) {
+    tripIds.add(row.trip_id);
+    const ticket = Number(row.ticket_price || 0) * Number(row.ticket_exchange_rate || 1);
+    if (ticket > 0) { ticketCostThb += ticket; pricedSegments += 1; }
+    const duration = Number(row.duration_hours || 0);
+    if (duration > 0) { durationHours += duration; durationSegments += 1; }
+    const airlineKey = row.airline_code || row.airline_name || "unknown";
+    const airline = airlines.get(airlineKey) || { code: row.airline_code, name: row.airline_name || row.airline_code || "ไม่ระบุ", flights: 0, ticketCostThb: 0 };
+    airline.flights += 1; airline.ticketCostThb += ticket; airlines.set(airlineKey,airline);
+    const cabin = row.cabin_class?.trim() || "ไม่ระบุ";
+    cabins.set(cabin,(cabins.get(cabin)||0)+1);
+    const month = Number(row.departure_month);
+    if (month>=1&&month<=12) months.set(month,(months.get(month)||0)+1);
+    const route = `${row.departure_airport_code} → ${row.arrival_airport_code}`;
+    routes.set(route,(routes.get(route)||0)+1);
+    const hour = Number(row.departure_hour);
+    const periodKey = hour>=5&&hour<12?"morning":hour>=12&&hour<17?"afternoon":hour>=17&&hour<22?"evening":"night";
+    periods.get(periodKey)!.flights += 1;
+  }
+  return {
+    totals: {
+      segments: rows.length,
+      trips: tripIds.size,
+      ticketCostThb,
+      averageTicketCostThb: pricedSegments ? ticketCostThb/pricedSegments : 0,
+      averageDurationHours: durationSegments ? durationHours/durationSegments : 0,
+    },
+    airlines:[...airlines.values()].sort((a,b)=>b.flights-a.flights||b.ticketCostThb-a.ticketCostThb),
+    cabins:[...cabins.entries()].map(([name,flights])=>({name,flights})).sort((a,b)=>b.flights-a.flights),
+    periods:[...periods.entries()].map(([key,value])=>({key,...value})).sort((a,b)=>b.flights-a.flights),
+    months:[...months.entries()].map(([month,flights])=>({month,flights})).sort((a,b)=>b.flights-a.flights),
+    routes:[...routes.entries()].map(([route,flights])=>({route,flights})).sort((a,b)=>b.flights-a.flights).slice(0,8),
+  };
+}
 
 function clientSafe<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -131,6 +214,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
           right.totalExpense - left.totalExpense ||
           left.country.localeCompare(right.country),
       ),
+    flights: emptyFlightAnalytics(),
   };
 }
 
@@ -167,7 +251,7 @@ export async function loadTravelAnalytics(
   }
 
   await ensureLatestDatabaseSchema();
-  const result = await query<AnalyticsTripRow>(
+  const [result,flightResult] = await Promise.all([query<AnalyticsTripRow>(
     `WITH accessible_past AS (
        SELECT t.id,EXTRACT(YEAR FROM t.start_date)::int AS year,
          COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ') AS country,
@@ -190,8 +274,23 @@ export async function loadTravelAnalytics(
      GROUP BY trip.id,trip.year,trip.country,trip.country_code
      ORDER BY trip.year DESC`,
     [session.userId],
-  );
-  return clientSafe(aggregateTravelAnalytics(result.rows));
+  ),query<AnalyticsFlightRow>(
+    `SELECT flight.trip_id,flight.airline_code,flight.airline_name,
+       flight.departure_airport_code,flight.arrival_airport_code,flight.cabin_class,
+       flight.ticket_price,flight.ticket_exchange_rate,
+       EXTRACT(MONTH FROM COALESCE(flight.entered_departure_local,flight.scheduled_departure_at::timestamp))::int AS departure_month,
+       EXTRACT(HOUR FROM COALESCE(flight.entered_departure_local,flight.scheduled_departure_at::timestamp))::int AS departure_hour,
+       (EXTRACT(EPOCH FROM (flight.scheduled_arrival_at-flight.scheduled_departure_at))/3600)::numeric(10,2) AS duration_hours
+     FROM trip_flight_segments flight JOIN trips t ON t.id=flight.trip_id
+     WHERE ${tripAccessSql("t")}
+       AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)
+         < (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
+     ORDER BY flight.scheduled_departure_at`,
+    [session.userId],
+  )]);
+  const analytics=aggregateTravelAnalytics(result.rows);
+  analytics.flights=aggregateFlightAnalytics(flightResult.rows);
+  return clientSafe(analytics);
 }
 
 export async function loadDashboard(session: SessionUser): Promise<DashboardPayload> {

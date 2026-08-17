@@ -25,7 +25,7 @@ export async function GET() {
 
     return NextResponse.json({ status: "ok" });
   } catch (error) {
-    console.error("BN Trip health check failed", error);
+    console.error("Pack & Go+ health check failed", error);
     return NextResponse.json({ status: "not_ready" }, { status: 503 });
   }
 }

@@ -11,16 +11,17 @@ import "./globals.css";
 import { PwaRuntime } from "@/src/components/pwa-runtime";
 
 export const metadata: Metadata = {
-  title: { default: "BN Trip", template: "%s · BN Trip" },
+  title: { default: "Pack & Go+", template: "%s · Pack & Go+" },
   description: "วางแผนทริป ตารางเที่ยว และค่าใช้จ่ายของเราในที่เดียว",
-  applicationName: "BN Trip",
+  applicationName: "Pack & Go+",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "BN Trip", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Pack & Go+", statusBarStyle: "black-translucent" },
   icons: {
     icon: [
-      { url: "/bn-trip-icon-orange-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/pack-and-go-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/pack-and-go-icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon-orange.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon-pack-and-go.png", sizes: "180x180", type: "image/png" }],
   },
 };
 

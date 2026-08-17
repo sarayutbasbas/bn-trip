@@ -3,7 +3,7 @@ const DEMO_USER_ID="d0000000-0000-4000-8000-000000000001";
 function isoDate(offset:number){const date=new Date();date.setUTCHours(0,0,0,0);date.setUTCDate(date.getUTCDate()+offset);return date.toISOString().slice(0,10)}
 function timestamp(date:string,time:string){return `${date}T${time}:00`}
 
-const demoProfile={id:DEMO_USER_ID,email:"demo@bn-trip.app",display_name:"BN Trip Explorer",avatar_url:"/bn-trip-icon-orange-512.png"};
+const demoProfile={id:DEMO_USER_ID,email:"demo@packandgo.app",display_name:"Pack & Go+ Explorer",avatar_url:"/pack-and-go-icon-512.png"};
 const demoCards=[
   {id:"d3000000-0000-4000-8000-000000000001",nickname:"Travel Visa",brand:"visa",last_four:"2026",is_active:true,sort_order:0,owner_id:DEMO_USER_ID,owner_name:demoProfile.display_name,owner_email:demoProfile.email,owner_avatar_url:demoProfile.avatar_url,is_own:true,member_role:"owner"},
   {id:"d3000000-0000-4000-8000-000000000002",nickname:"Journey JCB",brand:"jcb",last_four:"8899",is_active:true,sort_order:1,owner_id:DEMO_USER_ID,owner_name:demoProfile.display_name,owner_email:demoProfile.email,owner_avatar_url:demoProfile.avatar_url,is_own:true,member_role:"owner"},
@@ -45,6 +45,38 @@ export function getDemoProfile(){return demoProfile}
 export function getDemoCards(){return demoCards}
 export function getDemoTrip(id:string){return buildTrips().find(trip=>trip.id===id)??null}
 export function getDemoItineraries(id:string){return (buildItineraries() as Record<string,unknown[]>)[id]??[]}
+
+export function getDemoFlightSegments(id:string){
+  if(id!=="d1000000-0000-4000-8000-000000000001")return [];
+  const departureDate=isoDate(3),arrivalDate=isoDate(3);
+  const scheduledDeparture=timestamp(departureDate,"18:45");
+  const scheduledArrival=timestamp(arrivalDate,"23:15");
+  return [{
+    id:"d4000000-0000-4000-8000-000000000001",trip_id:id,journey_type:"return",segment_order:0,
+    airline_code:"TG",airline_name:"Thai Airways International",flight_number:"673",
+    departure_airport_code:"KIX",departure_airport_name:"Kansai International Airport",
+    arrival_airport_code:"BKK",arrival_airport_name:"Suvarnabhumi Airport",
+    scheduled_departure_at:scheduledDeparture,scheduled_arrival_at:scheduledArrival,
+    entered_departure_local_text:`${departureDate}T18:45`,entered_arrival_local_text:`${arrivalDate}T23:15`,
+    latest_departure_at:timestamp(departureDate,"18:55"),latest_arrival_at:timestamp(arrivalDate,"23:25"),
+    departure_terminal:"1",departure_gate:"28",arrival_terminal:"Main",arrival_gate:"D4",
+    status:"scheduled",booking_reference:"BNDEMO",cabin_class:"Economy",baggage_note:"สัมภาระโหลด 23 กก.",
+    ticket_price:"18500.00",ticket_currency:"THB",ticket_exchange_rate:"1",ticket_rate_date:departureDate,
+    last_synced_at:new Date().toISOString(),provider:"demo",provider_flight_id:"demo-tg673",
+    passengers:[{user_id:DEMO_USER_ID,seat_number:"35A",meal_preference:"Thai meal",baggage_note:"23 kg",display_name:demoProfile.display_name,avatar_url:demoProfile.avatar_url}],
+    documents:[],
+  }];
+}
+
+export function getDemoNearbyFlights(){
+  const trip=getDemoTrip("d1000000-0000-4000-8000-000000000001");
+  return getDemoFlightSegments(trip!.id).map(flight=>({
+    ...flight,
+    trip_name:trip!.name,
+    trip_destination:trip!.destination,
+    cover_image_url:trip!.cover_image_url,
+  }));
+}
 
 export function getDemoTrips(params:URLSearchParams){
   const trips=buildTrips();const now=Date.now();const departure=(trip:(typeof trips)[number])=>new Date(trip.outbound_departure_at).getTime();const arrival=(trip:(typeof trips)[number])=>new Date(trip.return_departure_at).getTime();const ongoing=trips.filter(trip=>departure(trip)<=now&&arrival(trip)>=now);const upcoming=trips.filter(trip=>departure(trip)>now);const past=trips.filter(trip=>arrival(trip)<now);

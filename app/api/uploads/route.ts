@@ -28,5 +28,5 @@ export async function POST(request:Request){
     const filename=`${randomUUID()}.webp`;
     const url=await saveUpload(filename,optimized,"image/webp");
     return NextResponse.json({url},{status:201});
-  }catch(error){console.error("BN Trip upload error",error);return NextResponse.json({error:"อัปโหลดรูปไม่สำเร็จ"},{status:500});}
+  }catch(error){console.error("Pack & Go+ upload error",error);return NextResponse.json({error:"อัปโหลดรูปไม่สำเร็จ"},{status:500});}
 }

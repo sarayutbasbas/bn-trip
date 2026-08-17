@@ -61,6 +61,7 @@ import {
   GripVertical,
   House,
   Languages,
+  Luggage,
   LocateFixed,
   LogOut,
   MapPin,
@@ -211,6 +212,42 @@ type CostItem = {
   creditCardId?: string;
   paymentOwnerName?: string;
   splitMemberIds?: string[];
+};
+type NearbyFlight = {
+  id: string;
+  trip_id: string;
+  journey_type: "outbound" | "return" | "internal";
+  airline_code: string;
+  airline_name: string;
+  flight_number: string;
+  departure_airport_code: string;
+  departure_airport_name: string | null;
+  arrival_airport_code: string;
+  arrival_airport_name: string | null;
+  scheduled_departure_at: string;
+  scheduled_arrival_at: string;
+  entered_departure_local_text: string | null;
+  entered_arrival_local_text: string | null;
+  latest_departure_at: string | null;
+  latest_arrival_at: string | null;
+  departure_terminal: string | null;
+  departure_gate: string | null;
+  arrival_terminal: string | null;
+  arrival_gate: string | null;
+  status: string;
+  last_synced_at: string | null;
+  booking_reference: string | null;
+  cabin_class: string | null;
+  baggage_note: string | null;
+  ticket_price: string | null;
+  ticket_currency: string | null;
+  passengers: Array<{
+    user_id: string;
+    seat_number: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+  }>;
+  trip_name: string;
 };
 export type Itinerary = {
   id: string;
@@ -1019,16 +1056,16 @@ function TripCountryFlag({ trip }: { trip: Trip }) {
 
 function Brand() {
   return (
-    <Link className="brand" href="/" aria-label="BN Trip · หน้าแรก">
+    <Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก">
       <Image
-        src="/bn-trip-icon-orange-512.png"
-        alt="BN Trip"
+        src="/pack-and-go-icon-512.png"
+        alt="Pack & Go+"
         width={48}
         height={48}
         priority
       />
       <div>
-        BN Trip<small>our tiny trip club</small>
+        Pack &amp; Go+<small>travel smarter together</small>
       </div>
     </Link>
   );
@@ -1041,7 +1078,7 @@ function AccountAvatar({
   profile: AccountProfile | null;
   size?: "small" | "medium" | "large";
 }) {
-  const label = (profile?.display_name || profile?.email || "BN Trip").trim();
+  const label = (profile?.display_name || profile?.email || "Pack & Go+").trim();
   const initial = label.charAt(0).toUpperCase();
   return (
     <span
@@ -1903,11 +1940,184 @@ function TripInvitations({
   );
 }
 
+function NearbyFlights({
+  openFlightTrip,
+  notify,
+}: {
+  openFlightTrip: (tripId: string) => void;
+  notify: (message: string) => void;
+}) {
+  const t = useT();
+  const [flights, setFlights] = useState<NearbyFlight[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncConfigured, setSyncConfigured] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    const apply = (body: { flights?: NearbyFlight[]; syncConfigured?: boolean }) => {
+      if (!active) return;
+      if (Array.isArray(body.flights)) setFlights(body.flights);
+      if (typeof body.syncConfigured === "boolean") setSyncConfigured(body.syncConfigured);
+    };
+    void fetch("/api/flights/nearby", { cache: "no-store" })
+      .then((response) => response.json())
+      .then(apply)
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    const refreshStale = () => {
+      void fetch("/api/flights/nearby", { method: "POST", cache: "no-store" })
+        .then((response) => response.json())
+        .then(apply)
+        .catch(() => {});
+    };
+    refreshStale();
+    const timer = window.setInterval(refreshStale, 2 * 60 * 60 * 1000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshStale();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
+  async function syncFlight(flight: NearbyFlight) {
+    if (!syncConfigured || syncingId) return;
+    setSyncingId(flight.id);
+    try {
+      const response = await fetch(`/api/trips/${flight.trip_id}/flights/${flight.id}/sync`, { method: "POST" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "อัปเดตเที่ยวบินไม่สำเร็จ");
+      const refreshed = await fetch("/api/flights/nearby", { cache: "no-store" });
+      const latest = await refreshed.json();
+      if (refreshed.ok && Array.isArray(latest.flights)) setFlights(latest.flights);
+      notify("อัปเดตข้อมูลเที่ยวบินแล้ว");
+    } catch (reason) {
+      notify(reason instanceof Error ? reason.message : "อัปเดตเที่ยวบินไม่สำเร็จ");
+    } finally {
+      setSyncingId(null);
+    }
+  }
+  if (!loading && !flights.length) return null;
+  const now = Date.now();
+  return (
+    <section className="nearby-flight-section">
+      <div className="section-head nearby-flight-heading">
+        <div>
+          <span className="section-kicker">LIVE FLIGHT</span>
+          <div className="section-title-row">
+            <h2>{t("เที่ยวบินใกล้ออก")}</h2>
+            <span className="section-trip-count">{t("ล่วงหน้า 3 วัน")}</span>
+          </div>
+          <p>{t("Terminal, Gate และเวลาล่าสุดจะอัปเดตตามช่วงเวลา หรือกด Sync ได้ทันที")}</p>
+        </div>
+      </div>
+      <div className="nearby-flight-list">
+        {loading && !flights.length ? (
+          <article className="nearby-flight-card is-loading">{t("กำลังตรวจเที่ยวบินล่าสุด…")}</article>
+        ) : flights.map((flight) => {
+          const departure = new Date(flight.latest_departure_at || flight.scheduled_departure_at);
+          const arrival = new Date(flight.latest_arrival_at || flight.scheduled_arrival_at);
+          const hasEnded = arrival.getTime() < now;
+          const hours = Math.max(0, Math.ceil((departure.getTime() - now) / 3600000));
+          const departureTime = flight.entered_departure_local_text?.slice(11, 16)
+            || departure.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+          const arrivalTime = flight.entered_arrival_local_text?.slice(11, 16)
+            || arrival.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+          const departureDay = flight.entered_departure_local_text?.slice(0, 10)
+            ? new Date(`${flight.entered_departure_local_text.slice(0, 10)}T00:00:00`)
+            : departure;
+          const arrivalDay = flight.entered_arrival_local_text?.slice(0, 10)
+            ? new Date(`${flight.entered_arrival_local_text.slice(0, 10)}T00:00:00`)
+            : arrival;
+          const airportName = (value: string) => value
+            .replace(/\s+(?:International(?:\s+Airport)?|Intl\.?|Int['’]l\.?)$/i, "")
+            .trim();
+          return (
+            <article
+              className="flight-card flight-card-compact nearby-flight-card nearby-flight-card-full"
+              key={flight.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => openFlightTrip(flight.trip_id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openFlightTrip(flight.trip_id);
+                }
+              }}
+              aria-label={`${flight.airline_code} ${flight.flight_number} ${flight.departure_airport_code} ไป ${flight.arrival_airport_code}`}
+            >
+              <div className="flight-card-top nearby-flight-card-top">
+                <div className="flight-card-identity">
+                  {flight.passengers.length > 0 && (
+                    <div className="flight-passenger-stack" aria-label={`${flight.passengers.length} ผู้โดยสาร`}>
+                      {flight.passengers.slice(0, 3).map((passenger) => passenger.avatar_url ? (
+                        <Image key={passenger.user_id} src={passenger.avatar_url} alt={passenger.display_name || "ผู้โดยสาร"} width={30} height={30} unoptimized />
+                      ) : <span key={passenger.user_id}>{(passenger.display_name || "?")[0]}</span>)}
+                      {flight.passengers.length > 3 && <b>+{flight.passengers.length - 3}</b>}
+                    </div>
+                  )}
+                  <div className="flight-number">
+                    <span><Plane className="flight-airline-icon" size={11} />{flight.airline_name || flight.airline_code}</span>
+                    <strong>{flight.airline_code} {flight.flight_number}</strong>
+                  </div>
+                </div>
+                <div className="nearby-flight-head-badges">
+                  <div className="nearby-flight-status-stack"><span className={`flight-status status-${flight.status.toLowerCase().replace(/\s/g, "-")}`}>{flight.status || "scheduled"}</span><b>{hasEnded?t("เดินทางแล้ว"):hours < 24 ? t(`อีก ${hours} ชม.`) : t(`อีก ${Math.ceil(hours / 24)} วัน`)}</b></div>
+                  {!hasEnded&&<button type="button" className={`icon-btn nearby-flight-sync ${syncingId === flight.id ? "is-syncing" : ""}`} disabled={!syncConfigured || Boolean(syncingId)} onClick={(event) => { event.stopPropagation(); void syncFlight(flight); }} aria-label={t("อัปเดตข้อมูลเที่ยวบินทันที")}><RefreshCw size={15} /></button>}
+                </div>
+              </div>
+              <div className="flight-route-compact">
+                <div className="flight-airport-block">
+                  <span className="flight-route-label">{t("ต้นทาง")}</span>
+                  <strong>{flight.departure_airport_code}</strong>
+                  <em>{flight.departure_airport_name ? airportName(flight.departure_airport_name) : t("รอข้อมูลสนามบิน")}</em>
+                  <b>{departureTime}</b>
+                </div>
+                <div className="flight-route-path"><small className="flight-route-date"><CalendarDays size={10}/><span>{departureDay.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span><i>→</i><span>{arrivalDay.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span></small><div className="flight-route-track"><span /><Plane size={23} /><span /></div></div>
+                <div className="flight-airport-block is-arrival">
+                  <span className="flight-route-label">{t("ปลายทาง")}</span>
+                  <strong>{flight.arrival_airport_code}</strong>
+                  <em>{flight.arrival_airport_name ? airportName(flight.arrival_airport_name) : t("รอข้อมูลสนามบิน")}</em>
+                  <b>{arrivalTime}</b>
+                </div>
+              </div>
+              <div className="flight-terminal-grid">
+                <span>Terminal <b>{flight.departure_terminal || t("รออัปเดต")}</b> · Gate <b>{flight.departure_gate || t("รออัปเดต")}</b></span>
+                <span>Terminal <b>{flight.arrival_terminal || t("รออัปเดต")}</b> · Gate <b>{flight.arrival_gate || t("รออัปเดต")}</b></span>
+              </div>
+              <div className="flight-card-footer">
+                <div className="flight-meta">
+                  {flight.ticket_price && <span className="flight-ticket-price">{Number(flight.ticket_price).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {flight.ticket_currency}</span>}
+                  {flight.booking_reference && <span>Booking {flight.booking_reference}</span>}
+                  {flight.cabin_class && <span>{flight.cabin_class}</span>}
+                  {flight.passengers.map((passenger) => (
+                    <span className="flight-seat-chip" key={`home-seat-${passenger.user_id}`} aria-label={`${passenger.display_name || "ผู้โดยสาร"} ที่นั่ง ${passenger.seat_number || "ยังไม่ระบุ"}`}>
+                      {passenger.avatar_url ? <Image src={passenger.avatar_url} alt="" width={18} height={18} unoptimized /> : <i>{(passenger.display_name || "?")[0]}</i>}
+                      <b>{passenger.seat_number || t("ยังไม่ระบุ")}</b>
+                    </span>
+                  ))}
+                  {flight.baggage_note && <span className="flight-baggage-chip"><Luggage size={13} /><b>{t("สัมภาระรวม")}</b> {flight.baggage_note}</span>}
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function Dashboard({
   trips,
   counts,
   revision,
   selectTrip,
+  openFlightTrip,
   createTrip,
   viewAll,
   viewAnalytics,
@@ -1919,6 +2129,7 @@ function Dashboard({
   counts: DashboardCounts;
   revision: number;
   selectTrip: (t: Trip) => void;
+  openFlightTrip: (tripId: string) => void;
   createTrip: () => void;
   viewAll: (status: TripStatus) => void;
   viewAnalytics: () => void;
@@ -2037,6 +2248,7 @@ function Dashboard({
         notify={notify}
         confirmAction={confirmAction}
       />
+      <NearbyFlights openFlightTrip={openFlightTrip} notify={notify} />
       {ongoing.length > 0 && (
         <>
           {heading(
@@ -2153,6 +2365,11 @@ function TravelAnalyticsDashboard({ data }: { data: TravelAnalyticsPayload }) {
   const travelShare = expenseTotal
     ? (data.totals.travelExpense / expenseTotal) * 100
     : 0;
+  const flightInsights = data.flights;
+  const maxAirlineFlights = Math.max(1, ...flightInsights.airlines.map((item) => item.flights));
+  const maxPeriodFlights = Math.max(1, ...flightInsights.periods.map((item) => item.flights));
+  const monthName = (month: number) =>
+    new Intl.DateTimeFormat("th-TH", { month: "short" }).format(new Date(2026, month - 1, 1));
 
   if (!data.totals.trips)
     return (
@@ -2250,6 +2467,51 @@ function TravelAnalyticsDashboard({ data }: { data: TravelAnalyticsPayload }) {
           </div>
         </div>
       </section>
+
+      {flightInsights.totals.segments > 0 && <>
+        <section className="card analytics-flight-overview">
+          <div className="analytics-section-head">
+            <div>
+              <h2>{t("ข้อมูลการบิน")}</h2>
+              <p>{t("สรุปจากเที่ยวบินของทริปที่ผ่านมาแล้ว")}</p>
+            </div>
+            <span className="analytics-flight-badge"><Plane size={18} /></span>
+          </div>
+          <div className="analytics-flight-kpis">
+            <div><small>{t("ช่วงบินทั้งหมด")}</small><strong>{flightInsights.totals.segments}</strong><span>{flightInsights.totals.trips} {t("ทริป")}</span></div>
+            <div><small>{t("ค่าตั๋วรวม")}</small><strong>{money(flightInsights.totals.ticketCostThb)}</strong><span>{t("เฉลี่ย")} {money(flightInsights.totals.averageTicketCostThb)}</span></div>
+            <div><small>{t("เวลาบินเฉลี่ย")}</small><strong>{flightInsights.totals.averageDurationHours.toFixed(1)} ชม.</strong><span>{flightInsights.airlines.length} {t("สายการบิน")}</span></div>
+          </div>
+        </section>
+
+        <section className="card analytics-airline-card">
+          <div className="analytics-section-head">
+            <div><h2>{t("สายการบินที่ใช้บ่อย")}</h2><p>{t("จำนวนช่วงบินและค่าตั๋วที่บันทึกไว้")}</p></div>
+          </div>
+          <div className="analytics-airline-list">
+            {flightInsights.airlines.slice(0,6).map((item,index)=><div className="analytics-airline-row" key={item.code||item.name}>
+              <b>{index+1}</b><div><strong>{item.name}</strong><small>{item.code}</small><span><i style={{width:`${item.flights/maxAirlineFlights*100}%`}}/></span></div><aside><strong>{item.flights} {t("เที่ยว")}</strong>{item.ticketCostThb>0&&<small>{money(item.ticketCostThb)}</small>}</aside>
+            </div>)}
+          </div>
+        </section>
+
+        <section className="analytics-flight-pattern-grid">
+          <article className="card analytics-pattern-card">
+            <div className="analytics-section-head"><div><h2>{t("ช่วงเวลาที่บินบ่อย")}</h2><p>{t("อิงเวลาออกเดินทาง")}</p></div></div>
+            <div className="analytics-period-list">{flightInsights.periods.map(item=><div key={item.key}><span><strong>{t(item.label)}</strong><small>{item.flights} {t("เที่ยว")}</small></span><i><b style={{width:`${item.flights/maxPeriodFlights*100}%`}}/></i></div>)}</div>
+          </article>
+          <article className="card analytics-pattern-card">
+            <div className="analytics-section-head"><div><h2>{t("ชั้นโดยสาร")}</h2><p>{t("ประเภทที่เลือกใช้")}</p></div></div>
+            <div className="analytics-chip-cloud">{flightInsights.cabins.map(item=><span key={item.name}><Plane size={12}/><b>{item.name}</b><small>{item.flights}</small></span>)}</div>
+            <div className="analytics-months"><small>{t("เดือนที่บินบ่อย")}</small><div>{flightInsights.months.slice(0,6).map(item=><span key={item.month}><b>{monthName(item.month)}</b><small>{item.flights} {t("เที่ยว")}</small></span>)}</div></div>
+          </article>
+        </section>
+
+        <section className="card analytics-route-card">
+          <div className="analytics-section-head"><div><h2>{t("เส้นทางที่บินบ่อย")}</h2><p>{t("ต้นทางและปลายทางจากทุกช่วงบิน")}</p></div></div>
+          <div className="analytics-route-list">{flightInsights.routes.map((item,index)=><div key={item.route}><span>{index+1}</span><Plane size={15}/><strong>{item.route}</strong><small>{item.flights} {t("เที่ยว")}</small></div>)}</div>
+        </section>
+      </>}
 
       <section className="card analytics-chart-card">
         <div className="analytics-section-head">
@@ -3012,6 +3274,7 @@ function TripHub({
   onFlightChanged,
   notify,
   initialWorkspaceTab,
+  initialView,
 }: {
   trip: Trip;
   items: Itinerary[];
@@ -3031,11 +3294,15 @@ function TripHub({
   onFlightChanged: () => void | Promise<void>;
   notify: (message: string) => void;
   initialWorkspaceTab?: WorkspaceTab;
+  initialView?: "plan" | "flights";
 }) {
   const t = useT();
   const lang = useContext(LanguageContext);
   const [view, setView] = useState<"plan" | "expenses" | "workspace" | "flights">(
-    initialWorkspaceTab ? "workspace" : "plan",
+    initialWorkspaceTab ? "workspace" : initialView || "plan",
+  );
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>(
+    initialWorkspaceTab || "checklist",
   );
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
@@ -3048,12 +3315,18 @@ function TripHub({
   const searchScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
-  function selectView(nextView: "plan" | "expenses" | "workspace" | "flights") {
+  function selectView(
+    nextView: "plan" | "expenses" | "workspace" | "flights",
+    nextWorkspaceTab = activeWorkspaceTab,
+  ) {
     setView(nextView);
+    if (nextView === "workspace") setActiveWorkspaceTab(nextWorkspaceTab);
     const url = new URL(window.location.href);
     if (nextView === "workspace")
-      url.searchParams.set("workspace", initialWorkspaceTab || "checklist");
+      url.searchParams.set("workspace", nextWorkspaceTab);
     else url.searchParams.delete("workspace");
+    if (nextView === "flights") url.searchParams.set("view", "flights");
+    else url.searchParams.delete("view");
     window.history.replaceState(
       window.history.state,
       "",
@@ -3414,13 +3687,14 @@ function TripHub({
             canDelete={trip.access_role !== "view"}
             notify={notify}
             onChanged={onFlightChanged}
+            onOpenDocuments={() => selectView("workspace", "documents")}
           />
         ) : (
           <TripWorkspace
             tripId={trip.id}
             onUndo={() => location.reload()}
             label={t}
-            initialTab={initialWorkspaceTab}
+            initialTab={activeWorkspaceTab}
           />
         )}
       </div>
@@ -6940,12 +7214,11 @@ function ModalForm({
                 />
               </div>
               <div className="field">
-                <label>{t("การเดินทางด้วยเครื่องบิน")}</label>
-                <select name="hasFlights" defaultValue={modal.trip?.has_flights ? "true" : "false"}>
-                  <option value="false">{t("ทริปนี้ไม่มีเที่ยวบิน")}</option>
-                  <option value="true">{t("ทริปนี้มีเที่ยวบิน")}</option>
-                </select>
-                <small>{t("เมื่อเปิดใช้ จะเพิ่มเที่ยวบินต่อเครื่อง ที่นั่ง อาหาร และเอกสารได้")}</small>
+                <label className="trip-flight-checkbox">
+                  <input name="hasFlights" type="checkbox" value="true" defaultChecked={Boolean(modal.trip?.has_flights)} />
+                  <span className="split-checkmark" aria-hidden="true" />
+                  <strong>{t("เดินทางแบบมีเที่ยวบิน")}</strong>
+                </label>
               </div>
               <div className="form-row flight-datetime-row">
                 <div className="field">
@@ -7184,6 +7457,7 @@ export function BNTripApp({
   returnTo,
   authError,
   workspaceTab,
+  tripView,
   initialDashboard,
   initialAnalytics,
   initialTrip,
@@ -7200,6 +7474,7 @@ export function BNTripApp({
   returnTo?: string;
   authError?: string;
   workspaceTab?: WorkspaceTab;
+  tripView?: "flights";
   initialDashboard?: {
     ongoing: Trip[];
     upcoming: Trip[];
@@ -7858,6 +8133,7 @@ export function BNTripApp({
       counts={dashboardCounts}
       revision={tripRevision + dashboardRefreshToken}
       selectTrip={selectTrip}
+      openFlightTrip={(id) => router.push(`/trips/${id}?view=flights`)}
       createTrip={protect(() => setModal({ type: "trip" }))}
       viewAll={(status) =>
         router.push(status === "all" ? "/trips" : `/trips?status=${status}`)
@@ -7930,6 +8206,7 @@ export function BNTripApp({
       }}
       notify={flash}
       initialWorkspaceTab={workspaceTab}
+      initialView={tripView}
     />
   ) : page === "timeline" && selected ? (
     <TimelineScreen

@@ -317,17 +317,17 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
           <Link
             className="brand master-brand"
             href="/"
-            aria-label="BN Trip · หน้าแรก"
+            aria-label="Pack & Go+ · หน้าแรก"
           >
             <Image
-              src="/bn-trip-icon-orange-512.png"
-              alt="BN Trip"
+              src="/pack-and-go-icon-512.png"
+              alt="Pack & Go+"
               width={48}
               height={48}
               priority
             />
             <div>
-              BN Trip<small>our tiny trip club</small>
+              Pack &amp; Go+<small>travel smarter together</small>
             </div>
           </Link>
           <nav className="mobile-actions">

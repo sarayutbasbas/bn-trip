@@ -5,7 +5,7 @@ export function getAppOrigin(request: Request) {
     try {
       return new URL(configuredUrl).origin;
     } catch {
-      console.error("BN Trip app URL is invalid");
+      console.error("Pack & Go+ app URL is invalid");
     }
   }
 

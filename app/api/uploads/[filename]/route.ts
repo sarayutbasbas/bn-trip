@@ -29,5 +29,5 @@ export async function GET(request:Request,{params}:{params:Promise<{filename:str
     headers["Content-Length"]=String(thumbnail.byteLength);
     const body=thumbnail.buffer.slice(thumbnail.byteOffset,thumbnail.byteOffset+thumbnail.byteLength) as ArrayBuffer;
     return new Response(body,{headers});
-  }catch(error){console.error("BN Trip read upload error",error);return NextResponse.json({error:"Not found"},{status:404});}
+  }catch(error){console.error("Pack & Go+ read upload error",error);return NextResponse.json({error:"Not found"},{status:404});}
 }

@@ -1,13 +1,13 @@
 {
-  "name": "BN Trip",
-  "short_name": "BN Trip",
+  "name": "Pack & Go+",
+  "short_name": "Pack & Go+",
   "description": "แพลนทริป บันทึกความทรงจำ และคุมค่าใช้จ่ายของเราสองคน",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fff7f0",
   "theme_color": "#ff7412",
   "icons": [
-    { "src": "/bn-trip-icon-orange-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/bn-trip-icon-orange-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/pack-and-go-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/pack-and-go-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

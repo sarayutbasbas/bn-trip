@@ -200,6 +200,12 @@ const migrations = [
       "ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS entered_arrival_local TIMESTAMP",
     ],
   },
+  {
+    version: 17,
+    statements: [
+      "CREATE INDEX IF NOT EXISTS trip_flight_segments_nearby_idx ON trip_flight_segments ((COALESCE(latest_departure_at,scheduled_departure_at)),last_synced_at)",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

@@ -72,7 +72,7 @@ async function enrichStaticDetails(flight:ResolvedFlight,operatorCode:string):Pr
     ...flight,
     departureAirportName:airportDisplayName(flight.departureAirportName||originData?.name||originData?.city||flight.departureAirportCode),
     arrivalAirportName:airportDisplayName(flight.arrivalAirportName||destinationData?.name||destinationData?.city||flight.arrivalAirportCode),
-    airlineName:operatorData?.shortname||operatorData?.name||flight.airlineName||operatorCode,
+    airlineName:operatorData?.name||operatorData?.shortname||flight.airlineName||operatorCode,
   };
 }
 

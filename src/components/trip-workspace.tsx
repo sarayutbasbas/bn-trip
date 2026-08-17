@@ -1617,15 +1617,17 @@ export function TripWorkspace({
               )}
             </div>
             {error && <p className="login-error">{label(error)}</p>}
-            <button
-              type="button"
-              className="primary-btn master-import-btn"
-              disabled={!selectedMaster.length || busy === "master"}
-              onClick={() => void importMaster()}
-            >
-              <Plus size={15} />
-              {label(`เพิ่ม ${selectedMaster.length} รายการเข้าทริป`)}
-            </button>
+            <div className="modal-submit-actions">
+              <button
+                type="button"
+                className="primary-btn master-import-btn"
+                disabled={!selectedMaster.length || busy === "master"}
+                onClick={() => void importMaster()}
+              >
+                <Plus size={15} />
+                {label(`เพิ่ม ${selectedMaster.length} รายการเข้าทริป`)}
+              </button>
+            </div>
           </section>
         </div>
       )}
@@ -1995,21 +1997,23 @@ export function TripWorkspace({
               )}
             </small>
             {error && <p className="login-error">{label(error)}</p>}
-            <button
-              className="primary-btn document-upload-submit"
-              disabled={
-                busy === "document" ||
-                !documentTitle.trim() ||
-                !documentFileName ||
-                !documentCreateHasChanges ||
-                usagePercent >= 100
-              }
-            >
-              <Upload size={16} />
-              {label(
-                busy === "document" ? "กำลังอัปโหลด…" : "อัปโหลดไฟล์",
-              )}
-            </button>
+            <div className="modal-submit-actions">
+              <button
+                className="primary-btn document-upload-submit"
+                disabled={
+                  busy === "document" ||
+                  !documentTitle.trim() ||
+                  !documentFileName ||
+                  !documentCreateHasChanges ||
+                  usagePercent >= 100
+                }
+              >
+                <Upload size={16} />
+                {label(
+                  busy === "document" ? "กำลังอัปโหลด…" : "อัปโหลดไฟล์",
+                )}
+              </button>
+            </div>
           </form>
         </div>
       )}
