@@ -329,6 +329,7 @@ export async function loadTravelAnalytics(
        (EXTRACT(EPOCH FROM (flight.scheduled_arrival_at-flight.scheduled_departure_at))/3600)::numeric(10,2) AS duration_hours
      FROM trip_flight_segments flight JOIN trips t ON t.id=flight.trip_id
      WHERE ${tripAccessSql("t")}
+       AND t.has_flights=true
        AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)
          < (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
      ORDER BY flight.scheduled_departure_at`,

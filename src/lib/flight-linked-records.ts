@@ -132,3 +132,31 @@ export async function removeFlightLinkedRecords(client: PoolClient, tripId: stri
   if (costId) await removeCostFromItineraries(client, tripId, costId);
   if (itineraryId) await client.query("DELETE FROM itineraries WHERE id=$1 AND trip_id=$2", [itineraryId, tripId]);
 }
+
+export async function removeAllFlightRecords(client: PoolClient, tripId: string) {
+  const segments = await client.query<{
+    itinerary_id: string | null;
+    ticket_cost_item_id: string | null;
+  }>(
+    "SELECT itinerary_id,ticket_cost_item_id FROM trip_flight_segments WHERE trip_id=$1",
+    [tripId],
+  );
+  const itineraryIds = segments.rows.flatMap((segment) =>
+    segment.itinerary_id ? [segment.itinerary_id] : [],
+  );
+  const affectedDays = itineraryIds.length
+    ? await client.query<{ day_number: number }>(
+        "SELECT DISTINCT day_number FROM itineraries WHERE trip_id=$1 AND id=ANY($2::uuid[])",
+        [tripId, itineraryIds],
+      )
+    : { rows: [] as Array<{ day_number: number }> };
+  for (const segment of segments.rows)
+    await removeFlightLinkedRecords(
+      client,
+      tripId,
+      segment.itinerary_id,
+      segment.ticket_cost_item_id,
+    );
+  await client.query("DELETE FROM trip_flight_segments WHERE trip_id=$1", [tripId]);
+  return affectedDays.rows.map((row) => row.day_number);
+}

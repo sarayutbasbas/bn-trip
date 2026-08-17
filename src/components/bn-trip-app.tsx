@@ -7107,6 +7107,8 @@ function ModalForm({
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
+  const [confirmDisableFlights, setConfirmDisableFlights] = useState(false);
+  const flightDisableConfirmed = useRef(false);
   const formDirtyKey =
     modal.type === "trip"
       ? `trip:${modal.trip?.id || "new"}`
@@ -7173,9 +7175,18 @@ function ModalForm({
     Number(String(f.get(name) || "0").replace(/,/g, ""));
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    if (
+      modal.type === "trip" &&
+      modal.trip?.has_flights &&
+      f.get("hasFlights") !== "true" &&
+      !flightDisableConfirmed.current
+    ) {
+      setConfirmDisableFlights(true);
+      return;
+    }
     setSaving(true);
     setError("");
-    const f = new FormData(e.currentTarget);
     try {
       if (modal.type === "trip") {
         let coverImageUrl = modal.trip?.cover_image_url || DEFAULT_TRIP_COVER;
@@ -7544,6 +7555,22 @@ function ModalForm({
           close={() => setPendingDelete(false)}
         />
       )}{" "}
+      {confirmDisableFlights && modal.type === "trip" && modal.trip && (
+        <ConfirmDialog
+          confirmation={{
+            title: "ปิดการเดินทางแบบมีเที่ยวบิน?",
+            description:
+              "ข้อมูลเที่ยวบิน ผู้โดยสาร รายการ Timeline และค่าใช้จ่ายตั๋วเครื่องบินที่เชื่อมไว้จะถูกลบถาวร",
+            confirmLabel: "ปิดและลบข้อมูล",
+            onConfirm: () => {
+              flightDisableConfirmed.current = true;
+              setConfirmDisableFlights(false);
+              window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+            },
+          }}
+          close={() => setConfirmDisableFlights(false)}
+        />
+      )}
       {canDelete && pendingDelete && modal.type === "trip" && modal.trip && (
         <ConfirmDialog
           confirmation={{
@@ -7981,6 +8008,7 @@ export function BNTripApp({
       });
       setTripRevision((value) => value + 1);
       if (!modal.trip) itineraryCache.set(saved.id, []);
+      else if (data.hasFlights === false) itineraryCache.delete(saved.id);
       setSelected(saved);
       flash(
         modal.trip

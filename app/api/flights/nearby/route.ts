@@ -38,6 +38,7 @@ const nearbySelect = `SELECT flight.id,flight.trip_id,flight.journey_type,
   FROM trip_flight_segments flight
   JOIN trips t ON t.id=flight.trip_id
   WHERE ${tripAccessSql("t")}
+    AND t.has_flights=true
     AND COALESCE(flight.latest_departure_at,flight.scheduled_departure_at)
       BETWEEN now()-interval '8 hours' AND now()+interval '3 days'
   ORDER BY COALESCE(flight.latest_departure_at,flight.scheduled_departure_at),flight.segment_order
@@ -73,6 +74,7 @@ export async function POST() {
     `SELECT flight.id,flight.trip_id,flight.airline_code,flight.flight_number,flight.scheduled_departure_at
      FROM trip_flight_segments flight JOIN trips t ON t.id=flight.trip_id
      WHERE ${tripAccessSql("t")}
+       AND t.has_flights=true
        AND COALESCE(flight.latest_departure_at,flight.scheduled_departure_at)
          BETWEEN now()-interval '8 hours' AND now()+interval '3 days'
        AND (flight.last_synced_at IS NULL OR flight.last_synced_at < now() - CASE
