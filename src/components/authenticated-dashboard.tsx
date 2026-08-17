@@ -1,6 +1,7 @@
 "use client";
 
 import { BNTripApp, type DashboardCounts, type Trip } from "@/src/components/bn-trip-app";
+import type { CountryHighlight } from "@/src/lib/trip-loaders";
 
 export function AuthenticatedDashboard({
   demo,
@@ -12,6 +13,7 @@ export function AuthenticatedDashboard({
     upcoming: Trip[];
     past: Trip[];
     counts: DashboardCounts;
+    countryHighlights: CountryHighlight[];
   };
 }) {
   return (

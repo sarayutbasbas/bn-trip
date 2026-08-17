@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getSession } from "@/src/lib/auth";
 import { loadDashboard } from "@/src/lib/trip-loaders";
+import type { DashboardPayload } from "@/src/lib/trip-loaders";
 import type { DashboardCounts, Trip } from "@/src/components/bn-trip-app";
 import { LoginScreen } from "@/src/components/login-screen";
 import { AuthenticatedDashboard } from "@/src/components/authenticated-dashboard";
@@ -16,6 +17,6 @@ export default async function Home({searchParams}:{searchParams:Promise<{authErr
   const session = await getSession();
   const raw=(await searchParams).authError;const authError=typeof raw==="string"?raw:undefined;
   if(!session)return <LoginScreen authError={authError}/>;
-  const initialDashboard=await loadDashboard(session) as {ongoing:Trip[];upcoming:Trip[];past:Trip[];counts:DashboardCounts};
+  const initialDashboard=await loadDashboard(session) as DashboardPayload & {ongoing:Trip[];upcoming:Trip[];past:Trip[];counts:DashboardCounts};
   return <AuthenticatedDashboard demo={Boolean(session.isDemo)} initialDashboard={initialDashboard} />;
 }

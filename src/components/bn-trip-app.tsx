@@ -17,6 +17,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type {
+  CountryHighlight,
   TravelAnalyticsCollection,
   TravelAnalyticsPayload,
   TravelAnalyticsScope,
@@ -754,6 +755,9 @@ Object.assign(EN_TEXT, {
   ยินดีต้อนรับกลับมา: "Welcome back",
   สถิติ: "Insights",
   สถิติการเดินทาง: "Travel insights",
+  ประเทศที่ประทับใจ: "Favorite countries",
+  เรียงตามคะแนนรีวิว: "Sorted by review score",
+  ดูทริปทั้งหมดใน: "View all trips in",
   กรองสถิติการเดินทาง: "Filter travel insights",
   ภายในประเทศ: "Domestic",
   ต่างประเทศ: "International",
@@ -2104,6 +2108,7 @@ function NearbyFlights({
 function Dashboard({
   trips,
   counts,
+  countryHighlights,
   revision,
   selectTrip,
   openFlightTrip,
@@ -2116,6 +2121,7 @@ function Dashboard({
 }: {
   trips: Trip[];
   counts: DashboardCounts;
+  countryHighlights: CountryHighlight[];
   revision: number;
   selectTrip: (t: Trip) => void;
   openFlightTrip: (tripId: string) => void;
@@ -2231,6 +2237,9 @@ function Dashboard({
           </button>
         </div>
       </section>
+      {countryHighlights.length > 0 && (
+        <PastCountryHighlights items={countryHighlights} />
+      )}
       <TripInvitations
         revision={revision}
         onChanged={onInvitationChanged}
@@ -2282,6 +2291,47 @@ function Dashboard({
         )}
       </div>
     </div>
+  );
+}
+
+function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
+  const t = useT();
+  const lang = useContext(LanguageContext);
+  return (
+    <section className="country-highlights" aria-label={t("ประเทศที่ประทับใจ")}>
+      <div className="country-highlights-head">
+        <div>
+          <span className="section-kicker">TRAVEL MEMORIES</span>
+          <h2>{t("ประเทศที่ประทับใจ")}</h2>
+        </div>
+        <small>{t("เรียงตามคะแนนรีวิว")}</small>
+      </div>
+      <div className="country-highlights-scroll">
+        {items.map((item) => {
+          const country =
+            countryByCode(item.countryCode) || inferTripCountry(item.country);
+          const name = lang === "EN" ? country.nameEn : country.nameTh;
+          return (
+            <Link
+              className="country-highlight-item"
+              key={`${item.countryCode}:${item.country}`}
+              href={`/trips?q=${encodeURIComponent(country.nameEn)}`}
+              title={`${name} · ${item.averageRating.toFixed(1)}`}
+              aria-label={`${t("ดูทริปทั้งหมดใน")} ${name}`}
+            >
+              <div className="country-highlight-flag" role="img" aria-label={name}>
+                <span>{country.flag}</span>
+                {item.reviewCount > 0 && (
+                  <b><Star size={9} fill="currentColor" />{item.averageRating.toFixed(1)}</b>
+                )}
+              </div>
+              <strong>{name}</strong>
+              <small>{t(`${item.trips} ทริป`)}</small>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -7497,6 +7547,7 @@ export function BNTripApp({
     upcoming: Trip[];
     past: Trip[];
     counts: DashboardCounts;
+    countryHighlights: CountryHighlight[];
   };
   initialAnalytics?: TravelAnalyticsCollection;
   initialTrip?: Trip | null;
@@ -7544,6 +7595,9 @@ export function BNTripApp({
   const [dashboardCounts, setDashboardCounts] = useState<DashboardCounts>(
     initialDashboard?.counts || { total: 0, ongoing: 0, upcoming: 0, past: 0 },
   );
+  const [dashboardCountryHighlights, setDashboardCountryHighlights] = useState<
+    CountryHighlight[]
+  >(initialDashboard?.countryHighlights || []);
   const [tripRevision, setTripRevision] = useState(0);
   const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0);
   const [pullDistance, setPullDistance] = useState(0);
@@ -7679,6 +7733,7 @@ export function BNTripApp({
               past: 0,
             },
           );
+          setDashboardCountryHighlights(data.countryHighlights || []);
         } else if (tripId) {
           const cached = tripListCache?.find((trip) => trip.id === tripId);
           if (cached) {
@@ -7782,6 +7837,7 @@ export function BNTripApp({
               past: 0,
             },
           );
+          setDashboardCountryHighlights(data.countryHighlights || []);
           setDashboardRefreshToken((value) => value + 1);
         });
         setToast("อัปเดตหน้าแรกแล้ว");
@@ -8148,6 +8204,7 @@ export function BNTripApp({
     <Dashboard
       trips={trips}
       counts={dashboardCounts}
+      countryHighlights={dashboardCountryHighlights}
       revision={tripRevision + dashboardRefreshToken}
       selectTrip={selectTrip}
       openFlightTrip={(id) => router.push(`/trips/${id}?view=flights`)}

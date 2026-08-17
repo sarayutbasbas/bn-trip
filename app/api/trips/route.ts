@@ -6,6 +6,7 @@ import { tripAccessSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@
 import { getDemoTrips } from "@/src/lib/demo-data";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode,formatTripDestination } from "@/src/lib/countries";
+import { loadDashboard } from "@/src/lib/trip-loaders";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const countryCodeSchema=z.string().length(2).transform(value=>value.toUpperCase()).refine(value=>Boolean(countryByCode(value)),{message:"Invalid country"});
@@ -15,18 +16,10 @@ export async function GET(request:Request) {
   const session = await getSession(); if (!session) return NextResponse.json({error:"Unauthorized"},{status:401});
   const params=new URL(request.url).searchParams;
   if(session.isDemo)return NextResponse.json(getDemoTrips(params));
-  await ensureLatestDatabaseSchema();
   const mode=params.get("mode");
+  if(mode==="dashboard")return NextResponse.json(await loadDashboard(session));
+  await ensureLatestDatabaseSchema();
   const access=tripAccessSql("t");const role=tripRoleSql("t");const members=tripMembersSql("t");const reviews=tripReviewSummarySql("t");
-  if(mode==="dashboard"){
-    const [ongoing,upcoming,past,counts]=await Promise.all([
-      query(`SELECT t.*,${role},${members},${reviews} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`,[session.userId]),
-      query(`SELECT t.*,${role},${members},${reviews} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 3`,[session.userId]),
-      query(`SELECT t.*,${role},${members},${reviews} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 2`,[session.userId]),
-      query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past FROM trips t WHERE ${access}`,[session.userId]),
-    ]);
-    return NextResponse.json({ongoing:ongoing.rows,upcoming:upcoming.rows,past:past.rows,counts:counts.rows[0]});
-  }
   if(mode==="list"){
     const status=params.get("status")||"all";
     const year=Number(params.get("year")||0);

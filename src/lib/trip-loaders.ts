@@ -22,6 +22,15 @@ export type DashboardPayload = {
   upcoming: unknown[];
   past: unknown[];
   counts: { total: number; ongoing: number; upcoming: number; past: number };
+  countryHighlights: CountryHighlight[];
+};
+
+export type CountryHighlight = {
+  countryCode: string;
+  country: string;
+  trips: number;
+  averageRating: number;
+  reviewCount: number;
 };
 
 export type TripDirectoryPayload = {
@@ -226,10 +235,10 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
 }
 
 function isDomesticAnalyticsTrip(row: AnalyticsTripRow) {
-  const countryCode =
-    (row.country_code || "").trim().toUpperCase() ||
-    inferTripCountry(row.country).code.toUpperCase();
-  return countryCode === "TH";
+  const countryCode = (row.country_code || "").trim().toUpperCase();
+  if (countryCode) return countryCode === "TH";
+  const countryName = row.country.trim().toLowerCase();
+  return countryName === "thailand" || countryName === "ไทย";
 }
 
 function aggregateTravelAnalyticsCollection(
@@ -338,17 +347,46 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
   const role = tripRoleSql("t");
   const members = tripMembersSql("t");
   const reviews = tripReviewSummarySql("t");
-  const [ongoing, upcoming, past, counts] = await Promise.all([
+  const [ongoing, upcoming, past, counts, countries] = await Promise.all([
     query(`SELECT t.*,${role},${members},${reviews} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
     query(`SELECT t.*,${role},${members},${reviews} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 3`, [session.userId]),
     query(`SELECT t.*,${role},${members},${reviews} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 2`, [session.userId]),
     query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past FROM trips t WHERE ${access}`, [session.userId]),
+    query<{country_code:string;country:string;trips:number;average_rating:number;review_count:number}>(`SELECT
+        btrim(COALESCE(t.country_code,'')) AS country_code,
+        COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ') AS country,
+        count(*)::int AS trips,
+        COALESCE(round(avg(review.average_rating),1),0)::float AS average_rating,
+        COALESCE(sum(review.review_count),0)::int AS review_count
+      FROM trips t
+      LEFT JOIN LATERAL (
+        SELECT avg(trip_review.rating) AS average_rating,count(*)::int AS review_count
+        FROM trip_reviews trip_review
+        WHERE trip_review.trip_id=t.id
+          AND (trip_review.user_id=t.owner_id OR EXISTS (
+            SELECT 1 FROM trip_collaborators review_member
+            WHERE review_member.trip_id=t.id AND review_member.user_id=trip_review.user_id
+          ))
+      ) review ON true
+      WHERE ${access}
+        AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)
+          < (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
+      GROUP BY btrim(COALESCE(t.country_code,'')),
+        COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ')
+      ORDER BY average_rating DESC,trips DESC,country ASC`, [session.userId]),
   ]);
   return clientSafe({
     ongoing: ongoing.rows,
     upcoming: upcoming.rows,
     past: past.rows,
     counts: counts.rows[0] as DashboardPayload["counts"],
+    countryHighlights: countries.rows.map((country) => ({
+      countryCode: country.country_code,
+      country: country.country,
+      trips: Number(country.trips),
+      averageRating: Number(country.average_rating || 0),
+      reviewCount: Number(country.review_count || 0),
+    })),
   });
 }
 

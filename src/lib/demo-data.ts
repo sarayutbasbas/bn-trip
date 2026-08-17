@@ -80,7 +80,7 @@ export function getDemoNearbyFlights(){
 
 export function getDemoTrips(params:URLSearchParams){
   const trips=buildTrips();const now=Date.now();const departure=(trip:(typeof trips)[number])=>new Date(trip.outbound_departure_at).getTime();const arrival=(trip:(typeof trips)[number])=>new Date(trip.return_departure_at).getTime();const ongoing=trips.filter(trip=>departure(trip)<=now&&arrival(trip)>=now);const upcoming=trips.filter(trip=>departure(trip)>now);const past=trips.filter(trip=>arrival(trip)<now);
-  if(params.get("mode")==="dashboard")return {ongoing,upcoming,past,counts:{total:trips.length,ongoing:ongoing.length,upcoming:upcoming.length,past:past.length},years:[...new Set(trips.map(trip=>Number(trip.start_date.slice(0,4))))].sort((a,b)=>b-a)};
+  if(params.get("mode")==="dashboard")return {ongoing,upcoming,past,counts:{total:trips.length,ongoing:ongoing.length,upcoming:upcoming.length,past:past.length},countryHighlights:[{countryCode:"JP",country:"Japan",trips:past.length,averageRating:5,reviewCount:1}],years:[...new Set(trips.map(trip=>Number(trip.start_date.slice(0,4))))].sort((a,b)=>b-a)};
   if(params.get("mode")!=="list")return trips;
   const status=params.get("status")||"all",year=Number(params.get("year")||0),search=(params.get("q")||"").trim().toLowerCase(),sort=params.get("sort")||"latest",limit=Math.min(50,Math.max(1,Number(params.get("limit")||20))),offset=Math.max(0,Number(params.get("offset")||0));
   let items=trips.filter(trip=>(status==="all"||(status==="ongoing"&&ongoing.includes(trip))||(status==="upcoming"&&upcoming.includes(trip))||(status==="past"&&past.includes(trip)))&&(!year||Number(trip.start_date.slice(0,4))===year)&&(!search||`${trip.name} ${trip.destination}`.toLowerCase().includes(search)));
