@@ -2323,7 +2323,9 @@ function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
               className="country-highlight-item"
               key={`${item.countryCode}:${item.country}`}
               onClick={() =>
-                router.push(`/trips?q=${encodeURIComponent(country.nameEn)}`)
+                router.push(
+                  `/trips?status=past&q=${encodeURIComponent(country.nameEn)}`,
+                )
               }
               title={`${name} · ${item.averageRating.toFixed(1)}`}
               aria-label={`${t("ดูทริปทั้งหมดใน")} ${name}`}
