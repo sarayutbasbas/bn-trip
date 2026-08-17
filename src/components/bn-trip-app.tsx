@@ -46,7 +46,9 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
+  BusFront,
   CalendarDays,
+  CarFront,
   ChartNoAxesColumnIncreasing,
   CheckCircle2,
   ChevronDown,
@@ -60,6 +62,7 @@ import {
   Crown,
   Database,
   FolderOpen,
+  Footprints,
   Gem,
   Globe2,
   ImagePlus,
@@ -79,6 +82,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  Ship,
   Sparkles,
   Star,
   Sun,
@@ -619,7 +623,7 @@ const EN_TEXT: Record<string, string> = {
     "Change plans anytime. Items move to the selected day and sort automatically",
   ชื่อรายการ: "Item name",
   "สถานที่ / ที่อยู่": "Place / address",
-  วิธีเดินทางไปจุดถัดไป: "Transport to next stop",
+  วิธีเดินทางมาที่นี่: "Transport to here",
   เดิน: "Walk",
   รถไฟ: "Train",
   รถยนต์: "Car",
@@ -3177,6 +3181,16 @@ function TimelineCostBar({
   );
 }
 
+function TransportModeIcon({ mode }: { mode: string }) {
+  if (mode.includes("เดิน")) return <Footprints size={12} />;
+  if (mode.includes("รถยนต์") || mode.includes("แท็กซี่"))
+    return <CarFront size={12} />;
+  if (mode.includes("รถบัส")) return <BusFront size={12} />;
+  if (mode.includes("เครื่องบิน")) return <Plane size={12} />;
+  if (mode.includes("เรือ")) return <Ship size={12} />;
+  return <TrainFront size={12} />;
+}
+
 function useActiveDayScroll(day: number, tripId: string) {
   const stripRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -3617,7 +3631,6 @@ function TripHub({
             ) : (
               <div className="timeline editable-timeline">
                 {dayItems.map((item, index) => {
-                  const isLast = index === dayItems.length - 1;
                   const isCurrent = index === currentIndex;
                   const isPast =
                     tripDay !== null &&
@@ -3645,6 +3658,12 @@ function TripHub({
                       className={`timeline-stop ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                       key={item.id}
                     >
+                      {item.transport_mode && (
+                        <div className="transport transport-to-stop">
+                          <TransportModeIcon mode={item.transport_mode} />
+                          <span>{t(item.transport_mode)}</span>
+                        </div>
+                      )}
                       <div className="event">
                         <div className="event-dot">
                           <MapPin size={16} />
@@ -3730,12 +3749,6 @@ function TripHub({
                           </div>
                         </article>
                       </div>
-                      {!isLast && item.transport_mode && (
-                        <div className="transport">
-                          <TrainFront size={12} />
-                          <span>{t(item.transport_mode)}</span>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
@@ -3894,6 +3907,12 @@ function TimelineScreen({
                 className={`timeline-stop ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                 key={item.id}
               >
+                {item.transport_mode && (
+                  <div className="transport transport-to-stop">
+                    <TransportModeIcon mode={item.transport_mode} />
+                    {t(item.transport_mode)}
+                  </div>
+                )}
                 <div className="event">
                   <div className="event-dot">
                     <MapPin size={16} />
@@ -3917,12 +3936,6 @@ function TimelineScreen({
                     </div>
                   </article>
                 </div>
-                {index < dayItems.length - 1 && item.transport_mode && (
-                  <div className="transport">
-                    <TrainFront size={12} />
-                    {t(item.transport_mode)}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -7434,7 +7447,7 @@ function ModalForm({
                 currentItem={placeSource}
               />
               <div className="field">
-                <label>{t("วิธีเดินทางไปจุดถัดไป")}</label>
+                <label>{t("วิธีเดินทางมาที่นี่")}</label>
                 <select
                   name="transportMode"
                   defaultValue={placeSource?.transport_mode || ""}

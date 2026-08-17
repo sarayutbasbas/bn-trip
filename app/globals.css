@@ -4083,6 +4083,9 @@ button:disabled {
   background: var(--surface-2);
   font-size: 9px;
 }
+.transport-to-stop {
+  margin: 0 0 8px 51px;
+}
 .current-stop .event-dot {
   width: 24px;
   height: 24px;
@@ -8040,7 +8043,7 @@ html.sheet-open body {
 }
 .flight-route-track > svg {
   flex: 0 0 23px;
-  transform: rotate(90deg);
+  transform: rotate(0deg);
 }
 .flight-route-date {
   min-width: 0;
