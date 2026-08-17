@@ -17,6 +17,14 @@ import {
   prepareDocumentFile,
 } from "@/src/lib/client-image-compression";
 import {
+  flightResourceKey,
+  invalidateClientResource,
+  loadClientResource,
+  MASTER_CHECKLIST_RESOURCE_KEY,
+  peekClientResource,
+  workspaceResourceKey,
+} from "@/src/lib/client-resource-cache";
+import {
   AlertTriangle,
   ArrowUp,
   Check,
@@ -143,12 +151,18 @@ export function TripWorkspace({
   initialTab?: "checklist" | "documents" | "history";
 }) {
   const router = useRouter();
-  const [data, setData] = useState<Workspace>(EMPTY);
+  const initialCachedWorkspace = peekClientResource<Partial<Workspace>>(
+    workspaceResourceKey(tripId, initialTab),
+  );
+  const [data, setData] = useState<Workspace>(() => ({
+    ...EMPTY,
+    ...(initialCachedWorkspace || {}),
+  }));
   const orderedMembers = ownerLast(data.members);
   const [tab, setTab] = useState<"checklist" | "documents" | "history">(
     initialTab,
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialCachedWorkspace);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [showBackTop, setShowBackTop] = useState(false);
@@ -185,9 +199,6 @@ export function TripWorkspace({
   );
   const knownChecklistCategoriesRef = useRef<Set<string>>(new Set());
   const completedCategoriesRef = useRef<Set<string>>(new Set());
-  const loadedTabsRef = useRef<Set<"checklist" | "documents" | "history">>(
-    new Set(),
-  );
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const editDocumentFileRef = useRef<HTMLInputElement>(null);
@@ -220,6 +231,13 @@ export function TripWorkspace({
       toastTimer.current = null;
     }, 2200);
   }
+  function invalidateWorkspaceTabs(
+    ...tabs: Array<"checklist" | "documents" | "history">
+  ) {
+    invalidateClientResource(
+      ...tabs.map((targetTab) => workspaceResourceKey(tripId, targetTab)),
+    );
+  }
   function syncCollapsedChecklistCategories(workspace: Workspace) {
     const categoryNames = new Set(
       workspace.checklist.map((item) => item.category_name || "อื่น ๆ"),
@@ -243,19 +261,28 @@ export function TripWorkspace({
     targetTab: "checklist" | "documents" | "history" = tab,
     force = true,
   ) {
-    if (!force && loadedTabsRef.current.has(targetTab)) return;
-    setLoading(true);
+    const resourceKey = workspaceResourceKey(tripId, targetTab);
+    const cached = peekClientResource<Partial<Workspace>>(resourceKey);
+    if (!cached) setLoading(true);
     setError("");
     try {
-      const response = await fetch(
-        `/api/trips/${tripId}/workspace?tab=${targetTab}`,
+      const body = await loadClientResource<Partial<Workspace>>(
+        resourceKey,
+        async () => {
+          const response = await fetch(
+            `/api/trips/${tripId}/workspace?tab=${targetTab}`,
+          );
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error);
+          return result as Partial<Workspace>;
+        },
+        force,
       );
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error);
       if (targetTab === "checklist") {
-        syncCollapsedChecklistCategories(body as Workspace);
+        syncCollapsedChecklistCategories({ ...EMPTY, ...body } as Workspace);
         setCategoryId(
-          (current) => current || defaultChecklistCategory(body as Workspace),
+          (current) =>
+            current || defaultChecklistCategory({ ...EMPTY, ...body } as Workspace),
         );
       }
       setData((current) => ({ ...current, ...body }) as Workspace);
@@ -263,7 +290,6 @@ export function TripWorkspace({
         setOfflineIds(
           JSON.parse(localStorage.getItem(offlineKey(tripId)) || "[]"),
         );
-      loadedTabsRef.current.add(targetTab);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "โหลดข้อมูลไม่สำเร็จ",
@@ -274,8 +300,14 @@ export function TripWorkspace({
   }
   useEffect(() => {
     knownChecklistCategoriesRef.current = new Set();
-    loadedTabsRef.current = new Set();
-    const frame = requestAnimationFrame(() => void load(initialTab, false));
+    const frame = requestAnimationFrame(() => {
+      const cached = peekClientResource<Partial<Workspace>>(
+        workspaceResourceKey(tripId, initialTab),
+      );
+      setData({ ...EMPTY, ...(cached || {}) });
+      setLoading(!cached);
+      void load(initialTab, false);
+    });
     // The trip id is the lifecycle boundary; tab changes load on demand.
     return () => cancelAnimationFrame(frame);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -319,6 +351,8 @@ export function TripWorkspace({
       setAssignee("");
       setEditingItemId(null);
       setChecklistSheetOpen(false);
+      invalidateWorkspaceTabs("history");
+      invalidateClientResource(MASTER_CHECKLIST_RESOURCE_KEY);
       await load("checklist");
       if (editingItem) notify("แก้ไข Checklist แล้ว");
     } catch (reason) {
@@ -338,6 +372,7 @@ export function TripWorkspace({
       });
       setSelectedMaster([]);
       setMasterOpen(false);
+      invalidateWorkspaceTabs("history");
       await load("checklist");
     } catch (reason) {
       setError(
@@ -374,6 +409,9 @@ export function TripWorkspace({
         method: "PATCH",
         body: JSON.stringify(input),
       });
+      invalidateWorkspaceTabs("checklist", "history");
+      if ("title" in input || "categoryId" in input || "categoryName" in input)
+        invalidateClientResource(MASTER_CHECKLIST_RESOURCE_KEY);
     } catch (reason) {
       setData((current) => ({
         ...current,
@@ -414,6 +452,7 @@ export function TripWorkspace({
           method: "PATCH",
           body: JSON.stringify({ assignedUserId }),
         });
+        invalidateWorkspaceTabs("checklist", "history");
       } catch (reason) {
         setData((current) => ({
           ...current,
@@ -445,6 +484,7 @@ export function TripWorkspace({
       setChecklistSheetOpen(false);
       setTitle("");
       setAssignee("");
+      invalidateWorkspaceTabs("checklist", "history");
       notify("ลบ Checklist แล้ว");
     } catch (reason) {
       setData((current) => {
@@ -481,6 +521,7 @@ export function TripWorkspace({
         body: JSON.stringify({ categoryName: category }),
       });
       setDeleteTarget(null);
+      invalidateWorkspaceTabs("checklist", "history");
       notify("ลบหมวด Checklist แล้ว");
     } catch (reason) {
       setData((current) => ({
@@ -566,6 +607,8 @@ export function TripWorkspace({
       setDocumentTitle("");
       setDocumentFileName("");
       setDocumentSheetOpen(false);
+      invalidateWorkspaceTabs("history");
+      invalidateClientResource(flightResourceKey(tripId));
       await load("documents");
       notify("อัปโหลดไฟล์แล้ว");
     } catch (reason) {
@@ -592,6 +635,8 @@ export function TripWorkspace({
       await removeOffline(item);
       setDeleteTarget(null);
       setEditingDocument(null);
+      invalidateWorkspaceTabs("documents", "history");
+      invalidateClientResource(flightResourceKey(tripId));
       notify("ลบไฟล์แล้ว");
     } catch (reason) {
       await load("documents");
@@ -691,6 +736,8 @@ export function TripWorkspace({
       if (file) await removeOffline(editingDocument);
       setEditingDocument(null);
       setEditingDocumentFileName("");
+      invalidateWorkspaceTabs("history");
+      invalidateClientResource(flightResourceKey(tripId));
       await load("documents");
       notify("แก้ไขไฟล์แล้ว");
     } catch (reason) {
@@ -731,6 +778,11 @@ export function TripWorkspace({
       await json(`/api/trips/${tripId}/activities/${activity.id}/undo`, {
         method: "POST",
       });
+      invalidateWorkspaceTabs("checklist", "documents", "history");
+      invalidateClientResource(
+        MASTER_CHECKLIST_RESOURCE_KEY,
+        flightResourceKey(tripId),
+      );
       await load("history");
       onUndo();
     } catch (reason) {

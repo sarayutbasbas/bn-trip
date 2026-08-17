@@ -5,6 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
+  invalidateClientResourcesContaining,
+  loadClientResource,
+  MASTER_CHECKLIST_RESOURCE_KEY,
+  peekClientResource,
+} from "@/src/lib/client-resource-cache";
+import {
   startTransition,
   useDeferredValue,
   useEffect,
@@ -41,11 +47,19 @@ type DeleteTarget = {
 } | null;
 
 const NEW_CATEGORY = "__new_category__";
+type MasterPayload = { categories: Category[]; items: Item[] };
 
 export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   const router = useRouter();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
+  const cachedMaster = peekClientResource<MasterPayload>(
+    MASTER_CHECKLIST_RESOURCE_KEY,
+  );
+  const [categories, setCategories] = useState<Category[]>(
+    () => cachedMaster?.categories || [],
+  );
+  const [items, setItems] = useState<Item[]>(
+    () => cachedMaster?.items || [],
+  );
   const [open, setOpen] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [editingCategory, setEditingCategory] = useState<{
@@ -84,8 +98,12 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     return body;
   }
 
-  async function load() {
-    const data = await api("/api/checklist-master");
+  async function load(force = true) {
+    const data = await loadClientResource<MasterPayload>(
+      MASTER_CHECKLIST_RESOURCE_KEY,
+      () => api("/api/checklist-master") as Promise<MasterPayload>,
+      force,
+    );
     const nextCategories = (data.categories || []) as Category[];
     setCategories(nextCategories);
     setItems(data.items || []);
@@ -95,7 +113,10 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
 
   useEffect(() => {
     let active = true;
-    void api("/api/checklist-master")
+    void loadClientResource<MasterPayload>(
+      MASTER_CHECKLIST_RESOURCE_KEY,
+      () => api("/api/checklist-master") as Promise<MasterPayload>,
+    )
       .then((data) => {
         if (!active) return;
         const nextCategories = (data.categories || []) as Category[];
@@ -211,6 +232,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
           ),
         },
       );
+      invalidateClientResourcesContaining(":workspace:checklist");
       const wasEditing = Boolean(editingItemId);
       closeItemSheet();
       setOpen((current) =>
@@ -234,6 +256,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
         method: "PATCH",
         body: JSON.stringify({ name: editingCategory.value.trim() }),
       });
+      invalidateClientResourcesContaining(":workspace:checklist");
       setEditingCategory(null);
       await load();
       notify("แก้ไขหมวดหมู่แล้ว");
@@ -256,6 +279,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
           : `/api/checklist-master/items/${target.id}`,
         { method: "DELETE" },
       );
+      invalidateClientResourcesContaining(":workspace:checklist");
       setDeleteTarget(null);
       if (target.kind === "item" && editingItemId === target.id)
         closeItemSheet();

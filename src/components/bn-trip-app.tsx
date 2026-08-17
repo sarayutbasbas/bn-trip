@@ -1955,6 +1955,7 @@ function NearbyFlights({
   const [loading, setLoading] = useState(true);
   const [syncConfigured, setSyncConfigured] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
+  const now = useMinuteClock().getTime();
   useEffect(() => {
     let active = true;
     const apply = (body: { flights?: NearbyFlight[]; syncConfigured?: boolean }) => {
@@ -2005,7 +2006,6 @@ function NearbyFlights({
     }
   }
   if (!loading && !flights.length) return null;
-  const now = Date.now();
   return (
     <section className="nearby-flight-section">
       <div className="section-head nearby-flight-heading">
