@@ -1,6 +1,5 @@
 "use client";
 
-import { upload } from "@vercel/blob/client";
 import {
   startTransition,
   useDeferredValue,
@@ -16,6 +15,7 @@ import {
   MAX_SOURCE_IMAGE_BYTES,
   prepareDocumentFile,
 } from "@/src/lib/client-image-compression";
+import { uploadPrivateDocument } from "@/src/lib/client-blob-upload";
 import {
   flightResourceKey,
   invalidateClientResource,
@@ -579,11 +579,7 @@ export function TripWorkspace({
             ?.toLowerCase()
             .replace(/[^a-z0-9]/g, "") || "bin";
         const pathname = `documents/${tripId}/doc-${crypto.randomUUID()}.${extension}`;
-        const blob = await upload(pathname, file, {
-          access: "private",
-          handleUploadUrl: `/api/trips/${tripId}/documents/client-upload`,
-          clientPayload: JSON.stringify({ size: file.size }),
-        });
+        const blob = await uploadPrivateDocument({tripId,pathname,file});
         await json(`/api/trips/${tripId}/documents`, {
           method: "POST",
           body: JSON.stringify({
@@ -692,14 +688,7 @@ export function TripWorkspace({
             ?.toLowerCase()
             .replace(/[^a-z0-9]/g, "") || "bin";
         const pathname = `documents/${tripId}/doc-${crypto.randomUUID()}.${extension}`;
-        const blob = await upload(pathname, file, {
-          access: "private",
-          handleUploadUrl: `/api/trips/${tripId}/documents/client-upload`,
-          clientPayload: JSON.stringify({
-            size: file.size,
-            replaceDocumentId: editingDocument.id,
-          }),
-        });
+        const blob = await uploadPrivateDocument({tripId,pathname,file,replaceDocumentId:editingDocument.id});
         await json(
           `/api/trips/${tripId}/documents/${editingDocument.id}`,
           {
