@@ -12,12 +12,17 @@ export type FlightPassengerInfo = {
 };
 
 export function FlightPassengerInfoList({ passengers }: { passengers: FlightPassengerInfo[] }) {
-  const seatedPassengers = passengers.filter((passenger) => passenger.seat_number);
-  if (!seatedPassengers.length) return null;
+  const passengersWithDetails = passengers.filter(
+    (passenger) =>
+      passenger.seat_number ||
+      passenger.carry_on_baggage ||
+      passenger.checked_baggage,
+  );
+  if (!passengersWithDetails.length) return null;
 
   return (
     <div className="flight-passenger-info-list">
-      {seatedPassengers.map((passenger) => {
+      {passengersWithDetails.map((passenger) => {
         const name = passenger.display_name || "ผู้โดยสาร";
         const details = [passenger.seat_number, passenger.carry_on_baggage, passenger.checked_baggage].filter(Boolean).join(" ");
         return (
@@ -30,7 +35,7 @@ export function FlightPassengerInfoList({ passengers }: { passengers: FlightPass
               )}
             </span>
             <span className="flight-passenger-info-details">
-              <span className="flight-passenger-info-value"><Armchair size={12} /><b>{passenger.seat_number}</b></span>
+              {passenger.seat_number ? <span className="flight-passenger-info-value"><Armchair size={12} /><b>{passenger.seat_number}</b></span> : null}
               {passenger.carry_on_baggage ? <span className="flight-passenger-info-value"><Briefcase size={12} /><b>{passenger.carry_on_baggage}</b></span> : null}
               {passenger.checked_baggage ? <span className="flight-passenger-info-value"><Luggage size={12} /><b>{passenger.checked_baggage}</b></span> : null}
             </span>
