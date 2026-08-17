@@ -1653,7 +1653,10 @@ button:disabled {
   overscroll-behavior-inline: contain;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
+  touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .country-highlights-scroll::-webkit-scrollbar {
   display: none;
@@ -1669,11 +1672,11 @@ button:disabled {
   color: inherit;
   text-align: center;
   text-decoration: none;
-  transition: transform 150ms var(--ease-ios), opacity 150ms ease;
+  -webkit-touch-callout: none;
 }
-.country-highlight-item:active {
-  opacity: 0.78;
-  transform: scale(0.95);
+.country-highlight-item:focus-visible .country-highlight-flag {
+  outline: 3px solid rgba(255, 107, 0, 0.28);
+  outline-offset: 3px;
 }
 .country-highlight-flag {
   position: relative;

@@ -2297,6 +2297,7 @@ function Dashboard({
 function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
   const t = useT();
   const lang = useContext(LanguageContext);
+  const gesture = useRef({ x: 0, y: 0, dragged: false });
   return (
     <section className="country-highlights" aria-label={t("ประเทศที่ประทับใจ")}>
       <div className="country-highlights-head">
@@ -2306,7 +2307,27 @@ function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
         </div>
         <small>{t("เรียงตามคะแนนรีวิว")}</small>
       </div>
-      <div className="country-highlights-scroll">
+      <div
+        className="country-highlights-scroll"
+        onPointerDownCapture={(event) => {
+          gesture.current = {
+            x: event.clientX,
+            y: event.clientY,
+            dragged: false,
+          };
+        }}
+        onPointerMoveCapture={(event) => {
+          const deltaX = event.clientX - gesture.current.x;
+          const deltaY = event.clientY - gesture.current.y;
+          if (Math.hypot(deltaX, deltaY) > 8) gesture.current.dragged = true;
+        }}
+        onClickCapture={(event) => {
+          if (!gesture.current.dragged) return;
+          event.preventDefault();
+          event.stopPropagation();
+          gesture.current.dragged = false;
+        }}
+      >
         {items.map((item) => {
           const country =
             countryByCode(item.countryCode) || inferTripCountry(item.country);
