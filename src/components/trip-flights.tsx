@@ -29,6 +29,21 @@ function localDay(value:string|null,fallback:string,latest?:string|null){if(!val
 function localTime(value:string|null,fallback:string,latest?:string|null){return value?.slice(11,16)||displayTime(fallback,latest)}
 function airportName(value:string){return value.replace(/\s+(?:International(?:\s+Airport)?|Intl\.?|Int['’]l\.?)$/i,"").trim()||value}
 function flightHasEnded(item:Segment){return new Date(item.latest_arrival_at||item.scheduled_arrival_at).getTime()<Date.now()}
+function layoverBetween(previous:Segment,next:Segment){
+  if(previous.arrival_airport_code.trim().toUpperCase()!==next.departure_airport_code.trim().toUpperCase())return null;
+  let arrival:string;
+  let departure:string;
+  if(previous.latest_arrival_at&&next.latest_departure_at){arrival=previous.latest_arrival_at;departure=next.latest_departure_at}
+  else if(previous.entered_arrival_local_text&&next.entered_departure_local_text){arrival=previous.entered_arrival_local_text;departure=next.entered_departure_local_text}
+  else{arrival=previous.scheduled_arrival_at;departure=next.scheduled_departure_at}
+  const minutes=Math.round((new Date(departure).getTime()-new Date(arrival).getTime())/60000);
+  if(!Number.isFinite(minutes)||minutes<=0||minutes>72*60)return null;
+  const days=Math.floor(minutes/1440);
+  const hours=Math.floor((minutes%1440)/60);
+  const remainingMinutes=minutes%60;
+  const duration=[days?`${days} วัน`:"",hours?`${hours} ชม.`:"",remainingMinutes?`${remainingMinutes} นาที`:""].filter(Boolean).join(" ");
+  return {airportCode:next.departure_airport_code,airportName:airportName(next.departure_airport_name||next.departure_airport_code),duration};
+}
 function moneyFormat(value:string|number){const clean=String(value??"").replace(/,/g,"").replace(/[^\d.]/g,"");if(!clean)return "";const [whole,decimal]=clean.split(".");return `${Number(whole||0).toLocaleString("en-US")}${decimal!==undefined?`.`+decimal.slice(0,2):""}`}
 function TicketMoneyInput({name,defaultValue}:{name:string;defaultValue?:string|number}){const [value,setValue]=useState(()=>moneyFormat(defaultValue??""));return <input name={name} inputMode="decimal" value={value} onChange={event=>setValue(moneyFormat(event.target.value))} placeholder="ไม่ระบุ"/>}
 function FlightDateTimeInput({name,type,value,onChange,label}:{name:string;type:"date"|"time";value:string;onChange:(value:string)=>void;label:string}){const display=type==="date"&&value?new Date(`${value}T00:00:00`).toLocaleDateString("th-TH-u-ca-gregory",{day:"numeric",month:"short",year:"numeric"}):value||(type==="date"?"เลือกวันที่":"เลือกเวลา");const Icon=type==="date"?CalendarDays:Clock;return <label className="native-picker-control"><span className="native-picker-value">{display}</span><Icon size={18} aria-hidden="true"/><input aria-label={label} lang="th-TH-u-ca-gregory" name={name} type={type} value={value} required onChange={event=>onChange(event.target.value)}/></label>}
@@ -71,7 +86,7 @@ export function TripFlights({tripId,members,tripOutboundAt,tripReturnAt,canDelet
     <div className="toolbar expense-toolbar flight-toolbar"><div><h2>เที่ยวบินของทริป</h2><p className="page-sub">ดึงสายการบิน สนามบิน และสถานะล่าสุดจากเลขเที่ยวบิน</p></div></div>
     {error&&!editing&&<div className="form-error">{error}</div>}
     {!data.segments.length?<div className="flight-empty"><Plane size={32}/><strong>ยังไม่มีเที่ยวบิน</strong><span>เพิ่มเที่ยวบินแรก แล้วระบบจะแยกขาไป ขากลับ และช่วงต่อเครื่องให้อัตโนมัติ</span></div>:
-      (["outbound","internal","return"] as const).map(type=>groups[type].length?<div className="flight-group" key={type}><h3>{labels[type]} <small>{groups[type].length} ช่วงบิน</small></h3>{groups[type].map(item=><article className={`flight-card flight-card-compact ${flightHasEnded(item)?"is-past-flight":""}`} key={item.id} role="button" tabIndex={0} aria-label={`แก้ไขเที่ยวบิน ${item.airline_code} ${item.flight_number}`} onClick={()=>openEdit(item)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openEdit(item)}}}>
+      (["outbound","internal","return"] as const).map(type=>{const items=groups[type];const connections=items.map((item,index)=>index<items.length-1?layoverBetween(item,items[index+1]):null);return items.length?<div className={`flight-group ${connections.some(Boolean)?"has-connections":""}`} key={type}><h3>{labels[type]} <small>{items.length} ช่วงบิน</small></h3>{items.map((item,index)=><div className="flight-segment-entry" key={item.id}><article className={`flight-card flight-card-compact ${flightHasEnded(item)?"is-past-flight":""}`} role="button" tabIndex={0} aria-label={`แก้ไขเที่ยวบิน ${item.airline_code} ${item.flight_number}`} onClick={()=>openEdit(item)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openEdit(item)}}}>
         <div className="flight-card-top">
           <div className="flight-card-identity">
             <div className="flight-number"><span><Plane className="flight-airline-icon" size={11}/>{item.airline_name||item.airline_code}</span><strong>{item.airline_code} {item.flight_number}</strong></div>
@@ -99,7 +114,7 @@ export function TripFlights({tripId,members,tripOutboundAt,tripReturnAt,canDelet
           <span>Terminal <b>{item.arrival_terminal||"รออัปเดต"}</b> · Gate <b>{item.arrival_gate||"รออัปเดต"}</b></span>
         </div>
         <FlightPassengerInfoList passengers={item.passengers}/>
-      </article>)}</div>:null)}
+      </article>{connections[index]&&<div className="flight-layover" aria-label={`เปลี่ยนเครื่องที่ ${connections[index]?.airportName} ${connections[index]?.duration}`}><span className="flight-layover-line"/><span className="flight-layover-icon"><Plane size={15}/></span><div><small>เปลี่ยนเครื่องที่ {connections[index]?.airportName} <b>{connections[index]?.airportCode}</b></small><strong>{connections[index]?.duration}</strong></div><span className="flight-layover-line"/></div>}</div>)}</div>:null})}
     <button className="directory-fab flight-fab" type="button" onClick={openNew} aria-label="เพิ่มเที่ยวบิน"><Plus size={22}/><span>เพิ่มเที่ยวบิน</span></button>
     {editing&&<div className="modal-backdrop flight-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!saving)setEditing(null)}}><form className="modal cost-sheet flight-sheet" onSubmit={save}><div className="modal-head"><div><h2>{edit?"แก้ไขเที่ยวบิน":"เพิ่มเที่ยวบิน"}</h2><p>กรอกเลขเที่ยวบิน แล้วระบบจะเติมข้อมูลที่ค้นหาได้ให้อัตโนมัติ</p></div><button type="button" className="icon-btn" onClick={()=>setEditing(null)} aria-label="ปิด"><X size={18}/></button></div>{error&&<div className="form-error">{error}</div>}<div className="flight-sheet-scroll"><div className="form-grid">
       <input name="segmentOrder" type="hidden" value={defaultOrder}/>
