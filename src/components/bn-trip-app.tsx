@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  Fragment,
   useContext,
   useDeferredValue,
   useEffect,
@@ -701,6 +702,7 @@ Object.assign(EN_TEXT, {
   ที่ผ่านมา: "Past",
   ทุกปี: "All years",
   เรียงล่าสุด: "Latest",
+  ใกล้ถึงวันเดินทาง: "Upcoming first",
   ใกล้ที่สุด: "Nearest",
   เก่าสุด: "Oldest",
   เรียงตามชื่อ: "Name",
@@ -2994,9 +2996,9 @@ function TripsDirectory({
           <select
             value={sort}
             onChange={(event) => setSort(event.target.value as TripSort)}
-            aria-label={t("เรียงล่าสุด")}
+            aria-label={t("ใกล้ถึงวันเดินทาง")}
           >
-            <option value="latest">{t("เรียงล่าสุด")}</option>
+            <option value="latest">{t("ใกล้ถึงวันเดินทาง")}</option>
             <option value="nearest">{t("ใกล้ที่สุด")}</option>
             <option value="oldest">{t("เก่าสุด")}</option>
             <option value="name">{t("เรียงตามชื่อ")}</option>
@@ -3038,15 +3040,29 @@ function TripsDirectory({
       ) : items.length ? (
         <>
           <div className="compact-trip-grid">
-            {items.map((trip, index) => (
-              <CompactTripCard
-                key={trip.id}
-                trip={trip}
-                now={now}
-                priority={index < 3}
-                selectTrip={selectTrip}
-              />
-            ))}
+            {items.map((trip, index) => {
+              const past = tripTemporalStatus(trip, now).past;
+              const showPastDivider =
+                status === "all" &&
+                sort === "latest" &&
+                past &&
+                (index === 0 || !tripTemporalStatus(items[index - 1], now).past);
+              return (
+                <Fragment key={trip.id}>
+                  {showPastDivider && (
+                    <div className="trip-past-divider">
+                      <span>{t("ที่ผ่านมาแล้ว")}</span>
+                    </div>
+                  )}
+                  <CompactTripCard
+                    trip={trip}
+                    now={now}
+                    priority={index < 3}
+                    selectTrip={selectTrip}
+                  />
+                </Fragment>
+              );
+            })}
           </div>
           {hasMore && (
             <button

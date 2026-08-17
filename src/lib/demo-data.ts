@@ -84,7 +84,7 @@ export function getDemoTrips(params:URLSearchParams){
   if(params.get("mode")!=="list")return trips;
   const status=params.get("status")||"all",year=Number(params.get("year")||0),search=(params.get("q")||"").trim().toLowerCase(),sort=params.get("sort")||"latest",limit=Math.min(50,Math.max(1,Number(params.get("limit")||20))),offset=Math.max(0,Number(params.get("offset")||0));
   let items=trips.filter(trip=>(status==="all"||(status==="ongoing"&&ongoing.includes(trip))||(status==="upcoming"&&upcoming.includes(trip))||(status==="past"&&past.includes(trip)))&&(!year||Number(trip.start_date.slice(0,4))===year)&&(!search||`${trip.name} ${trip.destination}`.toLowerCase().includes(search)));
-  items=[...items].sort((a,b)=>sort==="name"?a.name.localeCompare(b.name):sort==="oldest"?departure(a)-departure(b):sort==="nearest"?Math.abs(departure(a)-now)-Math.abs(departure(b)-now):arrival(b)-arrival(a));
+  items=[...items].sort((a,b)=>sort==="name"?a.name.localeCompare(b.name):sort==="oldest"?departure(a)-departure(b):sort==="nearest"?Math.abs(departure(a)-now)-Math.abs(departure(b)-now):ongoing.includes(a)!==ongoing.includes(b)?ongoing.includes(a)?-1:1:past.includes(a)!==past.includes(b)?past.includes(a)?1:-1:past.includes(a)?arrival(b)-arrival(a):departure(a)-departure(b));
   return {items:items.slice(offset,offset+limit),total:items.length,years:[...new Set(trips.map(trip=>Number(trip.start_date.slice(0,4))))].sort((a,b)=>b-a),hasMore:offset+limit<items.length};
 }
 

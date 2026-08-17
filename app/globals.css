@@ -2808,6 +2808,26 @@ button:disabled {
   grid-template-columns: 1fr;
   gap: 11px;
 }
+.trip-past-divider {
+  grid-column: 1 / -1;
+  margin: 10px 0 1px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+.trip-past-divider::before,
+.trip-past-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+.trip-past-divider span {
+  white-space: nowrap;
+}
 .compact-trip-card {
   position: relative;
   min-width: 0;
