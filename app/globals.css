@@ -1964,6 +1964,16 @@ button:disabled {
     linear-gradient(145deg, rgba(241, 253, 255, 0.96), rgba(208, 244, 255, 0.72)),
     var(--surface);
 }
+.dark .analytics-kpi {
+  background:
+    linear-gradient(145deg, rgba(255, 112, 38, 0.14), rgba(255, 142, 60, 0.05)),
+    var(--surface-solid);
+}
+.dark .analytics-kpi:nth-child(2) {
+  background:
+    linear-gradient(145deg, rgba(35, 155, 185, 0.16), rgba(33, 95, 120, 0.06)),
+    var(--surface-solid);
+}
 .analytics-kpi > span {
   width: 34px;
   height: 34px;

@@ -5,6 +5,7 @@ import { query } from "@/src/lib/db";
 import { getDemoItineraries,isDemoTrip } from "@/src/lib/demo-data";
 import { getTripRole,tripCardIdsAreMembers,tripMemberIdsAreMembers } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
+import { clearFirstItineraryTransport } from "@/src/lib/itinerary-order";
 
 const costItem=z.object({
   id:z.string().optional(),key:z.string().trim().min(1).max(100),value:z.number().min(0),category:z.string().max(60).optional(),currency:z.string().length(3).optional(),foreignAmount:z.number().min(0).optional(),exchangeRate:z.number().positive().optional(),rateDate:z.string().optional(),paymentMethod:z.string().max(260).optional(),creditCardId:z.string().uuid().optional(),paymentOwnerName:z.string().max(120).optional(),splitMemberIds:z.array(z.string().uuid()).min(1).max(20).optional(),
@@ -27,6 +28,6 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
     const duplicate=await query("SELECT 1 FROM itineraries WHERE trip_id=$1 AND day_number=$2 AND start_time=$3::time LIMIT 1",[id,x.dayNumber,x.startTime]);if(duplicate.rowCount)return NextResponse.json({error:"วันและเวลานี้มีแผนอยู่แล้ว กรุณาเลือกเวลาอื่น"},{status:409});
     const hour=Number(x.startTime.slice(0,2));const timeSlot=x.timeSlot??(hour<12?"morning":hour<17?"afternoon":"evening");
     const result=await query("INSERT INTO itineraries (trip_id,day_number,time_slot,start_time,place_name,address,image_url,transport_mode,transport_note,cost_items,sort_order) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,COALESCE((SELECT max(sort_order)+1 FROM itineraries WHERE trip_id=$1 AND day_number=$2),0) FROM trips WHERE id=$1 AND $2 BETWEEN 1 AND total_days RETURNING *",[id,x.dayNumber,timeSlot,x.startTime,x.placeName,x.address||null,x.imageUrl||null,x.transportMode||null,x.transportNote||null,JSON.stringify(x.costItems||[])]);
-    if(!result.rows[0])return NextResponse.json({error:"Trip not found or day is outside the trip"},{status:404});await logTripActivity({tripId:id,actorUserId:session.userId,entityType:"itinerary",entityId:result.rows[0].id,action:"create",summary:`เพิ่มแผน “${x.placeName}”`,after:result.rows[0]});return NextResponse.json(result.rows[0],{status:201});
+    if(!result.rows[0])return NextResponse.json({error:"Trip not found or day is outside the trip"},{status:404});await clearFirstItineraryTransport(id,[x.dayNumber]);const saved=await query("SELECT * FROM itineraries WHERE id=$1",[result.rows[0].id]);await logTripActivity({tripId:id,actorUserId:session.userId,entityType:"itinerary",entityId:result.rows[0].id,action:"create",summary:`เพิ่มแผน “${x.placeName}”`,after:saved.rows[0]});return NextResponse.json(saved.rows[0],{status:201});
   }catch{return NextResponse.json({error:"Invalid itinerary data"},{status:400});}
 }

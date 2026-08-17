@@ -1652,6 +1652,25 @@ function nextPlanTime(items: Itinerary[], day: number) {
     .at(-1);
   return latest ? shiftedPlanTime(latest) : "09:00";
 }
+function withoutFirstTransport(items: Itinerary[]) {
+  const firstByDay = new Map<number, Itinerary>();
+  for (const item of items) {
+    const first = firstByDay.get(item.day_number);
+    if (
+      !first ||
+      (item.start_time || "99:99").localeCompare(
+        first.start_time || "99:99",
+      ) < 0
+    )
+      firstByDay.set(item.day_number, item);
+  }
+  const firstIds = new Set([...firstByDay.values()].map((item) => item.id));
+  return items.map((item) =>
+    firstIds.has(item.id) && item.transport_mode
+      ? { ...item, transport_mode: null }
+      : item,
+  );
+}
 function useMinuteClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -3659,7 +3678,7 @@ function TripHub({
                       className={`timeline-stop ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                       key={item.id}
                     >
-                      {item.transport_mode && (
+                      {index > 0 && item.transport_mode && (
                         <div className="transport transport-to-stop">
                           <TransportModeIcon mode={item.transport_mode} />
                           <span>{t(item.transport_mode)}</span>
@@ -3908,7 +3927,7 @@ function TimelineScreen({
                 className={`timeline-stop ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                 key={item.id}
               >
-                {item.transport_mode && (
+                {index > 0 && item.transport_mode && (
                   <div className="transport transport-to-stop">
                     <TransportModeIcon mode={item.transport_mode} />
                     {t(item.transport_mode)}
@@ -7142,6 +7161,14 @@ function ModalForm({
           : nextPlanTime(items, initialPlaceDay)
       : "09:00",
   );
+  const placeIsFirst =
+    modal.type === "place" &&
+    !items.some(
+      (item) =>
+        item.id !== modal.item?.id &&
+        item.day_number === placeDay &&
+        (item.start_time || "99:99").slice(0, 5) < placeStartTime,
+    );
   const amount = (f: FormData, name: string) =>
     Number(String(f.get(name) || "0").replace(/,/g, ""));
   async function handle(e: React.FormEvent<HTMLFormElement>) {
@@ -7187,7 +7214,9 @@ function ModalForm({
         await submit({
           placeName: f.get("placeName"),
           address: f.get("address"),
-          transportMode: f.get("transportMode"),
+          transportMode: placeIsFirst
+            ? undefined
+            : f.get("transportMode"),
           transportNote: f.get("transportNote"),
           costItems: modal.item?.cost_items || [],
           dayNumber: Number(f.get("dayNumber")),
@@ -7447,20 +7476,22 @@ function ModalForm({
                 items={items}
                 currentItem={placeSource}
               />
-              <div className="field">
-                <label>{t("วิธีเดินทางมาที่นี่")}</label>
-                <select
-                  name="transportMode"
-                  defaultValue={placeSource?.transport_mode || ""}
-                >
-                  <option value="">{t("- / ไม่ระบุ")}</option>
-                  {transportOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {t(option)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {!placeIsFirst && (
+                <div className="field">
+                  <label>{t("วิธีเดินทางมาที่นี่")}</label>
+                  <select
+                    name="transportMode"
+                    defaultValue={placeSource?.transport_mode || ""}
+                  >
+                    <option value="">{t("- / ไม่ระบุ")}</option>
+                    {transportOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {t(option)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="field">
                 <label>{t("รายละเอียด")}</label>
                 <textarea
@@ -7987,8 +8018,9 @@ export function BNTripApp({
             a.day_number - b.day_number ||
             (a.start_time || "99:99").localeCompare(b.start_time || "99:99"),
         );
-        itineraryCache.set(selected.id, next);
-        return next;
+        const normalized = withoutFirstTransport(next);
+        itineraryCache.set(selected.id, normalized);
+        return normalized;
       });
       setActiveDay(saved.day_number);
       flash(
@@ -8003,7 +8035,9 @@ export function BNTripApp({
   async function removeItinerary(item: Itinerary) {
     await request(`/api/itineraries/${item.id}`, { method: "DELETE" });
     setItineraries((old) => {
-      const next = old.filter((row) => row.id !== item.id);
+      const next = withoutFirstTransport(
+        old.filter((row) => row.id !== item.id),
+      );
       if (selected) itineraryCache.set(selected.id, next);
       return next;
     });
@@ -8029,7 +8063,9 @@ export function BNTripApp({
       }),
     });
     setItineraries((old) => {
-      const next = old.map((row) => (row.id === saved.id ? saved : row));
+      const next = withoutFirstTransport(
+        old.map((row) => (row.id === saved.id ? saved : row)),
+      );
       if (selected) itineraryCache.set(selected.id, next);
       return next;
     });
