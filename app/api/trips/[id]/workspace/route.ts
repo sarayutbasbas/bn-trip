@@ -28,7 +28,7 @@ export async function GET(
       ...(tab === "history" ? { activities: [] } : {}),
       members: [],
       currentUserId: session.userId,
-      role: "collaborator",
+      role: "view",
       documentUploadMode: "server",
       documentQuotaBytes: DOCUMENT_QUOTA_BYTES,
       documentUsageBytes: 0,

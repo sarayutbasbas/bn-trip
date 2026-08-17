@@ -31,6 +31,7 @@ services:
       APP_URL: ${APP_URL:-https://bn-trip.basnana.com}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://bn-trip.basnana.com/api/auth/google/callback}
       GOOGLE_OWNER_EMAIL: ${GOOGLE_OWNER_EMAIL:-sarayutkongpeng@gmail.com}
+      FLIGHTAWARE_API_KEY: ${FLIGHTAWARE_API_KEY:-}
       UPLOAD_DIR: /app/uploads
       NODE_ENV: production
     volumes:

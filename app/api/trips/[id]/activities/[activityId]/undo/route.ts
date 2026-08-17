@@ -8,7 +8,7 @@ type Activity={id:string;trip_id:string;entity_type:string;entity_id:string|null
 
 export async function POST(_:Request,{params}:{params:Promise<{id:string;activityId:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
-  const {id,activityId}=await params;if(await getTripRole(id,session.userId)!=="owner")return NextResponse.json({error:"เฉพาะเจ้าของทริปที่ย้อนคืนประวัติได้"},{status:403});
+  const {id,activityId}=await params;const role=await getTripRole(id,session.userId);if(role!=="owner"&&role!=="admin")return NextResponse.json({error:"สิทธิ์ Admin หรือเจ้าของทริปเท่านั้นที่ย้อนคืนประวัติได้"},{status:403});
   try{const deletedFile=await transaction(async client=>{let fileToDelete:{filename:string;blobUrl:string|null}|null=null;const found=await client.query<Activity>(`SELECT * FROM trip_activity_logs activity WHERE id=$1 AND trip_id=$2 AND created_at>=now()-interval '180 days'
       AND (SELECT COUNT(*) FROM trip_activity_logs newer WHERE newer.trip_id=activity.trip_id AND newer.created_at>activity.created_at)<500 FOR UPDATE`,[activityId,id]);const activity=found.rows[0];if(!activity||activity.undone_at)throw new Error("undo_unavailable");const before=activity.before_data;const after=activity.after_data;const entityId=activity.entity_id;
     if(activity.entity_type==="itinerary"&&entityId){

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS trip_collaborators (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
   email VARCHAR(320) NOT NULL, user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   invited_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  access_level VARCHAR(8) NOT NULL DEFAULT 'view' CHECK (access_level IN ('view','admin')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(trip_id,email)
 );
 
@@ -39,8 +40,10 @@ CREATE TABLE IF NOT EXISTS collaborator_contacts (
 
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS google_photos_url TEXT;
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS timezone VARCHAR(80) NOT NULL DEFAULT 'Asia/Bangkok';
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS has_flights BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS country_code CHAR(2);
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS country_name VARCHAR(120);
+ALTER TABLE trip_collaborators ADD COLUMN IF NOT EXISTS access_level VARCHAR(8) NOT NULL DEFAULT 'view';
 
 CREATE TABLE IF NOT EXISTS itineraries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
@@ -122,6 +125,33 @@ CREATE TABLE IF NOT EXISTS trip_documents (
 
 ALTER TABLE trip_documents ADD COLUMN IF NOT EXISTS blob_url TEXT;
 
+CREATE TABLE IF NOT EXISTS trip_flight_segments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+  journey_type VARCHAR(16) NOT NULL CHECK (journey_type IN ('outbound','return','internal')), segment_order INTEGER NOT NULL DEFAULT 0,
+  airline_code VARCHAR(8) NOT NULL, airline_name VARCHAR(120) NOT NULL DEFAULT '', flight_number VARCHAR(16) NOT NULL,
+  departure_airport_code VARCHAR(8) NOT NULL, departure_airport_name VARCHAR(160) NOT NULL DEFAULT '', arrival_airport_code VARCHAR(8) NOT NULL, arrival_airport_name VARCHAR(160) NOT NULL DEFAULT '',
+  scheduled_departure_at TIMESTAMPTZ NOT NULL, scheduled_arrival_at TIMESTAMPTZ NOT NULL, latest_departure_at TIMESTAMPTZ, latest_arrival_at TIMESTAMPTZ,
+  entered_departure_local TIMESTAMP, entered_arrival_local TIMESTAMP,
+  departure_terminal VARCHAR(24), departure_gate VARCHAR(24), arrival_terminal VARCHAR(24), arrival_gate VARCHAR(24), status VARCHAR(40) NOT NULL DEFAULT 'scheduled',
+  booking_reference VARCHAR(80), cabin_class VARCHAR(80), baggage_note TEXT, provider VARCHAR(32), provider_flight_id VARCHAR(160), last_synced_at TIMESTAMPTZ,
+  itinerary_id UUID REFERENCES itineraries(id) ON DELETE SET NULL, ticket_cost_item_id UUID,
+  ticket_price NUMERIC(14,2), ticket_currency CHAR(3), ticket_exchange_rate NUMERIC(14,6), ticket_rate_date DATE,
+  created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS trip_flight_passengers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), segment_id UUID NOT NULL REFERENCES trip_flight_segments(id) ON DELETE CASCADE, user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  seat_number VARCHAR(24), meal_preference VARCHAR(160), baggage_note TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(segment_id,user_id)
+);
+ALTER TABLE trip_documents ADD COLUMN IF NOT EXISTS flight_segment_id UUID REFERENCES trip_flight_segments(id) ON DELETE SET NULL;
+ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS itinerary_id UUID REFERENCES itineraries(id) ON DELETE SET NULL;
+ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS ticket_cost_item_id UUID;
+ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS ticket_price NUMERIC(14,2);
+ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS ticket_currency CHAR(3);
+ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS ticket_exchange_rate NUMERIC(14,6);
+ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS ticket_rate_date DATE;
+ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS entered_departure_local TIMESTAMP;
+ALTER TABLE trip_flight_segments ADD COLUMN IF NOT EXISTS entered_arrival_local TIMESTAMP;
+
 CREATE TABLE IF NOT EXISTS trip_activity_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
   actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL, entity_type VARCHAR(40) NOT NULL,
@@ -137,6 +167,7 @@ CREATE INDEX IF NOT EXISTS credit_cards_user_sort_idx ON credit_cards(user_id,so
 CREATE INDEX IF NOT EXISTS itinerary_trip_day_idx ON itineraries(trip_id, day_number, sort_order);
 CREATE INDEX IF NOT EXISTS expenses_trip_date_idx ON expenses(trip_id, spent_at);
 CREATE INDEX IF NOT EXISTS flights_trip_idx ON flights(trip_id);
+CREATE INDEX IF NOT EXISTS trip_flight_segments_itinerary_idx ON trip_flight_segments(itinerary_id);
 CREATE INDEX IF NOT EXISTS trip_checklist_trip_sort_idx ON trip_checklist_items(trip_id,sort_order,created_at);
 CREATE INDEX IF NOT EXISTS trip_documents_trip_created_idx ON trip_documents(trip_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS trip_activity_trip_created_idx ON trip_activity_logs(trip_id,created_at DESC);

@@ -31,7 +31,7 @@ type StoredDocument = {
   created_at: string;
 };
 
-async function requireOwner(tripId: string) {
+async function requireContentAdmin(tripId: string) {
   const session = await getSession();
   if (!session)
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
@@ -42,10 +42,11 @@ async function requireOwner(tripId: string) {
         { status: 403 },
       ),
     };
-  if ((await getTripRole(tripId, session.userId)) !== "owner")
+  const role = await getTripRole(tripId, session.userId);
+  if (role !== "owner" && role !== "admin")
     return {
       error: NextResponse.json(
-        { error: "เฉพาะเจ้าของทริปที่แก้ไขเอกสารได้" },
+        { error: "สิทธิ์ Admin หรือเจ้าของทริปเท่านั้นที่แก้ไขเอกสารได้" },
         { status: 403 },
       ),
     };
@@ -57,7 +58,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; documentId: string }> },
 ) {
   const { id, documentId } = await params;
-  const access = await requireOwner(id);
+  const access = await requireContentAdmin(id);
   if (access.error) return access.error;
   const existingResult = await query<StoredDocument>(
     "SELECT * FROM trip_documents WHERE id=$1 AND trip_id=$2 LIMIT 1",
@@ -232,7 +233,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; documentId: string }> },
 ) {
   const { id, documentId } = await params;
-  const access = await requireOwner(id);
+  const access = await requireContentAdmin(id);
   if (access.error) return access.error;
   const result = await query<StoredDocument>(
     "DELETE FROM trip_documents WHERE id=$1 AND trip_id=$2 RETURNING *",

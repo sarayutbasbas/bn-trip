@@ -89,6 +89,10 @@ const TripWorkspace = dynamic(
     ),
   { loading: () => <div className="card">กำลังเปิดพื้นที่ทริป…</div> },
 );
+const TripFlights = dynamic(
+  () => import("@/src/components/trip-flights").then((module) => module.TripFlights),
+  { loading: () => <div className="card">กำลังเปิดข้อมูลเที่ยวบิน…</div> },
+);
 
 type Screen =
   | "dashboard"
@@ -136,6 +140,7 @@ type TripMember = {
   display_name: string | null;
   avatar_url: string | null;
   role: "owner" | "collaborator";
+  access_level?: "owner" | "view" | "admin";
 };
 export type Trip = {
   id: string;
@@ -152,7 +157,8 @@ export type Trip = {
   cover_image_url: string | null;
   google_photos_url: string | null;
   timezone?: string;
-  access_role?: "owner" | "collaborator";
+  has_flights?: boolean;
+  access_role?: "owner" | "view" | "admin";
   members?: TripMember[];
   review_average?: number;
   review_count?: number;
@@ -175,6 +181,7 @@ type Collaborator = {
   joined: boolean;
   display_name?: string | null;
   avatar_url?: string | null;
+  access_level: "view" | "admin";
 };
 type CardBrand = "visa" | "mastercard" | "jcb";
 export type PaymentCard = {
@@ -662,6 +669,11 @@ Object.assign(EN_TEXT, {
   ผู้ร่วมทริป: "Collaborators",
   "เพิ่มด้วย Gmail ผู้ร่วมทริปเพิ่มและแก้ไขได้ แต่ลบไม่ได้":
     "Invite by Gmail. Collaborators can add and edit, but cannot delete.",
+  "กำหนด View สำหรับเพิ่มและแก้ไข หรือ Admin สำหรับลบข้อมูลได้ด้วย":
+    "Use View for adding and editing, or Admin to allow deleting content too.",
+  "เปลี่ยนสิทธิ์เป็น Admin แล้ว": "Permission changed to Admin",
+  "เปลี่ยนสิทธิ์เป็น View แล้ว": "Permission changed to View",
+  "เปลี่ยนสิทธิ์ไม่สำเร็จ": "Could not change permission",
   อีเมลผู้ร่วมทริป: "Collaborator email",
   "กำลังเพิ่ม…": "Adding…",
   เพิ่มผู้ร่วมทริป: "Add collaborator",
@@ -2788,7 +2800,7 @@ function TripHeader({
         limit={3}
         onClick={manageMembers}
         actionLabel={
-          trip.access_role === "collaborator"
+          trip.access_role !== "owner"
             ? t("ออกจากทริป")
             : t("จัดการผู้ร่วมทริป")
         }
@@ -2997,6 +3009,8 @@ function TripHub({
   editPlace,
   duplicatePlace,
   openCost,
+  onFlightChanged,
+  notify,
   initialWorkspaceTab,
 }: {
   trip: Trip;
@@ -3014,11 +3028,13 @@ function TripHub({
   editPlace: (item: Itinerary) => void;
   duplicatePlace: (item: Itinerary) => void;
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
+  onFlightChanged: () => void | Promise<void>;
+  notify: (message: string) => void;
   initialWorkspaceTab?: WorkspaceTab;
 }) {
   const t = useT();
   const lang = useContext(LanguageContext);
-  const [view, setView] = useState<"plan" | "expenses" | "workspace">(
+  const [view, setView] = useState<"plan" | "expenses" | "workspace" | "flights">(
     initialWorkspaceTab ? "workspace" : "plan",
   );
   const now = useMinuteClock();
@@ -3032,7 +3048,7 @@ function TripHub({
   const searchScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
-  function selectView(nextView: "plan" | "expenses" | "workspace") {
+  function selectView(nextView: "plan" | "expenses" | "workspace" | "flights") {
     setView(nextView);
     const url = new URL(window.location.href);
     if (nextView === "workspace")
@@ -3122,7 +3138,7 @@ function TripHub({
           back={back}
           openReviews={openReviews}
           manageMembers={
-            trip.access_role === "collaborator"
+            trip.access_role !== "owner"
               ? leaveTrip
               : manageCollaborators
           }
@@ -3139,6 +3155,12 @@ function TripHub({
                   <Images size={18} />
                   <span>{t("เปิด Google Photos")}</span>
                 </a>
+              )}
+              {trip.has_flights && (
+                <button type="button" onClick={() => selectView(view === "flights" ? "plan" : "flights")}>
+                  {view === "flights" ? <Navigation size={18} /> : <Plane size={18} />}
+                  <span>{t(view === "flights" ? "แพลน" : "เที่ยวบิน")}</span>
+                </button>
               )}
               <button
                 type="button"
@@ -3382,6 +3404,16 @@ function TripHub({
             items={items}
             cards={cards}
             openCost={openCost}
+          />
+        ) : view === "flights" ? (
+          <TripFlights
+            tripId={trip.id}
+            members={trip.members || []}
+            tripOutboundAt={trip.outbound_departure_at}
+            tripReturnAt={trip.return_departure_at}
+            canDelete={trip.access_role !== "view"}
+            notify={notify}
+            onChanged={onFlightChanged}
           />
         ) : (
           <TripWorkspace
@@ -5825,7 +5857,7 @@ function CollaboratorsSheet({
   requestLeave: () => void;
 }) {
   const t = useT();
-  const canManage = trip.access_role !== "collaborator";
+  const canManage = trip.access_role === "owner";
   const [items, setItems] = useState<Collaborator[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [email, setEmail] = useState("");
@@ -5903,6 +5935,35 @@ function CollaboratorsSheet({
     onChanged();
     notify("ลบผู้ร่วมทริปสำเร็จแล้ว");
   }
+  async function updateAccess(item: Collaborator, accessLevel: "view" | "admin") {
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/trips/${trip.id}/collaborators/${item.id}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ accessLevel }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setItems((current) =>
+        current.map((member) =>
+          member.id === item.id
+            ? { ...member, access_level: accessLevel }
+            : member,
+        ),
+      );
+      onChanged();
+      notify(accessLevel === "admin" ? "เปลี่ยนสิทธิ์เป็น Admin แล้ว" : "เปลี่ยนสิทธิ์เป็น View แล้ว");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "เปลี่ยนสิทธิ์ไม่สำเร็จ");
+    } finally {
+      setSaving(false);
+    }
+  }
   function askRemove(item: Collaborator) {
     confirmRemove({
       title: `ลบผู้ร่วมทริป “${item.email}”?`,
@@ -5928,7 +5989,7 @@ function CollaboratorsSheet({
             <p>
               {t(
                 canManage
-                  ? "เพิ่มด้วย Gmail ผู้ร่วมทริปเพิ่มและแก้ไขได้ แต่ลบไม่ได้"
+                  ? "กำหนด View สำหรับเพิ่มและแก้ไข หรือ Admin สำหรับลบข้อมูลได้ด้วย"
                   : "ดูสมาชิกในทริป หรือเลือกออกจากทริปนี้",
               )}
             </p>
@@ -6002,6 +6063,30 @@ function CollaboratorsSheet({
                       : t(item.joined ? "เข้าร่วมแล้ว" : "รอการตอบรับ")}
                   </small>
                 </div>
+                {canManage ? (
+                  <div className={`collaborator-access-control is-${item.access_level || "view"}`}>
+                    <select
+                      className="collaborator-access-select"
+                      value={item.access_level || "view"}
+                      onChange={(event) =>
+                        void updateAccess(
+                          item,
+                          event.target.value as "view" | "admin",
+                        )
+                      }
+                      disabled={saving}
+                      aria-label={t(`กำหนดสิทธิ์ ${item.email}`)}
+                    >
+                      <option value="view">View</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </div>
+                ) : (
+                  <span className={`collaborator-access-badge is-${item.access_level}`}>
+                    {item.access_level === "admin" ? "Admin" : "View"}
+                  </span>
+                )}
                 {canManage && (
                   <button
                     type="button"
@@ -6731,6 +6816,7 @@ function ModalForm({
           returnTime: f.get("returnTime"),
           budgetThb: amount(f, "budgetThb"),
           shoppingBudgetThb: amount(f, "shoppingBudgetThb"),
+          hasFlights: f.get("hasFlights") === "true",
           coverImageUrl,
         });
       }
@@ -6852,6 +6938,14 @@ function ModalForm({
                   defaultValue={modal.trip?.google_photos_url || ""}
                   placeholder="https://photos.app.goo.gl/..."
                 />
+              </div>
+              <div className="field">
+                <label>{t("การเดินทางด้วยเครื่องบิน")}</label>
+                <select name="hasFlights" defaultValue={modal.trip?.has_flights ? "true" : "false"}>
+                  <option value="false">{t("ทริปนี้ไม่มีเที่ยวบิน")}</option>
+                  <option value="true">{t("ทริปนี้มีเที่ยวบิน")}</option>
+                </select>
+                <small>{t("เมื่อเปิดใช้ จะเพิ่มเที่ยวบินต่อเครื่อง ที่นั่ง อาหาร และเอกสารได้")}</small>
               </div>
               <div className="form-row flight-datetime-row">
                 <div className="field">
@@ -7824,6 +7918,17 @@ export function BNTripApp({
         setModal({ type: "place", duplicateOf: item });
       })}
       openCost={protect(openCost)}
+      onFlightChanged={async () => {
+        const response = await fetch(`/api/trips/${selected.id}/itineraries`, {
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "โหลด Timeline ไม่สำเร็จ");
+        const rows: Itinerary[] = Array.isArray(data) ? data : [];
+        itineraryCache.set(selected.id, rows);
+        setItineraries(rows);
+      }}
+      notify={flash}
       initialWorkspaceTab={workspaceTab}
     />
   ) : page === "timeline" && selected ? (
@@ -7915,7 +8020,7 @@ export function BNTripApp({
         close={() => setModal(null)}
         saveCost={saveCost}
         deleteCost={deleteCost}
-        canDelete={selected.access_role !== "collaborator"}
+        canDelete={selected.access_role !== "view"}
       />
     ) : null
   ) : (
@@ -7928,7 +8033,7 @@ export function BNTripApp({
       submit={saveModal}
       deleteItem={removeItinerary}
       deleteTrip={removeTrip}
-      canDelete={selected?.access_role !== "collaborator"}
+      canDelete={selected?.access_role !== "view"}
     />
   );
   const label = (value: string) =>

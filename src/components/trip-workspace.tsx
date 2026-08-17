@@ -92,7 +92,7 @@ type Workspace = {
   activities: Activity[];
   members: Member[];
   currentUserId: string;
-  role: "owner" | "collaborator";
+  role: "owner" | "admin" | "view";
   documentUploadMode: "client" | "server";
   documentQuotaBytes: number;
   documentUsageBytes: number;
@@ -110,7 +110,7 @@ const EMPTY: Workspace = {
   activities: [],
   members: [],
   currentUserId: "",
-  role: "collaborator",
+  role: "view",
   documentUploadMode: "server",
   documentQuotaBytes: 100 * 1024 * 1024,
   documentUsageBytes: 0,
@@ -802,7 +802,7 @@ export function TripWorkspace({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
   const canUndo = (activity: Activity) =>
-    data.role === "owner" &&
+    (data.role === "owner" || data.role === "admin") &&
     activity.can_undo &&
     !activity.undone_at &&
     (activity.entity_type === "itinerary" ||
@@ -1335,7 +1335,7 @@ export function TripWorkspace({
                 >
                   <Download size={16} />
                 </button>
-                {data.role === "owner" && (
+                {(data.role === "owner" || data.role === "admin") && (
                   <button
                     type="button"
                     className="document-edit-button"
