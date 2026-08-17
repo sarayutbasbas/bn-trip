@@ -93,6 +93,7 @@ export function TripFlights({tripId,members,tripOutboundAt,tripReturnAt,canDelet
     {error&&!editing&&<div className="form-error">{error}</div>}
     {!data.segments.length?<div className="flight-empty"><Plane size={32}/><strong>ยังไม่มีเที่ยวบิน</strong><span>เพิ่มเที่ยวบินแรก แล้วระบบจะแยกขาไป ขากลับ และช่วงต่อเครื่องให้อัตโนมัติ</span></div>:
       (["outbound","internal","return"] as const).map(type=>{const items=groups[type];const connections=items.map((item,index)=>index<items.length-1?layoverBetween(item,items[index+1]):null);return items.length?<div className={`flight-group ${connections.some(Boolean)?"has-connections":""}`} key={type}><h3>{labels[type]} <small>{items.length} ช่วงบิน</small></h3>{items.map((item,index)=><div className="flight-segment-entry" key={item.id}><article className={`flight-card flight-card-compact ${flightHasEnded(item,now)?"is-past-flight":""}`} role="button" tabIndex={0} aria-label={`แก้ไขเที่ยวบิน ${item.airline_code} ${item.flight_number}`} onClick={()=>openEdit(item)} onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openEdit(item)}}}>
+        {flightHasEnded(item,now)&&<span className="flight-archive-watermark" aria-hidden="true"><b>ARCHIVED</b><b>FLIGHT LOG</b></span>}
         <div className="flight-card-top">
           <div className="flight-card-identity">
             <div className="flight-number"><span><Plane className="flight-airline-icon" size={11}/>{item.airline_name||item.airline_code}</span><strong>{item.airline_code} {item.flight_number}</strong></div>

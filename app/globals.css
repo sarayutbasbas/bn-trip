@@ -7738,6 +7738,32 @@ html.sheet-open body {
 .flight-card-compact.is-past-flight .flight-card-top {
   grid-template-columns: minmax(0, 1fr) auto;
 }
+.flight-archive-watermark {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: max-content;
+  display: grid;
+  justify-items: center;
+  color: color-mix(in srgb, #4f8b87 78%, var(--muted));
+  opacity: .34;
+  pointer-events: none;
+  user-select: none;
+  transform: translate(-50%, -48%) rotate(-14deg);
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--surface-solid) 78%, transparent);
+}
+.flight-archive-watermark b {
+  font-size: clamp(29px, 9vw, 43px);
+  font-weight: 800;
+  line-height: .88;
+  letter-spacing: -.045em;
+  white-space: nowrap;
+}
+.flight-archive-watermark b:last-child {
+  font-size: clamp(24px, 7.5vw, 36px);
+  letter-spacing: -.025em;
+}
 .flight-panel .flight-card-compact {
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease;
