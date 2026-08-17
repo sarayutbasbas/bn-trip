@@ -60,10 +60,10 @@ export function getDemoFlightSegments(id:string){
     entered_departure_local_text:`${departureDate}T18:45`,entered_arrival_local_text:`${arrivalDate}T23:15`,
     latest_departure_at:timestamp(departureDate,"18:55"),latest_arrival_at:timestamp(arrivalDate,"23:25"),
     departure_terminal:"1",departure_gate:"28",arrival_terminal:"Main",arrival_gate:"D4",
-    status:"scheduled",booking_reference:"BNDEMO",cabin_class:"Economy",baggage_note:"สัมภาระโหลด 23 กก.",
+    status:"scheduled",booking_reference:"BNDEMO",cabin_class:"Economy",baggage_note:null,
     ticket_price:"18500.00",ticket_currency:"THB",ticket_exchange_rate:"1",ticket_rate_date:departureDate,
     last_synced_at:new Date().toISOString(),provider:"demo",provider_flight_id:"demo-tg673",
-    passengers:[{user_id:DEMO_USER_ID,seat_number:"35A",meal_preference:"Thai meal",baggage_note:"23 kg",display_name:demoProfile.display_name,avatar_url:demoProfile.avatar_url}],
+    passengers:[{user_id:DEMO_USER_ID,seat_number:"35A",meal_preference:"Thai meal",carry_on_baggage:"7 kg",checked_baggage:"23 kg",display_name:demoProfile.display_name,avatar_url:demoProfile.avatar_url}],
     documents:[],
   }];
 }

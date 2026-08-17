@@ -27,7 +27,8 @@ const nearbySelect = `SELECT flight.id,flight.trip_id,flight.journey_type,
   flight.booking_reference,flight.cabin_class,flight.baggage_note,
   flight.ticket_price,flight.ticket_currency,
   COALESCE((SELECT jsonb_agg(jsonb_build_object(
-    'user_id',passenger.user_id,'seat_number',passenger.seat_number,
+    'user_id',passenger.user_id,'seat_number',passenger.seat_number,'meal_preference',passenger.meal_preference,
+    'carry_on_baggage',passenger.carry_on_baggage,'checked_baggage',passenger.checked_baggage,
     'display_name',member.display_name,'avatar_url',member.avatar_url
   ) ORDER BY member.display_name)
   FROM trip_flight_passengers passenger

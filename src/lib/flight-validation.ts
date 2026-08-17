@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const optionalText=(max:number)=>z.string().trim().max(max).optional().default("");
 const optionalAirportCode=z.string().trim().max(4).optional().default("").transform(value=>value.toUpperCase()).refine(value=>!value||/^[A-Z0-9]{3,4}$/.test(value),"กรุณากรอกรหัสสนามบิน 3–4 ตัว เช่น BKK");
-export const flightPassengerSchema=z.object({userId:z.string().uuid(),seatNumber:optionalText(24),mealPreference:optionalText(160),baggageNote:optionalText(500)});
+export const flightPassengerSchema=z.object({userId:z.string().uuid(),seatNumber:optionalText(24),mealPreference:optionalText(160),carryOnBaggage:optionalText(160),checkedBaggage:optionalText(160)});
 export const flightSegmentSchema=z.object({
   journeyType:z.enum(["outbound","return","internal"]),segmentOrder:z.coerce.number().int().min(0).max(20),
   flightIdent:z.string().trim().min(3).max(16).transform(value=>value.replace(/[\s-]/g,"").toUpperCase()).refine(value=>/^[A-Z0-9]{2,3}\d{1,4}[A-Z]?$/.test(value),"กรุณากรอกเลขเที่ยวบิน เช่น TG670"),

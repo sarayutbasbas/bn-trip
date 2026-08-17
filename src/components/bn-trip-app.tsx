@@ -35,6 +35,7 @@ import {
   inferTripCountry,
   tripCity,
 } from "@/src/lib/countries";
+import { FlightPassengerInfoList } from "@/src/components/flight-passenger-info";
 import {
   AlertTriangle,
   ArrowRight,
@@ -61,7 +62,6 @@ import {
   GripVertical,
   House,
   Languages,
-  Luggage,
   LocateFixed,
   LogOut,
   MapPin,
@@ -244,6 +244,9 @@ type NearbyFlight = {
   passengers: Array<{
     user_id: string;
     seat_number: string | null;
+    meal_preference: string | null;
+    carry_on_baggage: string | null;
+    checked_baggage: string | null;
     display_name: string | null;
     avatar_url: string | null;
   }>;
@@ -2053,14 +2056,6 @@ function NearbyFlights({
             >
               <div className="flight-card-top nearby-flight-card-top">
                 <div className="flight-card-identity">
-                  {flight.passengers.length > 0 && (
-                    <div className="flight-passenger-stack" aria-label={`${flight.passengers.length} ผู้โดยสาร`}>
-                      {flight.passengers.slice(0, 3).map((passenger) => passenger.avatar_url ? (
-                        <Image key={passenger.user_id} src={passenger.avatar_url} alt={passenger.display_name || "ผู้โดยสาร"} width={30} height={30} unoptimized />
-                      ) : <span key={passenger.user_id}>{(passenger.display_name || "?")[0]}</span>)}
-                      {flight.passengers.length > 3 && <b>+{flight.passengers.length - 3}</b>}
-                    </div>
-                  )}
                   <div className="flight-number">
                     <span><Plane className="flight-airline-icon" size={11} />{flight.airline_name || flight.airline_code}</span>
                     <strong>{flight.airline_code} {flight.flight_number}</strong>
@@ -2090,20 +2085,7 @@ function NearbyFlights({
                 <span>Terminal <b>{flight.departure_terminal || t("รออัปเดต")}</b> · Gate <b>{flight.departure_gate || t("รออัปเดต")}</b></span>
                 <span>Terminal <b>{flight.arrival_terminal || t("รออัปเดต")}</b> · Gate <b>{flight.arrival_gate || t("รออัปเดต")}</b></span>
               </div>
-              <div className="flight-card-footer">
-                <div className="flight-meta">
-                  {flight.ticket_price && <span className="flight-ticket-price">{Number(flight.ticket_price).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {flight.ticket_currency}</span>}
-                  {flight.booking_reference && <span>Booking {flight.booking_reference}</span>}
-                  {flight.cabin_class && <span>{flight.cabin_class}</span>}
-                  {flight.passengers.map((passenger) => (
-                    <span className="flight-seat-chip" key={`home-seat-${passenger.user_id}`} aria-label={`${passenger.display_name || "ผู้โดยสาร"} ที่นั่ง ${passenger.seat_number || "ยังไม่ระบุ"}`}>
-                      {passenger.avatar_url ? <Image src={passenger.avatar_url} alt="" width={18} height={18} unoptimized /> : <i>{(passenger.display_name || "?")[0]}</i>}
-                      <b>{passenger.seat_number || t("ยังไม่ระบุ")}</b>
-                    </span>
-                  ))}
-                  {flight.baggage_note && <span className="flight-baggage-chip"><Luggage size={13} /><b>{t("สัมภาระรวม")}</b> {flight.baggage_note}</span>}
-                </div>
-              </div>
+              <FlightPassengerInfoList passengers={flight.passengers} />
             </article>
           );
         })}

@@ -206,6 +206,14 @@ const migrations = [
       "CREATE INDEX IF NOT EXISTS trip_flight_segments_nearby_idx ON trip_flight_segments ((COALESCE(latest_departure_at,scheduled_departure_at)),last_synced_at)",
     ],
   },
+  {
+    version: 18,
+    statements: [
+      "ALTER TABLE trip_flight_passengers ADD COLUMN IF NOT EXISTS carry_on_baggage VARCHAR(160)",
+      "ALTER TABLE trip_flight_passengers ADD COLUMN IF NOT EXISTS checked_baggage VARCHAR(160)",
+      "UPDATE trip_flight_passengers SET checked_baggage=baggage_note WHERE checked_baggage IS NULL AND baggage_note IS NOT NULL",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;
