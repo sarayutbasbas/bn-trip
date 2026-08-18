@@ -38,7 +38,6 @@ export async function uploadPrivateDocument({
     headers: {
       "x-vercel-blob-access": "private",
       "x-content-type": file.type,
-      "x-add-random-suffix": "0",
     },
     body: file,
   });
