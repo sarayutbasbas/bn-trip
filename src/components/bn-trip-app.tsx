@@ -173,6 +173,7 @@ export type Trip = {
   members?: TripMember[];
   review_average?: number;
   review_count?: number;
+  has_incomplete_setup?: boolean;
 };
 type TripReview = {
   user_id: string;
@@ -1810,13 +1811,19 @@ function TripCard({
           className="trip-cover-image"
         />
         <span />
+        {!past && trip.has_incomplete_setup && (
+          <i
+            className="notification-dot home-trip-notification-dot"
+            aria-label={t("ข้อมูลทริปยังไม่ครบ")}
+          />
+        )}
         {past ? (
           <b className="past-badge">{t("ที่ผ่านมาแล้ว")}</b>
         ) : (
           <b
             className={`countdown-badge ${ongoing ? "ongoing-badge" : "upcoming-badge"}`}
           >
-            {countdownLabel}
+            <span>{countdownLabel}</span>
           </b>
         )}
         <SharedTripAvatars members={trip.members} limit={3} />
@@ -2681,6 +2688,12 @@ function CompactTripCard({
         onClick={() => selectTrip(trip)}
         aria-label={`${t("ทริปทั้งหมด")} ${trip.name}`}
       />
+      {!past && trip.has_incomplete_setup && (
+        <i
+          className="notification-dot compact-trip-notification-dot"
+          aria-label={t("ข้อมูลทริปยังไม่ครบ")}
+        />
+      )}
       <div className="compact-trip-cover">
         <TripCoverImage
           src={trip.cover_image_url || DEFAULT_TRIP_COVER}
@@ -2692,7 +2705,9 @@ function CompactTripCard({
         {past && <TripRatingBadge trip={trip} variant="compact" />}
       </div>
       <div className="compact-trip-body">
-        <span className="compact-trip-status">{status}</span>
+        <span className="compact-trip-status">
+          <span>{status}</span>
+        </span>
         <h3>{trip.name}</h3>
         <p>
           <TripCountryFlag trip={trip} />

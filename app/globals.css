@@ -2897,6 +2897,9 @@ button:disabled {
   overflow: hidden;
   border: 0.5px solid rgba(255, 107, 0, 0.14);
   border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--orange);
   background: var(--brand-soft);
   box-shadow: none;
@@ -2904,6 +2907,11 @@ button:disabled {
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.compact-trip-status > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .is-ongoing .compact-trip-status {
   border-color: rgba(36, 189, 105, 0.16);
@@ -3138,10 +3146,26 @@ button:disabled {
   font-weight: 650;
   box-shadow: 0 7px 18px rgba(0, 0, 0, 0.14);
 }
+.countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 .upcoming-badge {
   border-color: rgba(255, 107, 0, 0.22);
-  color: #d95100;
+  color: var(--orange);
   background: rgba(255, 244, 235, 0.9);
+}
+.home-trip-notification-dot {
+  z-index: 4;
+  top: 12px !important;
+  right: auto;
+  left: 12px !important;
+}
+.compact-trip-notification-dot {
+  z-index: 2;
+  top: 10px !important;
+  right: 8px !important;
 }
 .ongoing-badge {
   border-color: rgba(36, 189, 105, 0.22);

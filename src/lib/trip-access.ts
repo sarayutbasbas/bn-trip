@@ -52,6 +52,39 @@ export const tripReviewSummarySql=(alias="trips")=>`COALESCE((SELECT round(avg(r
       SELECT 1 FROM trip_collaborators review_member
       WHERE review_member.trip_id=${alias}.id AND review_member.user_id=review.user_id
     ))) AS review_count`;
+export const tripIncompleteSetupSql=(alias="trips")=>`(
+    EXISTS(
+      SELECT 1 FROM trip_checklist_items checklist_item
+      WHERE checklist_item.trip_id=${alias}.id AND checklist_item.completed_at IS NULL
+    ) OR (
+      ${alias}.has_flights=true AND (
+        NOT EXISTS(SELECT 1 FROM trip_flight_segments flight WHERE flight.trip_id=${alias}.id)
+        OR NOT EXISTS(
+          SELECT 1 FROM trip_travel_insurance insurance
+          WHERE insurance.trip_id=${alias}.id
+            AND NOT EXISTS (
+              SELECT 1 FROM (
+                SELECT ${alias}.owner_id AS user_id
+                UNION ALL
+                SELECT collaborator.user_id FROM trip_collaborators collaborator
+                WHERE collaborator.trip_id=${alias}.id AND collaborator.user_id IS NOT NULL
+              ) trip_member
+              WHERE NOT EXISTS (
+                SELECT 1 FROM trip_travel_insurance_policies policy
+                WHERE policy.trip_id=${alias}.id AND policy.user_id=trip_member.user_id
+                  AND length(trim(policy.insured_name))>0
+                  AND length(trim(policy.provider_name))>0
+                  AND length(trim(policy.policy_number))>0
+              ) AND NOT EXISTS (
+                SELECT 1 FROM trip_travel_insurance_passengers passenger
+                WHERE passenger.trip_id=${alias}.id AND passenger.user_id=trip_member.user_id
+                  AND passenger.declined_insurance=true
+              )
+            )
+        )
+      )
+    )
+  ) AS has_incomplete_setup`;
 export const tripMembersSql=(alias="trips")=>`(
     SELECT COALESCE(
       jsonb_agg(
