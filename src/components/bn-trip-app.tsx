@@ -3376,6 +3376,112 @@ function TripTimelineSearch({
   );
 }
 
+function usePullToRefresh(enabled: boolean, onRefresh: () => Promise<void>) {
+  const [pullDistance, setPullDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullDistanceRef = useRef(0);
+  const refreshRef = useRef(onRefresh);
+  useEffect(() => {
+    refreshRef.current = onRefresh;
+  }, [onRefresh]);
+  useEffect(() => {
+    if (!enabled || refreshing) return;
+    let startY: number | null = null;
+    let pulling = false;
+    const updateDistance = (distance: number) => {
+      pullDistanceRef.current = distance;
+      setPullDistance(distance);
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      if (
+        event.touches.length !== 1 ||
+        window.scrollY > 0 ||
+        (event.target instanceof Element &&
+          event.target.closest("input,textarea,select"))
+      )
+        return;
+      startY = event.touches[0].clientY;
+      pulling = true;
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!pulling || startY === null || event.touches.length !== 1) return;
+      if (window.scrollY > 0) {
+        pulling = false;
+        startY = null;
+        updateDistance(0);
+        return;
+      }
+      const delta = event.touches[0].clientY - startY;
+      if (delta <= 0) {
+        updateDistance(0);
+        return;
+      }
+      event.preventDefault();
+      updateDistance(Math.min(92, delta * 0.44));
+    };
+    const runRefresh = async () => {
+      setRefreshing(true);
+      updateDistance(54);
+      try {
+        await refreshRef.current();
+      } finally {
+        setRefreshing(false);
+        updateDistance(0);
+      }
+    };
+    const onTouchEnd = () => {
+      if (!pulling) return;
+      pulling = false;
+      startY = null;
+      if (pullDistanceRef.current >= 68) void runRefresh();
+      else updateDistance(0);
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [enabled, refreshing]);
+  return { pullDistance, refreshing };
+}
+
+function PullRefreshIndicator({
+  pullDistance,
+  refreshing,
+}: {
+  pullDistance: number;
+  refreshing: boolean;
+}) {
+  const t = useT();
+  if (!pullDistance && !refreshing) return null;
+  return (
+    <div
+      className={`pull-refresh-indicator ${refreshing ? "is-refreshing" : ""} ${pullDistance >= 68 ? "is-ready" : ""}`}
+      style={{
+        opacity: refreshing ? 1 : Math.min(1, pullDistance / 42),
+        transform: `translate(-50%, ${Math.max(-46, pullDistance - 54)}px)`,
+      }}
+      aria-live="polite"
+    >
+      <RefreshCw size={16} />
+      <span>
+        {t(
+          refreshing
+            ? "กำลังรีเฟรช…"
+            : pullDistance >= 68
+              ? "ปล่อยเพื่อรีเฟรช"
+              : "ดึงลงเพื่อรีเฟรช",
+        )}
+      </span>
+    </div>
+  );
+}
+
 function TripHub({
   trip,
   items,
@@ -3394,6 +3500,8 @@ function TripHub({
   openCost,
   onFlightChanged,
   notify,
+  onRefresh,
+  refreshEnabled,
   initialWorkspaceTab,
   initialView,
 }: {
@@ -3414,6 +3522,8 @@ function TripHub({
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
   onFlightChanged: () => void | Promise<void>;
   notify: (message: string) => void;
+  onRefresh: () => Promise<void>;
+  refreshEnabled: boolean;
   initialWorkspaceTab?: WorkspaceTab;
   initialView?: "plan" | "flights";
 }) {
@@ -3429,6 +3539,7 @@ function TripHub({
     flightIncomplete: false,
     checklistIncomplete: false,
   });
+  const [flightRefreshToken, setFlightRefreshToken] = useState(0);
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
@@ -3440,6 +3551,26 @@ function TripHub({
   const searchScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
+  const { pullDistance, refreshing } = usePullToRefresh(
+    refreshEnabled && (view === "plan" || view === "flights"),
+    async () => {
+      try {
+        await onRefresh();
+        if (view === "flights") {
+          invalidateClientResourcesContaining(`trip:${trip.id}:`);
+          setFlightRefreshToken((value) => value + 1);
+        }
+        window.dispatchEvent(
+          new CustomEvent("trip-completion-changed", {
+            detail: { tripId: trip.id },
+          }),
+        );
+        notify(view === "flights" ? "อัปเดตข้อมูลเที่ยวบินแล้ว" : "อัปเดต Timeline แล้ว");
+      } catch {
+        notify("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
+      }
+    },
+  );
   useEffect(() => {
     let active = true;
     async function loadCompletion() {
@@ -3577,7 +3708,9 @@ function TripHub({
     [],
   );
   return (
-    <div ref={hubRef} className="screen trip-hub-screen">
+    <>
+      <PullRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
+      <div ref={hubRef} className={`screen trip-hub-screen dashboard-pull-content ${pullDistance > 0 && !refreshing ? "is-pulling" : ""}`} style={pullDistance > 0 ? { transform: `translateY(${pullDistance}px)` } : undefined}>
       <div className="trip-cover-region">
         <TripHeader
           trip={trip}
@@ -3862,6 +3995,7 @@ function TripHub({
             canDelete={trip.access_role !== "view"}
             notify={notify}
             onChanged={onFlightChanged}
+            refreshToken={flightRefreshToken}
             onOpenDocuments={() => selectView("workspace", "documents")}
           />
         ) : (
@@ -3873,7 +4007,8 @@ function TripHub({
           />
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -3884,6 +4019,9 @@ function TimelineScreen({
   setDay,
   addPlace,
   back,
+  onRefresh,
+  refreshEnabled,
+  notify,
 }: {
   trip: Trip;
   items: Itinerary[];
@@ -3891,6 +4029,9 @@ function TimelineScreen({
   setDay: (n: number) => void;
   addPlace: () => void;
   back: () => void;
+  onRefresh: () => Promise<void>;
+  refreshEnabled: boolean;
+  notify: (message: string) => void;
 }) {
   const t = useT();
   const lang = useContext(LanguageContext);
@@ -3899,6 +4040,17 @@ function TimelineScreen({
   const ended = tripHasEnded(trip, now);
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
+  const { pullDistance, refreshing } = usePullToRefresh(
+    refreshEnabled,
+    async () => {
+      try {
+        await onRefresh();
+        notify("อัปเดต Timeline แล้ว");
+      } catch {
+        notify("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
+      }
+    },
+  );
   useEffect(
     () =>
       setDay(
@@ -3927,7 +4079,9 @@ function TimelineScreen({
         }, -1)
       : -1;
   return (
-    <div className="screen timeline-screen">
+    <>
+      <PullRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
+      <div className={`screen timeline-screen dashboard-pull-content ${pullDistance > 0 && !refreshing ? "is-pulling" : ""}`} style={pullDistance > 0 ? { transform: `translateY(${pullDistance}px)` } : undefined}>
       <TripHeader trip={trip} back={back} />
       <div
         ref={dayStripRef}
@@ -4032,7 +4186,8 @@ function TimelineScreen({
           })}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -8366,6 +8521,29 @@ export function BNTripApp({
       return next;
     });
   }
+  async function refreshActiveTrip(id: string) {
+    const [freshValue, itineraryResponse] = await Promise.all([
+      request(`/api/trips/${id}`, { cache: "no-store" }),
+      fetch(`/api/trips/${id}/itineraries`, { cache: "no-store" }),
+    ]);
+    const fresh = freshValue as Trip;
+    const itineraryBody = await itineraryResponse.json();
+    if (!itineraryResponse.ok)
+      throw new Error(itineraryBody.error || "โหลด Timeline ไม่สำเร็จ");
+    const rows: Itinerary[] = Array.isArray(itineraryBody)
+      ? itineraryBody
+      : [];
+    setSelected((current) => (current?.id === id ? fresh : current));
+    setTrips((old) => {
+      const next = old.map((trip) => (trip.id === id ? fresh : trip));
+      tripListCache = (tripListCache || next).map((trip) =>
+        trip.id === id ? fresh : trip,
+      );
+      return next;
+    });
+    itineraryCache.set(id, rows);
+    setItineraries(rows);
+  }
   function updateTripReviewSummary(id: string, average: number, count: number) {
     tripReviewSummaryCache.set(id, { average, count });
     const update = (trip: Trip) =>
@@ -8480,6 +8658,8 @@ export function BNTripApp({
         setItineraries(rows);
       }}
       notify={flash}
+      onRefresh={() => refreshActiveTrip(selected.id)}
+      refreshEnabled={!modal && !confirmation}
       initialWorkspaceTab={workspaceTab}
       initialView={tripView}
     />
@@ -8491,6 +8671,9 @@ export function BNTripApp({
       setDay={setActiveDay}
       addPlace={protect(() => setModal({ type: "place" }))}
       back={() => router.push(`/trips/${selected.id}`)}
+      onRefresh={() => refreshActiveTrip(selected.id)}
+      refreshEnabled={!modal && !confirmation}
+      notify={flash}
     />
   ) : page === "expenses" && selected ? (
     <ExpensesScreen

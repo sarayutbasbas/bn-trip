@@ -9,6 +9,10 @@ import { getTripRole, tripMemberIdsAreMembers } from "@/src/lib/trip-access";
 import { getStorageBackend } from "@/src/lib/storage";
 import { getDemoFlightSegments, isDemoTrip } from "@/src/lib/demo-data";
 import type { ResolvedFlight } from "@/src/lib/flightaware";
+import {
+  canonicalManualFlight,
+  loadFlightReferenceData,
+} from "@/src/lib/flight-reference-data";
 
 const denied=()=>NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});
 const segmentSelect=`SELECT flight.*,
@@ -20,9 +24,9 @@ const segmentSelect=`SELECT flight.*,
 
 export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
-  const {id}=await params;if(session.isDemo)return isDemoTrip(id)?NextResponse.json({segments:getDemoFlightSegments(id),syncConfigured:false,documentUploadMode:"server"}):NextResponse.json({error:"Not found"},{status:404});
+  const {id}=await params;if(session.isDemo)return isDemoTrip(id)?NextResponse.json({segments:getDemoFlightSegments(id),referenceData:{airports:[{code:"BKK",name:"Suvarnabhumi"}],airlines:[]},syncConfigured:false,documentUploadMode:"server"}):NextResponse.json({error:"Not found"},{status:404});
   await ensureLatestDatabaseSchema();if(!await getTripRole(id,session.userId))return NextResponse.json({error:"Not found"},{status:404});
-  const [result,insuranceResult]=await Promise.all([
+  const [result,insuranceResult,referenceData]=await Promise.all([
     query(`${segmentSelect} WHERE flight.trip_id=$1 ORDER BY CASE flight.journey_type WHEN 'outbound' THEN 0 WHEN 'internal' THEN 1 ELSE 2 END,flight.segment_order,flight.scheduled_departure_at`,[id]),
     query(`SELECT insurance.*,
       COALESCE((SELECT jsonb_agg(jsonb_build_object(
@@ -38,8 +42,9 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
       COALESCE((SELECT jsonb_agg(passenger.user_id) FROM trip_travel_insurance_passengers passenger WHERE passenger.trip_id=insurance.trip_id AND passenger.declined_insurance=true),'[]'::jsonb) AS declined_user_ids
       FROM trip_travel_insurance insurance
       WHERE insurance.trip_id=$1`,[id]),
+    loadFlightReferenceData(id),
   ]);
-  return NextResponse.json({segments:result.rows,insurance:insuranceResult.rows[0]||null,syncConfigured:Boolean(process.env.FLIGHTAWARE_API_KEY),documentUploadMode:getStorageBackend()==="blob"?"client":"server"});
+  return NextResponse.json({segments:result.rows,insurance:insuranceResult.rows[0]||null,referenceData,syncConfigured:Boolean(process.env.FLIGHTAWARE_API_KEY),documentUploadMode:getStorageBackend()==="blob"?"client":"server"});
 }
 
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){
@@ -50,10 +55,15 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   try{
     const ident=splitFlightIdent(input.flightIdent);
     const manual=Boolean(input.manualDepartureAirportCode&&input.manualArrivalAirportCode);
+    const canonical=manual?canonicalManualFlight(await loadFlightReferenceData(id),{
+      airlineCode:ident.airlineCode,airlineName:input.manualAirlineName,
+      departureAirportCode:input.manualDepartureAirportCode,departureAirportName:input.manualDepartureAirportName,
+      arrivalAirportCode:input.manualArrivalAirportCode,arrivalAirportName:input.manualArrivalAirportName,
+    }):null;
     const resolved:ResolvedFlight=manual?{
-      providerFlightId:null,airlineName:input.manualAirlineName||ident.airlineCode,
-      departureAirportCode:input.manualDepartureAirportCode,departureAirportName:input.manualDepartureAirportName||input.manualDepartureAirportCode,
-      arrivalAirportCode:input.manualArrivalAirportCode,arrivalAirportName:input.manualArrivalAirportName||input.manualArrivalAirportCode,
+      providerFlightId:null,airlineName:canonical!.airlineName,
+      departureAirportCode:canonical!.departureAirportCode,departureAirportName:canonical!.departureAirportName,
+      arrivalAirportCode:canonical!.arrivalAirportCode,arrivalAirportName:canonical!.arrivalAirportName,
       scheduledDepartureAt:input.scheduledDepartureAt,scheduledArrivalAt:input.scheduledArrivalAt,
       latestDepartureAt:null,latestArrivalAt:null,departureTerminal:null,departureGate:null,arrivalTerminal:null,arrivalGate:null,
       status:new Date(input.scheduledArrivalAt)<new Date()?"completed":"scheduled",
