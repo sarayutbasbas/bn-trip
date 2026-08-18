@@ -34,7 +34,12 @@ import {
   updateCurrentAccount,
 } from "@/src/lib/client-account";
 import { optimizedCanvasFile } from "@/src/lib/client-image-compression";
-import { invalidateClientResourcesContaining } from "@/src/lib/client-resource-cache";
+import {
+  accommodationResourceKey,
+  flightResourceKey,
+  invalidateClientResource,
+  invalidateClientResourcesContaining,
+} from "@/src/lib/client-resource-cache";
 import {
   TRIP_COUNTRIES,
   countryByCode,
@@ -3237,6 +3242,28 @@ function TransportModeIcon({ mode }: { mode: string }) {
   return <TrainFront size={12} />;
 }
 
+function TravelStayIcon({ size = 23 }: { size?: number }) {
+  return (
+    <svg
+      className="travel-stay-glyph"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        fill="currentColor"
+        d="M2.1 7.9c.08-.58.63-.96 1.2-.83l5.5 1.25 4.72-5.15a3.25 3.25 0 0 1 3.78-.77l1.25.6-4.2 6.48 4.38 1.02-1.32 2.08-6.12-1.12-3.18 2.73-1.77-.48 1.48-3.5-4.93-1.15a1 1 0 0 1-.79-1.16Z"
+      />
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M4 15h7v7H4v-7Zm2 1.7v1.35h1.35V16.7H6Zm2.7 0v1.35h1.35V16.7H8.7ZM6 19.4V22h4.05v-2.6H6ZM13 13.2h7v8.8h-7v-8.8Zm2 1.7v1.35h1.35V14.9H15Zm2.7 0v1.35h1.35V14.9H17.7ZM15 17.6v1.35h1.35V17.6H15Zm2.7 0v1.35h1.35V17.6H17.7ZM15 20.3V22h4.05v-1.7H15Z"
+      />
+    </svg>
+  );
+}
+
 function useActiveDayScroll(day: number, tripId: string) {
   const stripRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -3562,6 +3589,8 @@ function TripHub({
     checklistIncomplete: false,
   });
   const [flightRefreshToken, setFlightRefreshToken] = useState(0);
+  const [accommodationRefreshToken, setAccommodationRefreshToken] =
+    useState(0);
   const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(
     initialAccommodationId || null,
   );
@@ -3577,20 +3606,30 @@ function TripHub({
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
   const { pullDistance, refreshing } = usePullToRefresh(
-    refreshEnabled && (view === "plan" || view === "flights"),
+    refreshEnabled &&
+      (view === "plan" || view === "flights" || view === "stays"),
     async () => {
       try {
         await onRefresh();
         if (view === "flights") {
-          invalidateClientResourcesContaining(`trip:${trip.id}:`);
+          invalidateClientResource(flightResourceKey(trip.id));
           setFlightRefreshToken((value) => value + 1);
+        } else if (view === "stays") {
+          invalidateClientResource(accommodationResourceKey(trip.id));
+          setAccommodationRefreshToken((value) => value + 1);
         }
         window.dispatchEvent(
           new CustomEvent("trip-completion-changed", {
             detail: { tripId: trip.id },
           }),
         );
-        notify(view === "flights" ? "อัปเดตข้อมูลเที่ยวบินแล้ว" : "อัปเดต Timeline แล้ว");
+        notify(
+          view === "flights"
+            ? "อัปเดตข้อมูลเที่ยวบินแล้ว"
+            : view === "stays"
+              ? "อัปเดตข้อมูลที่พักแล้ว"
+              : "อัปเดต Timeline แล้ว",
+        );
       } catch {
         notify("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
       }
@@ -3794,10 +3833,7 @@ function TripHub({
                 {view === "flights" || view === "stays" ? (
                   <Navigation size={18} />
                 ) : trip.has_flights && trip.total_days > 1 ? (
-                  <span className="travel-stay-icon" aria-hidden="true">
-                    <Plane />
-                    <BedDouble />
-                  </span>
+                  <TravelStayIcon />
                 ) : trip.has_flights ? (
                   <Plane size={18} />
                 ) : (
@@ -4128,6 +4164,7 @@ function TripHub({
                   `${url.pathname}${url.search}${url.hash}`,
                 );
               }}
+              refreshToken={accommodationRefreshToken}
               canDelete={trip.access_role !== "view"}
               notify={notify}
               onChanged={onFlightChanged}
@@ -4163,6 +4200,7 @@ function TripHub({
             openAccommodationId={openAccommodationId}
             onAccommodationOpened={() => setOpenAccommodationId(null)}
             overlayOnly
+            refreshToken={accommodationRefreshToken}
             canDelete={trip.access_role !== "view"}
             notify={notify}
             onChanged={onFlightChanged}

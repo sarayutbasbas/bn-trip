@@ -1540,6 +1540,7 @@ button:disabled {
 }
 .welcome-insights-btn {
   position: absolute;
+  z-index: 4;
   top: 14px;
   right: 17px;
   min-height: 36px;
@@ -1559,6 +1560,8 @@ button:disabled {
   font-size: 11px;
   font-weight: 650;
   white-space: nowrap;
+  pointer-events: auto;
+  touch-action: manipulation;
   transition:
     transform 160ms var(--ease-ios),
     opacity 160ms ease;
@@ -3515,6 +3518,7 @@ button:disabled {
   display: none;
 }
 .trip-cover-actions .travel-stay-icon{position:relative;width:24px;height:22px;display:block}.trip-cover-actions .travel-stay-icon svg{position:absolute;width:14px;height:14px}.trip-cover-actions .travel-stay-icon svg:first-child{top:0;left:0}.trip-cover-actions .travel-stay-icon svg:last-child{right:0;bottom:0;padding:1px;border-radius:5px;background:rgba(28,28,30,.64)}
+.trip-cover-actions .travel-stay-glyph{display:block;width:23px;height:23px;overflow:visible}
 .trip-cover-actions .has-notification-dot {
   position: relative;
   overflow: visible;

@@ -13,6 +13,11 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import {
+  accommodationResourceKey,
+  loadClientResource,
+  peekClientResource,
+} from "@/src/lib/client-resource-cache";
 
 type Member = {
   id: string;
@@ -77,6 +82,16 @@ async function json<T>(url: string, options?: RequestInit) {
   const body = await response.json();
   if (!response.ok) throw new Error(body.error || "ทำรายการไม่สำเร็จ");
   return body as T;
+}
+function getAccommodationItems(tripId: string, force = false) {
+  return loadClientResource(
+    accommodationResourceKey(tripId),
+    () =>
+      json<Accommodation[]>(`/api/trips/${tripId}/accommodations`, {
+        cache: "no-store",
+      }),
+    force,
+  );
 }
 function money(value: number | string, currency = "THB") {
   return new Intl.NumberFormat("th-TH", {
@@ -241,6 +256,7 @@ export function TripAccommodations({
   openAccommodationId,
   onAccommodationOpened,
   overlayOnly = false,
+  refreshToken = 0,
   canDelete,
   notify,
   onChanged,
@@ -254,12 +270,16 @@ export function TripAccommodations({
   openAccommodationId?: string | null;
   onAccommodationOpened?: () => void;
   overlayOnly?: boolean;
+  refreshToken?: number;
   canDelete: boolean;
   notify: (message: string) => void;
   onChanged: () => void | Promise<void>;
 }) {
-  const [items, setItems] = useState<Accommodation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedItems = peekClientResource<Accommodation[]>(
+    accommodationResourceKey(tripId),
+  );
+  const [items, setItems] = useState<Accommodation[]>(() => cachedItems || []);
+  const [loading, setLoading] = useState(!cachedItems);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState<Accommodation | "new" | null>(null);
   const [saving, setSaving] = useState(false);
@@ -279,14 +299,11 @@ export function TripAccommodations({
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>(allMemberIds);
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
   const splitPickerRef = useRef<HTMLDivElement>(null);
-  async function load() {
-    setLoading(true);
+  const handledRefreshToken = useRef(refreshToken);
+  async function load(force = true, showLoading = false) {
+    if (showLoading) setLoading(true);
     try {
-      setItems(
-        await json<Accommodation[]>(`/api/trips/${tripId}/accommodations`, {
-          cache: "no-store",
-        }),
-      );
+      setItems(await getAccommodationItems(tripId, force));
       setError("");
     } catch (reason) {
       setError(
@@ -297,11 +314,68 @@ export function TripAccommodations({
     }
   }
   useEffect(() => {
+    let active = true;
     const frame = requestAnimationFrame(() => {
-      void load();
+      const cached = peekClientResource<Accommodation[]>(
+        accommodationResourceKey(tripId),
+      );
+      if (cached) {
+        setItems(cached);
+        setError("");
+        setLoading(false);
+        return;
+      }
+      setItems([]);
+      setLoading(true);
+      void getAccommodationItems(tripId)
+        .then((nextItems) => {
+          if (!active) return;
+          setItems(nextItems);
+          setError("");
+        })
+        .catch((reason) => {
+          if (!active) return;
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "โหลดข้อมูลที่พักไม่สำเร็จ",
+          );
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
     });
-    return () => cancelAnimationFrame(frame);
-  }, [tripId]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      active = false;
+      cancelAnimationFrame(frame);
+    };
+  }, [tripId]);
+  useEffect(() => {
+    if (
+      refreshToken <= 0 ||
+      handledRefreshToken.current === refreshToken
+    )
+      return;
+    handledRefreshToken.current = refreshToken;
+    let active = true;
+    void getAccommodationItems(tripId, true)
+      .then((nextItems) => {
+        if (!active) return;
+        setItems(nextItems);
+        setError("");
+      })
+      .catch((reason) => {
+        if (!active) return;
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : "โหลดข้อมูลที่พักไม่สำเร็จ",
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [refreshToken, tripId]);
   useEffect(() => {
     if (!splitPickerOpen) return;
     const close = (event: PointerEvent) => {

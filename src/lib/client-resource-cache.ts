@@ -7,6 +7,8 @@ const requests = new Map<string, Promise<unknown>>();
 const generations = new Map<string, number>();
 
 export const flightResourceKey = (tripId: string) => `trip:${tripId}:flights`;
+export const accommodationResourceKey = (tripId: string) =>
+  `trip:${tripId}:accommodations`;
 export const workspaceResourceKey = (tripId: string, tab: string) =>
   `trip:${tripId}:workspace:${tab}`;
 export const MASTER_CHECKLIST_RESOURCE_KEY = "account:master-checklist";
