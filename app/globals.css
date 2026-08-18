@@ -1539,8 +1539,11 @@ button:disabled {
   gap: 10px;
 }
 .welcome-insights-btn {
+  position: absolute;
+  top: 14px;
+  right: 17px;
   min-height: 36px;
-  margin-left: auto;
+  margin: 0;
   padding: 0 12px;
   border: 0.5px solid rgba(255, 255, 255, 0.42);
   border-radius: 999px;

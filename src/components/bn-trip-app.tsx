@@ -2229,6 +2229,15 @@ function Dashboard({
   return (
     <div className="screen">
       <section className="welcome">
+        <button
+          type="button"
+          className="welcome-insights-btn"
+          onClick={viewAnalytics}
+          aria-label={t("สถิติการเดินทาง")}
+        >
+          <ChartNoAxesColumnIncreasing size={15} />
+          <span>{t("สถิติ")}</span>
+        </button>
         <div className="welcome-content">
           <div className="welcome-topline">
             {profile && (
@@ -2240,15 +2249,6 @@ function Dashboard({
                 </div>
               </div>
             )}
-            <button
-              type="button"
-              className="welcome-insights-btn"
-              onClick={viewAnalytics}
-              aria-label={t("สถิติการเดินทาง")}
-            >
-              <ChartNoAxesColumnIncreasing size={15} />
-              <span>{t("สถิติ")}</span>
-            </button>
           </div>
           <div className="welcome-copy">
             <span className="eyebrow">
