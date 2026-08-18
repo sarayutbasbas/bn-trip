@@ -4,7 +4,7 @@ import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { query, transaction } from "@/src/lib/db";
 import { flightSegmentSchema, splitFlightIdent } from "@/src/lib/flight-validation";
 import { resolveFlightAware } from "@/src/lib/flightaware";
-import { syncFlightLinkedRecords } from "@/src/lib/flight-linked-records";
+import { syncFlightLinkedRecords, syncTripDayZero } from "@/src/lib/flight-linked-records";
 import { getTripRole, tripMemberIdsAreMembers } from "@/src/lib/trip-access";
 import { getStorageBackend } from "@/src/lib/storage";
 import { getDemoFlightSegments, isDemoTrip } from "@/src/lib/demo-data";
@@ -75,7 +75,9 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
       await client.query("UPDATE trip_flight_segments SET entered_departure_local=$2::timestamp,entered_arrival_local=$3::timestamp WHERE id=$1",[result.rows[0].id,input.enteredDepartureLocal,input.enteredArrivalLocal]);
       for(const passenger of input.passengers)await client.query(`INSERT INTO trip_flight_passengers (segment_id,user_id,seat_number,meal_preference,carry_on_baggage,checked_baggage) VALUES ($1,$2,$3,$4,$5,$6)`,[result.rows[0].id,passenger.userId,passenger.seatNumber||null,passenger.mealPreference||null,passenger.carryOnBaggage||null,passenger.checkedBaggage||null]);
       await syncFlightLinkedRecords(client,{tripId:id,segmentId:result.rows[0].id,flightLabel:`${ident.airlineCode}${ident.flightNumber}`,airlineName:resolved.airlineName,departureAirportCode:resolved.departureAirportCode,departureAirportName:resolved.departureAirportName,arrivalAirportCode:resolved.arrivalAirportCode,arrivalAirportName:resolved.arrivalAirportName,scheduledDepartureAt:resolved.scheduledDepartureAt,enteredDepartureLocal:input.enteredDepartureLocal,departureTerminal:resolved.departureTerminal,departureGate:resolved.departureGate,ticketPrice:input.ticketPrice,ticketCurrency:input.ticketCurrency,ticketExchangeRate:input.ticketExchangeRate,ticketRateDate:input.ticketRateDate,passengerIds:input.passengers.map(passenger=>passenger.userId)});
-      await client.query("UPDATE trips SET has_flights=true,updated_at=now() WHERE id=$1",[id]);return result.rows[0];
+      await client.query("UPDATE trips SET has_flights=true,updated_at=now() WHERE id=$1",[id]);
+      await syncTripDayZero(client,id);
+      return result.rows[0];
     });
     return NextResponse.json(segment,{status:201});
   }catch(error){const code=error instanceof Error?error.message:"";console.error("Create flight failed",{code,flightIdent:input.flightIdent,scheduledDepartureAt:input.scheduledDepartureAt});return NextResponse.json({error:code==="connection_mismatch"?"เที่ยวบินต่อเครื่องต้องออกจากสนามบินที่เที่ยวบินก่อนหน้ามาถึง และเวลาไม่ย้อนกัน":code==="flight_api_not_configured"?"กรุณาตั้งค่า FLIGHTAWARE_API_KEY ก่อนเพิ่มเที่ยวบิน":code==="flight_provider_401"||code==="flight_provider_403"?"Flight API key ใช้งานไม่ได้หรือไม่มีสิทธิ์ กรุณาตรวจการตั้งค่า":code==="flight_provider_429"?"เรียกข้อมูลเที่ยวบินถี่เกินไป กรุณารอสักครู่แล้วลองใหม่":code==="flight_provider_network"?"เชื่อมต่อ FlightAware ไม่สำเร็จ กรุณาลองใหม่":code==="flight_not_found"||code==="flight_incomplete"||code==="flight_provider_400"||code==="flight_provider_404"?"ไม่พบข้อมูลเที่ยวบินนี้ กรุณาตรวจเลขเที่ยวบินและวันที่":"ดึงข้อมูลเที่ยวบินไม่สำเร็จ กรุณาลองใหม่"},{status:code==="flight_api_not_configured"||code==="flight_provider_network"?503:400})}

@@ -249,6 +249,7 @@ function CardLogo({ brand }: { brand?: Card["brand"] }) {
 export function TripAccommodations({
   tripId,
   totalDays,
+  hasDayZero = false,
   startDate,
   members,
   cards,
@@ -263,6 +264,7 @@ export function TripAccommodations({
 }: {
   tripId: string;
   totalDays: number;
+  hasDayZero?: boolean;
   startDate: string;
   members: Member[];
   cards: Card[];
@@ -275,6 +277,7 @@ export function TripAccommodations({
   notify: (message: string) => void;
   onChanged: () => void | Promise<void>;
 }) {
+  const displayDay = (day: number) => day - Number(hasDayZero);
   const cachedItems = peekClientResource<Accommodation[]>(
     accommodationResourceKey(tripId),
   );
@@ -580,7 +583,8 @@ export function TripAccommodations({
                   </small>
                   <small>
                     <CalendarDays size={12} />
-                    Day {item.check_in_day}–{item.check_out_day} · {item.nights}{" "}
+                    Day {displayDay(item.check_in_day)}–
+                    {displayDay(item.check_out_day)} · {item.nights}{" "}
                     คืน
                   </small>
                 </span>
@@ -684,7 +688,7 @@ export function TripAccommodations({
                         (_, index) => index + 1,
                       ).map((day) => (
                         <option value={day} key={day}>
-                          Day {day}
+                          Day {displayDay(day)}
                         </option>
                       ))}
                     </select>
@@ -702,7 +706,9 @@ export function TripAccommodations({
                         (_, index) => checkInDay + index + 1,
                       ).map((day) => (
                         <option value={day} key={day}>
-                          {day === totalDays + 1 ? "หลังจบทริป" : `Day ${day}`}
+                          {day === totalDays + 1
+                            ? "หลังจบทริป"
+                            : `Day ${displayDay(day)}`}
                         </option>
                       ))}
                     </select>

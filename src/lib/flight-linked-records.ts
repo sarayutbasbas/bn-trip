@@ -28,6 +28,19 @@ type TimelinePosition = {
   time_slot: "morning" | "afternoon" | "evening";
 };
 
+export async function syncTripDayZero(client: PoolClient, tripId: string) {
+  const result = await client.query<{ has_day_zero: boolean }>(`UPDATE trips trip SET has_day_zero=COALESCE((
+    SELECT final_flight.entered_arrival_local::date>trip.start_date OR
+      (final_flight.entered_arrival_local::date=trip.start_date AND final_flight.entered_arrival_local::time>=TIME '15:00')
+    FROM trip_flight_segments final_flight
+    WHERE final_flight.trip_id=trip.id AND final_flight.journey_type='outbound'
+      AND final_flight.entered_arrival_local IS NOT NULL
+    ORDER BY final_flight.segment_order DESC,final_flight.scheduled_departure_at DESC
+    LIMIT 1
+  ),false),updated_at=now() WHERE trip.id=$1 RETURNING has_day_zero`, [tripId]);
+  return result.rows[0]?.has_day_zero ?? false;
+}
+
 async function timelinePosition(client: PoolClient, tripId: string, enteredDepartureLocal: string) {
   const result = await client.query<TimelinePosition>(`SELECT
     GREATEST(1, LEAST(total_days, ($2::timestamp::date - start_date) + 1))::int AS day_number,

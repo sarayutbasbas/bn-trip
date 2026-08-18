@@ -179,6 +179,7 @@ export type Trip = {
   google_photos_url: string | null;
   timezone?: string;
   has_flights?: boolean;
+  has_day_zero?: boolean;
   access_role?: "owner" | "view" | "admin";
   members?: TripMember[];
   review_average?: number;
@@ -1451,6 +1452,12 @@ function tripDayLabel(dateValue: string, day: number) {
         { day: "numeric", month: "short", year: "2-digit" },
       )
     : "";
+}
+function displayTripDay(
+  trip: Pick<Trip, "has_day_zero"> | null | undefined,
+  storedDay: number,
+) {
+  return storedDay - Number(Boolean(trip?.has_day_zero));
 }
 function tripRangeLabel(trip: Trip) {
   const label = (value: string | null) => {
@@ -3303,9 +3310,11 @@ function useItinerariesByDay(items: Itinerary[]) {
 }
 
 function TripTimelineSearch({
+  trip,
   items,
   onSelect,
 }: {
+  trip: Trip;
   items: Itinerary[];
   onSelect: (item: Itinerary) => void;
 }) {
@@ -3396,7 +3405,7 @@ function TripTimelineSearch({
               onClick={() => choose(item)}
             >
               <span>
-                DAY {item.day_number}
+                DAY {displayTripDay(trip, item.day_number)}
                 <b>{item.start_time?.slice(0, 5) || "--:--"}</b>
               </span>
               <div>
@@ -3928,7 +3937,7 @@ function TripHub({
                       onClick={() => startTransition(() => setDay(number))}
                     >
                       <small>DAY</small>
-                      <strong>{number}</strong>
+                      <strong>{displayTripDay(trip, number)}</strong>
                       <small>
                         {isToday
                           ? t("วันนี้")
@@ -3944,7 +3953,7 @@ function TripHub({
             )}
             <div className="section-head timeline-heading timeline-heading-search">
               <div>
-                <h2>{t(`แผนวันที่ ${day}`)}</h2>
+                <h2>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</h2>
                 <p>
                   {activeDateLabel} ·{" "}
                   {tripDay === day
@@ -3953,11 +3962,15 @@ function TripHub({
                   {t(`${dayItems.length} สถานที่`)}
                 </p>
               </div>
-              <TripTimelineSearch items={items} onSelect={selectSearchResult} />
+              <TripTimelineSearch
+                trip={trip}
+                items={items}
+                onSelect={selectSearchResult}
+              />
               <button
                 className="directory-fab timeline-fab"
                 onClick={() => addPlace(day)}
-                aria-label={t(`เพิ่มรายการวันที่ ${day}`)}
+                aria-label={t(`เพิ่มรายการวันที่ ${displayTripDay(trip, day)}`)}
               >
                 <Plus size={22} />
                 <span>{t("เพิ่มสถานที่")}</span>
@@ -3965,7 +3978,7 @@ function TripHub({
             </div>
             {dayItems.length === 0 ? (
               <EmptyState
-                title={t(`Day ${day} ยังว่างอยู่`)}
+                title={t(`Day ${displayTripDay(trip, day)} ยังว่างอยู่`)}
                 description={t(
                   "เพิ่มสถานที่และเวลา รายการใหม่จะถูกเรียงใน Timeline อัตโนมัติ",
                 )}
@@ -4145,6 +4158,7 @@ function TripHub({
             /> : <TripAccommodations
               tripId={trip.id}
               totalDays={trip.total_days}
+              hasDayZero={trip.has_day_zero}
               startDate={baseDate}
               members={trip.members || []}
               cards={cards}
@@ -4189,6 +4203,7 @@ function TripHub({
           <TripAccommodations
             tripId={trip.id}
             totalDays={trip.total_days}
+            hasDayZero={trip.has_day_zero}
             startDate={baseDate}
             members={trip.members || []}
             cards={cards}
@@ -4307,7 +4322,7 @@ function TimelineScreen({
               onClick={() => startTransition(() => setDay(n))}
             >
               <small>DAY</small>
-              <strong>{n}</strong>
+              <strong>{displayTripDay(trip, n)}</strong>
               <small>
                 {isToday
                   ? t("วันนี้")
@@ -4321,7 +4336,7 @@ function TimelineScreen({
       </div>
       <div className="section-head">
         <div>
-          <h2>{t(`แผนวันที่ ${day}`)}</h2>
+          <h2>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</h2>
           <p>
             {activeDateLabel} ·{" "}
             {tripDay === day
@@ -4341,7 +4356,7 @@ function TimelineScreen({
       </div>
       {dayItems.length === 0 ? (
         <EmptyState
-          title={t(`Day ${day} ยังว่างอยู่`)}
+          title={t(`Day ${displayTripDay(trip, day)} ยังว่างอยู่`)}
           description={t("เพิ่มสถานที่ เวลา และวิธีเดินทางสำหรับวันนี้")}
           action={t("เพิ่มสถานที่")}
           onClick={addPlace}
@@ -4425,6 +4440,7 @@ function TimelineScreen({
         <TripAccommodations
           tripId={trip.id}
           totalDays={trip.total_days}
+          hasDayZero={trip.has_day_zero}
           startDate={baseDate}
           members={trip.members || []}
           cards={cards}
@@ -4700,7 +4716,7 @@ export function LegacyPlanExpensesContent({
               >
                 <div className="expense-day-head">
                   <div>
-                    <span>DAY {dayNumber}</span>
+                    <span>DAY {displayTripDay(trip, dayNumber)}</span>
                     <small>{t(`${count} รายการ`)}</small>
                   </div>
                   <div className="expense-day-actions">
@@ -4710,13 +4726,13 @@ export function LegacyPlanExpensesContent({
                       disabled={!dayItems.length}
                       title={t(
                         dayItems.length
-                          ? `เพิ่มค่าใช้จ่าย Day ${dayNumber}`
+                          ? `เพิ่มค่าใช้จ่าย Day ${displayTripDay(trip, dayNumber)}`
                           : "วันนี้ยังไม่มี Timeline",
                       )}
                       aria-label={t(
                         dayItems.length
-                          ? `เพิ่มค่าใช้จ่าย Day ${dayNumber}`
-                          : `Day ${dayNumber} ยังไม่มี Timeline`,
+                          ? `เพิ่มค่าใช้จ่าย Day ${displayTripDay(trip, dayNumber)}`
+                          : `Day ${displayTripDay(trip, dayNumber)} ยังไม่มี Timeline`,
                       )}
                       onClick={() =>
                         dayItems.length &&
@@ -5085,7 +5101,7 @@ function PlanExpensesContent({
               >
                 <div className="expense-day-head">
                   <div>
-                    <span>DAY {dayNumber}</span>
+                    <span>DAY {displayTripDay(trip, dayNumber)}</span>
                     <small>{t(`${count} รายการ`)}</small>
                   </div>
                   <div className="expense-day-actions">
@@ -5104,13 +5120,13 @@ function PlanExpensesContent({
                       disabled={!dayItems.length}
                       title={t(
                         dayItems.length
-                          ? `เพิ่มค่าใช้จ่าย Day ${dayNumber}`
+                          ? `เพิ่มค่าใช้จ่าย Day ${displayTripDay(trip, dayNumber)}`
                           : "วันนี้ยังไม่มี Timeline",
                       )}
                       aria-label={t(
                         dayItems.length
-                          ? `เพิ่มค่าใช้จ่าย Day ${dayNumber}`
-                          : `Day ${dayNumber} ยังไม่มี Timeline`,
+                          ? `เพิ่มค่าใช้จ่าย Day ${displayTripDay(trip, dayNumber)}`
+                          : `Day ${displayTripDay(trip, dayNumber)} ยังไม่มี Timeline`,
                       )}
                       onClick={() =>
                         dayItems.length &&
@@ -7255,7 +7271,7 @@ function CostSheet({
               >
                 {availableDays.map((day) => (
                   <option key={day} value={day}>
-                    Day {day} ·{" "}
+                    Day {displayTripDay(trip, day)} ·{" "}
                     {tripDayLabel(
                       localDate(trip.outbound_departure_at, trip.start_date),
                       day,
@@ -7974,7 +7990,7 @@ function ModalForm({
                       (_, index) => index + 1,
                     ).map((number) => (
                       <option key={number} value={number}>
-                        Day {number}
+                        Day {displayTripDay(trip, number)}
                       </option>
                     ))}
                   </select>

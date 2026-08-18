@@ -11,6 +11,8 @@
     "start": "next start -p 8001",
     "test": "npm run build",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel",
+    "backup": "zsh scripts/backup-bn-trip.sh",
+    "restore": "zsh scripts/restore-bn-trip.sh",
     "db:generate": "drizzle-kit generate",
     "db:setup:cloud": "node scripts/setup-cloud-db.mjs",
     "db:migrate:data": "node scripts/migrate-postgres-data.mjs"

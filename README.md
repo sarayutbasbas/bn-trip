@@ -235,6 +235,37 @@ npm run db:migrate:data
 
 บัญชี demo มีไว้สำหรับ local development เท่านั้น ก่อนนำขึ้นใช้งานจริงควรเปลี่ยนรหัสผ่าน, ใช้ HTTPS, ตั้ง `AUTH_SECRET` แบบสุ่ม, จำกัด rate ของ login endpoint และสำรอง PostgreSQL ตามรอบเวลา
 
+## Backup และกู้คืน
+
+Git เก็บโค้ด, schema และ migrations แต่ **ไม่เก็บข้อมูล PostgreSQL หรือไฟล์ใน Docker volumes** ระบบ backup จึงสร้าง snapshot ที่มีทั้ง `database.dump` และ `uploads.tar.gz` พร้อม checksum ในชุดเดียวกัน
+
+แนะนำให้เก็บตามหลัก 3-2-1:
+
+1. ข้อมูลจริงใน server
+2. snapshot รายวันบน external HDD
+3. สำเนาเข้ารหัสนอกสถานที่บน Cloudflare R2 ผ่าน `rclone crypt`
+
+ตั้งค่า local/external backup:
+
+```bash
+cp .env.backup.example .env.backup
+# แก้ BNTRIP_BACKUP_DIR ให้เป็น path ของ external HDD
+npm run backup
+```
+
+ถ้าตั้ง `BNTRIP_RCLONE_REMOTE` สคริปต์จะส่ง snapshot ขึ้น remote หลังตรวจสอบไฟล์แล้ว ค่านี้ควรชี้ไปที่ **crypt remote** ของ rclone ไม่ใช่ R2 remote ตรง ๆ เพื่อให้ชื่อไฟล์และเนื้อหาถูกเข้ารหัสก่อนออกจากเครื่อง ห้าม commit `.env.backup` หรือรหัสผ่าน rclone ขึ้น Git
+
+ไฟล์ตัวอย่าง `launchd/com.bntrip.backup.plist` รันทุกวันเวลา 03:15 น. หลังตั้งค่าและทดสอบ `npm run backup` สำเร็จแล้วจึงคัดลอกไปที่ `~/Library/LaunchAgents/` และโหลดด้วย `launchctl`
+
+ตรวจรายการใน snapshot และกู้คืนด้วย:
+
+```bash
+ls -la /path/to/snapshot
+RESTORE_CONFIRM=restore-bn-trip npm run restore -- /path/to/snapshot
+```
+
+การ restore จะตรวจ checksum, หยุด app ชั่วคราว แล้ว **แทนที่ฐานข้อมูลและไฟล์อัปโหลดปัจจุบันทั้งหมด** ควรทดสอบกู้คืนบนเครื่อง/สภาพแวดล้อมทดลองเป็นระยะ เพราะ backup ที่ไม่เคยทดสอบ restore ยังถือว่าเชื่อถือไม่ได้
+
 ## Logo
 
 โลโก้ BN Trip อยู่ที่ `public/bn-trip-logo.png` เป็น PNG โปร่งใส ใช้กับ navbar, favicon และ PWA icon ส่วน `bn-trip-logo-source.png` คือไฟล์ต้นฉบับพื้น chroma key

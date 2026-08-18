@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS trips (
   traveller_count INTEGER NOT NULL DEFAULT 2 CHECK (traveller_count > 0),
   budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0, shopping_budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0,
   outbound_departure_at TIMESTAMP, return_departure_at TIMESTAMP,
+  has_day_zero BOOLEAN NOT NULL DEFAULT false,
   cover_image_url TEXT, google_photos_url TEXT, timezone VARCHAR(80) NOT NULL DEFAULT 'Asia/Bangkok',
   country_code CHAR(2), country_name VARCHAR(120),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

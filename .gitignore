@@ -31,6 +31,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.env.backup.example
+
+# local backup snapshots (the configured destination should normally be outside the repo)
+/backups/
 
 # vercel
 .vercel
