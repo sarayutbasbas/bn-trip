@@ -48,6 +48,7 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
+  BedDouble,
   BusFront,
   CalendarDays,
   CarFront,
@@ -104,6 +105,10 @@ const TripWorkspace = dynamic(
 const TripFlights = dynamic(
   () => import("@/src/components/trip-flights").then((module) => module.TripFlights),
   { loading: () => <div className="card">กำลังเปิดข้อมูลเที่ยวบิน…</div> },
+);
+const TripAccommodations = dynamic(
+  () => import("@/src/components/trip-accommodations").then((module) => module.TripAccommodations),
+  { loading: () => <div className="card">กำลังเปิดข้อมูลที่พัก…</div> },
 );
 
 type Screen =
@@ -274,6 +279,9 @@ export type Itinerary = {
   transport_mode: string | null;
   transport_note: string | null;
   cost_items: CostItem[];
+  accommodation_id?: string | null;
+  accommodation_night?: number | null;
+  accommodation_nights?: number | null;
 };
 type Modal =
   | { type: "trip"; trip?: Trip }
@@ -585,6 +593,8 @@ const EN_TEXT: Record<string, string> = {
   อาหาร: "Food",
   เดินทาง: "Transport",
   ที่พัก: "Accommodation",
+  เที่ยวบิน: "Flights",
+  เที่ยวบินและที่พัก: "Flights & stays",
   กิจกรรม: "Activities",
   ของฝาก: "Souvenirs",
   ยอดเงิน: "Amount",
@@ -3252,11 +3262,15 @@ function useItinerariesByDay(items: Itinerary[]) {
       else grouped.set(item.day_number, [item]);
     }
     for (const dayItems of grouped.values())
-      dayItems.sort((left, right) =>
-        (left.start_time || "99:99").localeCompare(
+      dayItems.sort((left, right) => {
+        const accommodationOrder =
+          Number(Boolean(left.accommodation_id)) -
+          Number(Boolean(right.accommodation_id));
+        if (accommodationOrder) return accommodationOrder;
+        return (left.start_time || "99:99").localeCompare(
           right.start_time || "99:99",
-        ),
-      );
+        );
+      });
     return grouped;
   }, [items]);
 }
@@ -3504,6 +3518,7 @@ function TripHub({
   refreshEnabled,
   initialWorkspaceTab,
   initialView,
+  initialAccommodationId,
 }: {
   trip: Trip;
   items: Itinerary[];
@@ -3525,12 +3540,19 @@ function TripHub({
   onRefresh: () => Promise<void>;
   refreshEnabled: boolean;
   initialWorkspaceTab?: WorkspaceTab;
-  initialView?: "plan" | "flights";
+  initialView?: "plan" | "flights" | "stays";
+  initialAccommodationId?: string;
 }) {
   const t = useT();
   const lang = useContext(LanguageContext);
-  const [view, setView] = useState<"plan" | "expenses" | "workspace" | "flights">(
-    initialWorkspaceTab ? "workspace" : initialView || "plan",
+  const [view, setView] = useState<"plan" | "expenses" | "workspace" | "flights" | "stays">(
+    initialWorkspaceTab
+      ? "workspace"
+      : initialView === "stays" && trip.total_days <= 1
+        ? trip.has_flights
+          ? "flights"
+          : "plan"
+        : initialView || "plan",
   );
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>(
     initialWorkspaceTab || "checklist",
@@ -3540,6 +3562,9 @@ function TripHub({
     checklistIncomplete: false,
   });
   const [flightRefreshToken, setFlightRefreshToken] = useState(0);
+  const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(
+    initialAccommodationId || null,
+  );
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
@@ -3601,7 +3626,7 @@ function TripHub({
     };
   }, [trip.id, trip.has_flights]);
   function selectView(
-    nextView: "plan" | "expenses" | "workspace" | "flights",
+    nextView: "plan" | "expenses" | "workspace" | "flights" | "stays",
     nextWorkspaceTab = activeWorkspaceTab,
   ) {
     setView(nextView);
@@ -3610,7 +3635,7 @@ function TripHub({
     if (nextView === "workspace")
       url.searchParams.set("workspace", nextWorkspaceTab);
     else url.searchParams.delete("workspace");
-    if (nextView === "flights") url.searchParams.set("view", "flights");
+    if (nextView === "flights" || nextView === "stays") url.searchParams.set("view", nextView);
     else url.searchParams.delete("view");
     window.history.replaceState(
       window.history.state,
@@ -3660,7 +3685,9 @@ function TripHub({
   const currentIndex =
     tripDay === day
       ? dayItems.reduce((found, item, index) => {
-          const start = timeInMinutes(item.start_time);
+          const start = timeInMinutes(
+            item.start_time || (item.accommodation_id ? "23:30" : null),
+          );
           return start !== null && start <= nowMinutes ? index : found;
         }, -1)
       : -1;
@@ -3710,7 +3737,7 @@ function TripHub({
   return (
     <>
       <PullRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
-      <div ref={hubRef} className={`screen trip-hub-screen dashboard-pull-content ${pullDistance > 0 && !refreshing ? "is-pulling" : ""}`} style={pullDistance > 0 ? { transform: `translateY(${pullDistance}px)` } : undefined}>
+      <div ref={hubRef} className="screen trip-hub-screen">
       <div className="trip-cover-region">
         <TripHeader
           trip={trip}
@@ -3735,13 +3762,70 @@ function TripHub({
                   <span>{t("เปิด Google Photos")}</span>
                 </a>
               )}
-              {trip.has_flights && (
-                <button className={completion.flightIncomplete ? "has-notification-dot" : ""} type="button" onClick={() => selectView(view === "flights" ? "plan" : "flights")}>
-                  {view === "flights" ? <Navigation size={18} /> : <Plane size={18} />}
-                  <span>{t(view === "flights" ? "แพลน" : "เที่ยวบิน")}</span>
-                  {completion.flightIncomplete && <i className="notification-dot" aria-label={t("ข้อมูลเที่ยวบินหรือประกันเดินทางยังไม่ครบ")} />}
-                </button>
-              )}
+              {(trip.has_flights || trip.total_days > 1) && <button
+                className={
+                  view !== "flights" &&
+                  view !== "stays" &&
+                  trip.has_flights &&
+                  completion.flightIncomplete
+                    ? "has-notification-dot"
+                    : ""
+                }
+                type="button"
+                onClick={() =>
+                  selectView(
+                    view === "flights" || view === "stays"
+                      ? "plan"
+                      : trip.has_flights
+                        ? "flights"
+                        : "stays",
+                  )
+                }
+                aria-label={t(
+                  view === "flights" || view === "stays"
+                    ? "แพลน"
+                    : trip.has_flights && trip.total_days > 1
+                      ? "เที่ยวบินและที่พัก"
+                      : trip.has_flights
+                        ? "เที่ยวบิน"
+                        : "ที่พัก",
+                )}
+              >
+                {view === "flights" || view === "stays" ? (
+                  <Navigation size={18} />
+                ) : trip.has_flights && trip.total_days > 1 ? (
+                  <span className="travel-stay-icon" aria-hidden="true">
+                    <Plane />
+                    <BedDouble />
+                  </span>
+                ) : trip.has_flights ? (
+                  <Plane size={18} />
+                ) : (
+                  <BedDouble size={18} />
+                )}
+                <span>
+                  {t(
+                    view === "flights" || view === "stays"
+                      ? "แพลน"
+                      : trip.has_flights && trip.total_days > 1
+                        ? "เที่ยวบินและที่พัก"
+                        : trip.has_flights
+                          ? "เที่ยวบิน"
+                          : "ที่พัก",
+                  )}
+                </span>
+                {view !== "flights" &&
+                  view !== "stays" &&
+                  trip.has_flights &&
+                  completion.flightIncomplete && (
+                    <i
+                      className="notification-dot"
+                      aria-label={t(
+                        "ข้อมูลเที่ยวบินหรือประกันเดินทางยังไม่ครบ",
+                      )}
+                    />
+                  )}
+              </button>}
               <button
                 className={completion.checklistIncomplete ? "has-notification-dot" : ""}
                 type="button"
@@ -3879,7 +3963,7 @@ function TripHub({
                   return (
                     <div
                       data-itinerary-id={item.id}
-                      className={`timeline-stop ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
+                      className={`timeline-stop ${item.accommodation_id ? "accommodation-stop" : ""} ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                       key={item.id}
                     >
                       {index > 0 && item.transport_mode && (
@@ -3890,26 +3974,44 @@ function TripHub({
                       )}
                       <div className="event">
                         <div className="event-dot">
-                          <MapPin size={16} />
+                          {item.accommodation_id ? <BedDouble size={16} /> : <MapPin size={16} />}
                         </div>
                         <article
                           className="event-card editable-event-card"
                           onClick={(event) => {
                             if (
                               !(event.target as HTMLElement).closest("button,a")
-                            )
-                              editPlace(item);
+                            ) {
+                              if (item.accommodation_id) {
+                                setOpenAccommodationId(item.accommodation_id);
+                              }
+                              else editPlace(item);
+                            }
                           }}
                         >
                           <button
                             className="event-card-main"
-                            onClick={() => editPlace(item)}
+                            onClick={() => {
+                              if (item.accommodation_id) {
+                                setOpenAccommodationId(item.accommodation_id);
+                              } else editPlace(item);
+                            }}
                           >
                             <div className="event-copy">
                               <span className="event-time">
-                                {item.start_time?.slice(0, 5) ||
-                                  t("ไม่ระบุเวลา")}{" "}
+                                {item.accommodation_id
+                                  ? "23:30"
+                                  : item.start_time?.slice(0, 5) ||
+                                    t("ไม่ระบุเวลา")}{" "}
                                 · {slots[item.time_slot]}
+                                {item.accommodation_id && (
+                                  <>
+                                    {" "}
+                                    · พักที่นี่ คืนที่{" "}
+                                    {item.accommodation_night}/
+                                    {item.accommodation_nights}
+                                  </>
+                                )}
                               </span>
                               <div className="timeline-title-row">
                                 <h3>{item.place_name}</h3>
@@ -3918,7 +4020,19 @@ function TripHub({
                                 <MapPin size={10} />
                                 {item.address || t("ยังไม่ได้ระบุสถานที่")}
                               </p>
-                              {item.transport_note && (
+                              {item.accommodation_id && (
+                                <>
+                                  {item.transport_note &&
+                                    !item.transport_note.startsWith(
+                                      "พักที่นี่ · คืนที่",
+                                    ) && (
+                                      <p className="event-detail">
+                                        {item.transport_note}
+                                      </p>
+                                    )}
+                                </>
+                              )}
+                              {!item.accommodation_id && item.transport_note && (
                                 <p className="event-detail">
                                   {item.transport_note}
                                 </p>
@@ -3952,7 +4066,7 @@ function TripHub({
                             >
                               <LocateFixed size={17} />
                             </a>
-                            <button
+                            {!item.accommodation_id && <button
                               type="button"
                               className="navigate-point-btn"
                               onClick={() => duplicatePlace(item)}
@@ -3960,7 +4074,7 @@ function TripHub({
                               title={t("ทำสำเนาแผน")}
                             >
                               <Copy size={16} />
-                            </button>
+                            </button>}
                             <button
                               type="button"
                               className="navigate-point-btn expense-point-btn"
@@ -3979,6 +4093,46 @@ function TripHub({
               </div>
             )}
           </>
+        ) : view === "flights" || view === "stays" ? (
+          <div className="travel-stay-section">
+            {trip.has_flights && trip.total_days > 1 && <nav className="travel-stay-tabs" aria-label={t("เที่ยวบินและที่พัก")}><button type="button" className={view==="flights"?"active":""} onClick={()=>selectView("flights")}><Plane size={17}/><span>{t("เที่ยวบิน")}</span>{completion.flightIncomplete&&<i className="notification-dot"/>}</button><button type="button" className={view==="stays"?"active":""} onClick={()=>selectView("stays")}><BedDouble size={17}/><span>{t("ที่พัก")}</span></button></nav>}
+            {view === "flights" && trip.has_flights ? <TripFlights
+              tripId={trip.id}
+              members={trip.members || []}
+              tripOutboundAt={trip.outbound_departure_at}
+              tripReturnAt={trip.return_departure_at}
+              canDelete={trip.access_role !== "view"}
+              notify={notify}
+              onChanged={onFlightChanged}
+              refreshToken={flightRefreshToken}
+              onOpenDocuments={() => selectView("workspace", "documents")}
+            /> : <TripAccommodations
+              tripId={trip.id}
+              totalDays={trip.total_days}
+              startDate={baseDate}
+              members={trip.members || []}
+              cards={cards}
+              locations={items.flatMap((item) =>
+                item.address
+                  ? [{ name: item.place_name, address: item.address }]
+                  : [],
+              )}
+              openAccommodationId={openAccommodationId}
+              onAccommodationOpened={() => {
+                setOpenAccommodationId(null);
+                const url = new URL(window.location.href);
+                url.searchParams.delete("accommodation");
+                window.history.replaceState(
+                  window.history.state,
+                  "",
+                  `${url.pathname}${url.search}${url.hash}`,
+                );
+              }}
+              canDelete={trip.access_role !== "view"}
+              notify={notify}
+              onChanged={onFlightChanged}
+            />}
+          </div>
         ) : view === "expenses" ? (
           <PlanExpensesContent
             trip={trip}
@@ -3986,24 +4140,32 @@ function TripHub({
             cards={cards}
             openCost={openCost}
           />
-        ) : view === "flights" ? (
-          <TripFlights
-            tripId={trip.id}
-            members={trip.members || []}
-            tripOutboundAt={trip.outbound_departure_at}
-            tripReturnAt={trip.return_departure_at}
-            canDelete={trip.access_role !== "view"}
-            notify={notify}
-            onChanged={onFlightChanged}
-            refreshToken={flightRefreshToken}
-            onOpenDocuments={() => selectView("workspace", "documents")}
-          />
         ) : (
           <TripWorkspace
             tripId={trip.id}
             onUndo={() => location.reload()}
             label={t}
             initialTab={activeWorkspaceTab}
+          />
+        )}
+        {view === "plan" && trip.total_days > 1 && (
+          <TripAccommodations
+            tripId={trip.id}
+            totalDays={trip.total_days}
+            startDate={baseDate}
+            members={trip.members || []}
+            cards={cards}
+            locations={items.flatMap((item) =>
+              item.address
+                ? [{ name: item.place_name, address: item.address }]
+                : [],
+            )}
+            openAccommodationId={openAccommodationId}
+            onAccommodationOpened={() => setOpenAccommodationId(null)}
+            overlayOnly
+            canDelete={trip.access_role !== "view"}
+            notify={notify}
+            onChanged={onFlightChanged}
           />
         )}
       </div>
@@ -4015,6 +4177,7 @@ function TripHub({
 function TimelineScreen({
   trip,
   items,
+  cards,
   day,
   setDay,
   addPlace,
@@ -4022,9 +4185,11 @@ function TimelineScreen({
   onRefresh,
   refreshEnabled,
   notify,
+  onChanged,
 }: {
   trip: Trip;
   items: Itinerary[];
+  cards: PaymentCard[];
   day: number;
   setDay: (n: number) => void;
   addPlace: () => void;
@@ -4032,6 +4197,7 @@ function TimelineScreen({
   onRefresh: () => Promise<void>;
   refreshEnabled: boolean;
   notify: (message: string) => void;
+  onChanged: () => void | Promise<void>;
 }) {
   const t = useT();
   const lang = useContext(LanguageContext);
@@ -4040,6 +4206,7 @@ function TimelineScreen({
   const ended = tripHasEnded(trip, now);
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
+  const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(null);
   const { pullDistance, refreshing } = usePullToRefresh(
     refreshEnabled,
     async () => {
@@ -4074,14 +4241,16 @@ function TimelineScreen({
   const currentIndex =
     tripDay === day
       ? dayItems.reduce((found, item, index) => {
-          const start = timeInMinutes(item.start_time);
+          const start = timeInMinutes(
+            item.start_time || (item.accommodation_id ? "23:30" : null),
+          );
           return start !== null && start <= nowMinutes ? index : found;
         }, -1)
       : -1;
   return (
     <>
       <PullRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
-      <div className={`screen timeline-screen dashboard-pull-content ${pullDistance > 0 && !refreshing ? "is-pulling" : ""}`} style={pullDistance > 0 ? { transform: `translateY(${pullDistance}px)` } : undefined}>
+      <div className="screen timeline-screen">
       <TripHeader trip={trip} back={back} />
       <div
         ref={dayStripRef}
@@ -4149,7 +4318,7 @@ function TimelineScreen({
                 (tripDay === day && currentIndex >= 0 && index < currentIndex));
             return (
               <div
-                className={`timeline-stop ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
+                className={`timeline-stop ${item.accommodation_id ? "accommodation-stop" : ""} ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                 key={item.id}
               >
                 {index > 0 && item.transport_mode && (
@@ -4160,13 +4329,29 @@ function TimelineScreen({
                 )}
                 <div className="event">
                   <div className="event-dot">
-                    <MapPin size={16} />
+                    {item.accommodation_id ? <BedDouble size={16} /> : <MapPin size={16} />}
                   </div>
-                  <article className="event-card">
+                  <article
+                    className="event-card"
+                    onClick={() => {
+                      if (item.accommodation_id)
+                        setOpenAccommodationId(item.accommodation_id);
+                    }}
+                  >
                     <div className="event-copy">
                       <span className="event-time">
-                        {item.start_time?.slice(0, 5) || t("ไม่ระบุเวลา")} ·{" "}
-                        {slots[item.time_slot]}
+                        {item.accommodation_id
+                          ? "23:30"
+                          : item.start_time?.slice(0, 5) ||
+                            t("ไม่ระบุเวลา")}{" "}
+                        · {slots[item.time_slot]}
+                        {item.accommodation_id && (
+                          <>
+                            {" "}
+                            · พักที่นี่ คืนที่ {item.accommodation_night}/
+                            {item.accommodation_nights}
+                          </>
+                        )}
                       </span>
                       <div className="timeline-title-row">
                         <h3>{item.place_name}</h3>
@@ -4175,7 +4360,19 @@ function TimelineScreen({
                         <MapPin size={10} />
                         {item.address || t("ยังไม่ได้ระบุที่อยู่")}
                       </p>
-                      {item.transport_note && (
+                      {item.accommodation_id && (
+                        <>
+                          {item.transport_note &&
+                            !item.transport_note.startsWith(
+                              "พักที่นี่ · คืนที่",
+                            ) && (
+                              <p className="event-detail">
+                                {item.transport_note}
+                              </p>
+                            )}
+                        </>
+                      )}
+                      {!item.accommodation_id && item.transport_note && (
                         <p className="event-detail">{item.transport_note}</p>
                       )}
                     </div>
@@ -4185,6 +4382,26 @@ function TimelineScreen({
             );
           })}
         </div>
+      )}
+      {trip.total_days > 1 && (
+        <TripAccommodations
+          tripId={trip.id}
+          totalDays={trip.total_days}
+          startDate={baseDate}
+          members={trip.members || []}
+          cards={cards}
+          locations={items.flatMap((item) =>
+            item.address
+              ? [{ name: item.place_name, address: item.address }]
+              : [],
+          )}
+          openAccommodationId={openAccommodationId}
+          onAccommodationOpened={() => setOpenAccommodationId(null)}
+          overlayOnly
+          canDelete={trip.access_role !== "view"}
+          notify={notify}
+          onChanged={onChanged}
+        />
       )}
       </div>
     </>
@@ -7046,9 +7263,17 @@ function CostSheet({
           <div className="form-row expense-category-split-row">
             <div className="field">
               <label>{t("หมวดหมู่")}</label>
+              {modal.item?.accommodation_id && (
+                <input type="hidden" name="category" value="ที่พัก" />
+              )}
               <select
                 name="category"
-                defaultValue={existing?.category || "อาหาร"}
+                defaultValue={
+                  modal.item?.accommodation_id
+                    ? "ที่พัก"
+                    : existing?.category || "อาหาร"
+                }
+                disabled={Boolean(modal.item?.accommodation_id)}
               >
                 {categories.map((category) => (
                   <option key={category} value={category}>
@@ -7861,6 +8086,7 @@ export function BNTripApp({
   authError,
   workspaceTab,
   tripView,
+  accommodationId,
   initialDashboard,
   initialAnalytics,
   initialTrip,
@@ -7877,7 +8103,8 @@ export function BNTripApp({
   returnTo?: string;
   authError?: string;
   workspaceTab?: WorkspaceTab;
-  tripView?: "flights";
+  tripView?: "flights" | "stays";
+  accommodationId?: string;
   initialDashboard?: {
     ongoing: Trip[];
     upcoming: Trip[];
@@ -8662,11 +8889,13 @@ export function BNTripApp({
       refreshEnabled={!modal && !confirmation}
       initialWorkspaceTab={workspaceTab}
       initialView={tripView}
+      initialAccommodationId={accommodationId}
     />
   ) : page === "timeline" && selected ? (
     <TimelineScreen
       trip={selected}
       items={itineraries}
+      cards={tripCards}
       day={activeDay}
       setDay={setActiveDay}
       addPlace={protect(() => setModal({ type: "place" }))}
@@ -8674,6 +8903,7 @@ export function BNTripApp({
       onRefresh={() => refreshActiveTrip(selected.id)}
       refreshEnabled={!modal && !confirmation}
       notify={flash}
+      onChanged={() => refreshActiveTrip(selected.id)}
     />
   ) : page === "expenses" && selected ? (
     <ExpensesScreen

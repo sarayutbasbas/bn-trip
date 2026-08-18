@@ -344,6 +344,45 @@ const migrations = [
       "ALTER TABLE trip_travel_insurance_passengers ADD COLUMN IF NOT EXISTS declined_insurance BOOLEAN NOT NULL DEFAULT false",
     ],
   },
+  {
+    version: 26,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS trip_accommodations (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+        name VARCHAR(180) NOT NULL,
+        location TEXT NOT NULL DEFAULT '',
+        check_in_day INTEGER NOT NULL CHECK (check_in_day >= 1),
+        check_out_day INTEGER NOT NULL CHECK (check_out_day > check_in_day),
+        check_in_time TIME NOT NULL DEFAULT '15:00',
+        check_out_time TIME NOT NULL DEFAULT '11:00',
+        foreign_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (foreign_amount >= 0),
+        currency CHAR(3) NOT NULL DEFAULT 'THB',
+        exchange_rate NUMERIC(14,6) NOT NULL DEFAULT 1 CHECK (exchange_rate > 0),
+        rate_date DATE NOT NULL,
+        payment_method VARCHAR(260) NOT NULL DEFAULT 'เงินสด',
+        credit_card_id UUID REFERENCES credit_cards(id) ON DELETE SET NULL,
+        payment_owner_name VARCHAR(120),
+        split_member_ids UUID[] NOT NULL DEFAULT '{}',
+        cost_item_id UUID NOT NULL DEFAULT gen_random_uuid(),
+        created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      "ALTER TABLE itineraries ADD COLUMN IF NOT EXISTS accommodation_id UUID REFERENCES trip_accommodations(id) ON DELETE SET NULL",
+      "ALTER TABLE itineraries ADD COLUMN IF NOT EXISTS accommodation_night INTEGER",
+      "ALTER TABLE itineraries ADD COLUMN IF NOT EXISTS accommodation_nights INTEGER",
+      "CREATE INDEX IF NOT EXISTS trip_accommodations_trip_day_idx ON trip_accommodations(trip_id,check_in_day,check_out_day)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS trip_accommodations_cost_item_unique_idx ON trip_accommodations(cost_item_id)",
+      "CREATE INDEX IF NOT EXISTS itineraries_accommodation_idx ON itineraries(accommodation_id,accommodation_night)",
+    ],
+  },
+  {
+    version: 27,
+    statements: [
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

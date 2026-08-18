@@ -3514,6 +3514,7 @@ button:disabled {
 .trip-cover-actions a span {
   display: none;
 }
+.trip-cover-actions .travel-stay-icon{position:relative;width:24px;height:22px;display:block}.trip-cover-actions .travel-stay-icon svg{position:absolute;width:14px;height:14px}.trip-cover-actions .travel-stay-icon svg:first-child{top:0;left:0}.trip-cover-actions .travel-stay-icon svg:last-child{right:0;bottom:0;padding:1px;border-radius:5px;background:rgba(28,28,30,.64)}
 .trip-cover-actions .has-notification-dot {
   position: relative;
   overflow: visible;
@@ -9177,6 +9178,9 @@ html.sheet-open body {
   font-size: 9px;
 }
 
+.travel-stay-section{position:relative}.travel-stay-tabs{margin:4px 0 14px;padding:4px;border:1px solid var(--border);border-radius:16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--surface-2)}.travel-stay-tabs button{position:relative;min-height:43px;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:7px;color:var(--muted);background:transparent;font-size:11px;font-weight:650}.travel-stay-tabs button.active{color:#fff;background:var(--brand-gradient);box-shadow:0 6px 16px rgba(255,95,16,.2)}.travel-stay-tabs .notification-dot{top:6px;right:8px;width:8px;height:8px}.travel-stay-tabs button.active .notification-dot{background:#fff}.accommodation-panel{position:relative;padding:8px 0 128px}.accommodation-list{display:grid;gap:10px}.accommodation-card{width:100%;min-height:92px;padding:13px;border:1px solid var(--border);border-radius:20px;display:grid;grid-template-columns:46px minmax(0,1fr) auto;align-items:center;gap:11px;color:var(--ink);background:var(--surface);box-shadow:var(--shadow-sm);text-align:left}.accommodation-card:active{transform:scale(.99)}.accommodation-card-icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:var(--orange);background:var(--brand-soft)}.accommodation-card-copy{min-width:0;display:grid;gap:4px}.accommodation-card-copy strong{overflow:hidden;font-size:14px;text-overflow:ellipsis;white-space:nowrap}.accommodation-card-copy small{min-width:0;display:flex;align-items:center;gap:4px;overflow:hidden;color:var(--muted);font-size:9px;text-overflow:ellipsis;white-space:nowrap}.accommodation-card-copy svg{flex:0 0 auto;color:var(--orange)}.accommodation-card-price{min-width:94px;display:grid;justify-items:end;gap:3px}.accommodation-card-price strong{font-size:12px;color:var(--orange)}.accommodation-card-price small{max-width:110px;overflow:hidden;color:var(--muted);font-size:8px;text-overflow:ellipsis;white-space:nowrap}.accommodation-card-price i{width:28px;height:28px;margin-top:3px;border-radius:50%;display:grid;place-items:center;color:var(--muted);background:var(--surface-3);font-style:normal}.accommodation-empty{min-height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center;color:var(--muted)}.accommodation-empty>span{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;color:var(--orange);background:var(--brand-soft)}.accommodation-empty strong{color:var(--ink);font-size:16px}.accommodation-empty p{max-width:290px;margin:0;font-size:10px;line-height:1.5}.accommodation-sheet{max-height:min(760px,calc(100dvh - 22px));display:flex;flex-direction:column}.accommodation-sheet-scroll{min-height:0;padding:2px 1px;display:grid;gap:10px;overflow-y:auto;overscroll-behavior:contain}.accommodation-price-section{padding:12px;border-radius:18px;display:grid;gap:10px;background:var(--surface-2)}.accommodation-price-heading{display:flex;align-items:center;gap:8px}.accommodation-price-heading>svg{color:var(--orange)}.accommodation-price-heading>div{display:grid;gap:2px}.accommodation-price-heading strong{font-size:13px}.accommodation-price-heading small,.accommodation-rate-note{color:var(--muted);font-size:9px}.accommodation-rate-note{margin:-4px 2px 0}.accommodation-split{margin:0;padding:0;border:0;display:flex;flex-wrap:wrap;gap:6px}.accommodation-split legend{width:100%;margin-bottom:4px;font-size:10px;font-weight:650}.accommodation-split label{min-height:36px;padding:5px 8px;border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;gap:6px;background:var(--surface-solid);font-size:9px;cursor:pointer}.accommodation-split label:has(input:checked){border-color:var(--orange);background:var(--brand-soft)}.accommodation-split input{position:absolute;opacity:0}.accommodation-split .split-checkmark{width:17px;height:17px}.accommodation-night-badge{min-height:22px;padding:0 8px;border-radius:999px;display:inline-flex;align-items:center;color:var(--orange);background:var(--brand-soft);font-size:8px;font-weight:700;white-space:nowrap}.accommodation-stop .event-dot{color:#fff;background:var(--brand-gradient)}.accommodation-stop .event-card{border-color:color-mix(in srgb,var(--orange) 24%,var(--border));background:color-mix(in srgb,var(--brand-soft) 18%,var(--surface))}.accommodation-stop .timeline-title-row{align-items:center;gap:7px}.accommodation-fab{overflow:visible}
+@media(max-width:600px){.accommodation-card{grid-template-columns:42px minmax(0,1fr) auto;padding:11px}.accommodation-card-icon{width:42px;height:42px}.accommodation-card-price{min-width:80px}.accommodation-sheet{height:min(760px,calc(100dvh - 16px))}}
+
 /* Flight analytics. */
 .analytics-flight-overview,
 .analytics-airline-card,
@@ -9304,4 +9308,158 @@ html.sheet-open body {
 @media (max-width: 600px) {
   .analytics-flight-pattern-grid { grid-template-columns:1fr; }
   .analytics-route-list { grid-template-columns:1fr; }
+}
+
+.accommodation-price-section .split-member-field { width: 100%; }
+.accommodation-payment-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.accommodation-card-brand {
+  width: 42px;
+  height: 25px;
+  flex: 0 0 42px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  background: var(--surface-solid);
+  font-size: 10px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: -.3px;
+}
+.accommodation-card-brand.card-brand-visa { color: #17357b; }
+.accommodation-card-brand.card-brand-mastercard { color: #e94d23; }
+.accommodation-card-brand.card-brand-jcb { color: #16734f; }
+.accommodation-sheet .trip-location-suggestions { z-index: 45; }
+.accommodation-panel > .expense-toolbar h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -.02em;
+}
+.accommodation-panel > .expense-toolbar { margin-bottom: 16px; }
+.accommodation-panel.accommodation-overlay-only {
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
+.accommodation-card {
+  position: relative;
+  min-height: 106px;
+  padding: 15px 16px;
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--brand-soft) 58%, transparent), transparent 42%),
+    var(--surface);
+}
+.accommodation-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--brand-gradient);
+}
+.accommodation-card-icon {
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--orange) 16%, transparent);
+}
+.accommodation-card-copy strong { font-size: 15px; }
+.accommodation-card-price i {
+  color: var(--orange);
+  background: var(--brand-soft);
+}
+.accommodation-stop .event-card-main { cursor: pointer; }
+.accommodation-stop .event-edit {
+  color: var(--orange);
+  background: var(--brand-soft);
+}
+.accommodation-price-section {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.accommodation-price-heading { display: none; }
+.accommodation-card-brand {
+  background-color: #fff;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  font-size: 0;
+  font-style: normal;
+}
+.accommodation-card-brand.card-brand-visa {
+  background-image: url("/card-brands/visa-wordmark.svg");
+  background-size: 74% auto;
+}
+.accommodation-card-brand.card-brand-mastercard {
+  background-image: url("/card-brands/mastercard.svg");
+}
+.accommodation-card-brand.card-brand-jcb {
+  background-image: url("/card-brands/jcb.svg");
+}
+.accommodation-card-brand.card-brand-generic {
+  background-image: url("/card-brands/card.svg");
+}
+.accommodation-stop .event-copy h3 {
+  overflow: visible;
+  line-height: 1.28;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.accommodation-stop .event-copy p {
+  align-items: flex-start;
+  overflow: visible;
+  line-height: 1.45;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.accommodation-stop .event-copy p > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.accommodation-stop .event-card {
+  background: linear-gradient(
+    100deg,
+    #fffdfa 0%,
+    #fff9f4 40%,
+    #fbe8d8 68%,
+    #f2c7a7 100%
+  );
+}
+.accommodation-stop:not(.current-stop) .event-card {
+  border-color: rgba(148, 79, 39, 0.16);
+  box-shadow:
+    var(--shadow-sm),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
+}
+.dark .accommodation-stop .event-card {
+  background: linear-gradient(
+    100deg,
+    #24201e 0%,
+    #29211d 42%,
+    #3b281f 72%,
+    #56301f 100%
+  );
+}
+.dark .accommodation-stop:not(.current-stop) .event-card {
+  border-color: rgba(255, 168, 105, 0.13);
+  box-shadow:
+    var(--shadow-sm),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+.accommodation-stop:not(.current-stop) .event-dot {
+  color: transparent;
+  border: 1px solid #8e8e93;
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--bg);
+}
+.dark .accommodation-stop:not(.current-stop) .event-dot {
+  border-color: #8e8e93;
+  background: #d1d1d6;
+}
+.flight-sheet.accommodation-sheet {
+  height: auto;
+  max-height: calc(100dvh - max(10px, env(safe-area-inset-top)));
 }
