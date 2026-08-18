@@ -22,8 +22,24 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
   const {id}=await params;if(session.isDemo)return isDemoTrip(id)?NextResponse.json({segments:getDemoFlightSegments(id),syncConfigured:false,documentUploadMode:"server"}):NextResponse.json({error:"Not found"},{status:404});
   await ensureLatestDatabaseSchema();if(!await getTripRole(id,session.userId))return NextResponse.json({error:"Not found"},{status:404});
-  const result=await query(`${segmentSelect} WHERE flight.trip_id=$1 ORDER BY CASE flight.journey_type WHEN 'outbound' THEN 0 WHEN 'internal' THEN 1 ELSE 2 END,flight.segment_order,flight.scheduled_departure_at`,[id]);
-  return NextResponse.json({segments:result.rows,syncConfigured:Boolean(process.env.FLIGHTAWARE_API_KEY),documentUploadMode:getStorageBackend()==="blob"?"client":"server"});
+  const [result,insuranceResult]=await Promise.all([
+    query(`${segmentSelect} WHERE flight.trip_id=$1 ORDER BY CASE flight.journey_type WHEN 'outbound' THEN 0 WHEN 'internal' THEN 1 ELSE 2 END,flight.segment_order,flight.scheduled_departure_at`,[id]),
+    query(`SELECT insurance.*,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'id',policy.id,'user_id',policy.user_id,'insured_name',policy.insured_name,
+        'provider_name',policy.provider_name,'policy_number',policy.policy_number,
+        'document_id',document.id,'document_title',document.title,
+        'original_filename',document.original_filename,'mime_type',document.mime_type
+      ) ORDER BY policy.sort_order,policy.created_at,policy.id)
+      FROM trip_travel_insurance_policies policy
+      LEFT JOIN trip_travel_insurance_documents insurance_document ON insurance_document.policy_id=policy.id
+      LEFT JOIN trip_documents document ON document.id=insurance_document.document_id
+      WHERE policy.trip_id=insurance.trip_id),'[]'::jsonb) AS policies,
+      COALESCE((SELECT jsonb_agg(passenger.user_id) FROM trip_travel_insurance_passengers passenger WHERE passenger.trip_id=insurance.trip_id AND passenger.declined_insurance=true),'[]'::jsonb) AS declined_user_ids
+      FROM trip_travel_insurance insurance
+      WHERE insurance.trip_id=$1`,[id]),
+  ]);
+  return NextResponse.json({segments:result.rows,insurance:insuranceResult.rows[0]||null,syncConfigured:Boolean(process.env.FLIGHTAWARE_API_KEY),documentUploadMode:getStorageBackend()==="blob"?"client":"server"});
 }
 
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){

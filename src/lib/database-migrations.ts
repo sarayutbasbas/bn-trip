@@ -214,6 +214,136 @@ const migrations = [
       "UPDATE trip_flight_passengers SET checked_baggage=baggage_note WHERE checked_baggage IS NULL AND baggage_note IS NOT NULL",
     ],
   },
+  {
+    version: 19,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS trip_travel_insurance (
+        trip_id UUID PRIMARY KEY REFERENCES trips(id) ON DELETE CASCADE,
+        provider_name VARCHAR(160) NOT NULL,
+        policy_number VARCHAR(120) NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        emergency_phone VARCHAR(80),
+        document_id UUID REFERENCES trip_documents(id) ON DELETE SET NULL,
+        created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      `CREATE TABLE IF NOT EXISTS trip_travel_insurance_passengers (
+        trip_id UUID NOT NULL REFERENCES trip_travel_insurance(trip_id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider_name VARCHAR(160) NOT NULL,
+        policy_number VARCHAR(120) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (trip_id,user_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS trip_travel_insurance_documents (
+        trip_id UUID NOT NULL REFERENCES trip_travel_insurance(trip_id) ON DELETE CASCADE,
+        document_id UUID NOT NULL REFERENCES trip_documents(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (trip_id,document_id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS trip_travel_insurance_document_idx ON trip_travel_insurance(document_id)",
+      "CREATE INDEX IF NOT EXISTS trip_travel_insurance_passenger_user_idx ON trip_travel_insurance_passengers(user_id)",
+      "CREATE INDEX IF NOT EXISTS trip_travel_insurance_documents_document_idx ON trip_travel_insurance_documents(document_id)",
+    ],
+  },
+  {
+    version: 20,
+    statements: [
+      "ALTER TABLE trip_travel_insurance DROP COLUMN IF EXISTS coverage_start_date",
+      "ALTER TABLE trip_travel_insurance DROP COLUMN IF EXISTS coverage_end_date",
+      `CREATE TABLE IF NOT EXISTS trip_travel_insurance_passengers (
+        trip_id UUID NOT NULL REFERENCES trip_travel_insurance(trip_id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider_name VARCHAR(160) NOT NULL,
+        policy_number VARCHAR(120) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (trip_id,user_id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS trip_travel_insurance_passenger_user_idx ON trip_travel_insurance_passengers(user_id)",
+    ],
+  },
+  {
+    version: 21,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS trip_travel_insurance_documents (
+        trip_id UUID NOT NULL REFERENCES trip_travel_insurance(trip_id) ON DELETE CASCADE,
+        document_id UUID NOT NULL REFERENCES trip_documents(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (trip_id,document_id)
+      )`,
+      "INSERT INTO trip_travel_insurance_documents (trip_id,document_id) SELECT trip_id,document_id FROM trip_travel_insurance WHERE document_id IS NOT NULL ON CONFLICT DO NOTHING",
+      "CREATE INDEX IF NOT EXISTS trip_travel_insurance_documents_document_idx ON trip_travel_insurance_documents(document_id)",
+    ],
+  },
+  {
+    version: 22,
+    statements: [
+      "ALTER TABLE trip_travel_insurance_passengers ADD COLUMN IF NOT EXISTS provider_name VARCHAR(160)",
+      "ALTER TABLE trip_travel_insurance_passengers ADD COLUMN IF NOT EXISTS policy_number VARCHAR(120)",
+      "UPDATE trip_travel_insurance_passengers passenger SET provider_name=insurance.provider_name,policy_number=insurance.policy_number FROM trip_travel_insurance insurance WHERE insurance.trip_id=passenger.trip_id AND (passenger.provider_name IS NULL OR passenger.policy_number IS NULL)",
+      "ALTER TABLE trip_travel_insurance_passengers ALTER COLUMN provider_name SET NOT NULL",
+      "ALTER TABLE trip_travel_insurance_passengers ALTER COLUMN policy_number SET NOT NULL",
+    ],
+  },
+  {
+    version: 23,
+    statements: [
+      "ALTER TABLE trip_travel_insurance_documents ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE",
+      `WITH ranked_documents AS (
+        SELECT trip_id,document_id,row_number() OVER (PARTITION BY trip_id ORDER BY created_at,document_id) AS position
+        FROM trip_travel_insurance_documents WHERE user_id IS NULL
+      ), ranked_passengers AS (
+        SELECT trip_id,user_id,row_number() OVER (PARTITION BY trip_id ORDER BY created_at,user_id) AS position
+        FROM trip_travel_insurance_passengers
+      )
+      UPDATE trip_travel_insurance_documents insurance_document
+      SET user_id=passenger.user_id
+      FROM ranked_documents document
+      JOIN ranked_passengers passenger USING (trip_id,position)
+      WHERE insurance_document.trip_id=document.trip_id
+        AND insurance_document.document_id=document.document_id
+        AND insurance_document.user_id IS NULL`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS trip_travel_insurance_documents_user_unique_idx ON trip_travel_insurance_documents(trip_id,user_id) WHERE user_id IS NOT NULL",
+      "CREATE INDEX IF NOT EXISTS trip_travel_insurance_documents_user_idx ON trip_travel_insurance_documents(user_id)",
+    ],
+  },
+  {
+    version: 24,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS trip_travel_insurance_policies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        trip_id UUID NOT NULL REFERENCES trip_travel_insurance(trip_id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        insured_name VARCHAR(180) NOT NULL,
+        provider_name VARCHAR(160) NOT NULL,
+        policy_number VARCHAR(120) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      "ALTER TABLE trip_travel_insurance_policies ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0",
+      `INSERT INTO trip_travel_insurance_policies (trip_id,user_id,insured_name,provider_name,policy_number,created_at)
+       SELECT passenger.trip_id,passenger.user_id,COALESCE(NULLIF(trim(member.display_name),''),NULLIF(trim(member.email),''),'ผู้เอาประกัน'),passenger.provider_name,passenger.policy_number,passenger.created_at
+       FROM trip_travel_insurance_passengers passenger
+       JOIN users member ON member.id=passenger.user_id
+       WHERE NOT EXISTS (SELECT 1 FROM trip_travel_insurance_policies policy WHERE policy.trip_id=passenger.trip_id AND policy.user_id=passenger.user_id)`,
+      "ALTER TABLE trip_travel_insurance_documents ADD COLUMN IF NOT EXISTS policy_id UUID REFERENCES trip_travel_insurance_policies(id) ON DELETE CASCADE",
+      `UPDATE trip_travel_insurance_documents document
+       SET policy_id=(SELECT candidate.id FROM trip_travel_insurance_policies candidate
+         WHERE candidate.trip_id=document.trip_id AND candidate.user_id=document.user_id
+         ORDER BY candidate.created_at,candidate.id LIMIT 1)
+       WHERE document.policy_id IS NULL AND document.user_id IS NOT NULL`,
+      "DROP INDEX IF EXISTS trip_travel_insurance_documents_user_unique_idx",
+      "CREATE UNIQUE INDEX IF NOT EXISTS trip_travel_insurance_documents_policy_unique_idx ON trip_travel_insurance_documents(policy_id) WHERE policy_id IS NOT NULL",
+      "CREATE INDEX IF NOT EXISTS trip_travel_insurance_policies_trip_user_idx ON trip_travel_insurance_policies(trip_id,user_id,sort_order,created_at)",
+    ],
+  },
+  {
+    version: 25,
+    statements: [
+      "ALTER TABLE trip_travel_insurance_passengers ADD COLUMN IF NOT EXISTS declined_insurance BOOLEAN NOT NULL DEFAULT false",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

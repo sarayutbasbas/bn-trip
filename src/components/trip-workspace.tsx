@@ -197,8 +197,6 @@ export function TripWorkspace({
   const assignmentTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
-  const knownChecklistCategoriesRef = useRef<Set<string>>(new Set());
-  const completedCategoriesRef = useRef<Set<string>>(new Set());
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const editDocumentFileRef = useRef<HTMLInputElement>(null);
@@ -231,6 +229,11 @@ export function TripWorkspace({
       toastTimer.current = null;
     }, 2200);
   }
+  function signalCompletionChanged() {
+    window.dispatchEvent(
+      new CustomEvent("trip-completion-changed", { detail: { tripId } }),
+    );
+  }
   function invalidateWorkspaceTabs(
     ...tabs: Array<"checklist" | "documents" | "history">
   ) {
@@ -239,23 +242,21 @@ export function TripWorkspace({
     );
   }
   function syncCollapsedChecklistCategories(workspace: Workspace) {
-    const categoryNames = new Set(
-      workspace.checklist.map((item) => item.category_name || "อื่น ๆ"),
-    );
-    // Capture the previous categories before scheduling React's state update.
-    // Reading the ref inside the updater races with the assignment below and
-    // made the first load look as if every category had already been seen.
-    const knownCategories = knownChecklistCategoriesRef.current;
-    setCollapsedCategories((current) => {
-      const next = new Set(
-        [...current].filter((category) => categoryNames.has(category)),
-      );
-      for (const category of categoryNames) {
-        if (!knownCategories.has(category)) next.add(category);
-      }
-      return next;
+    const totals = new Map<string, number>();
+    const completed = new Map<string, number>();
+    workspace.checklist.forEach((item) => {
+      const category = item.category_name || "อื่น ๆ";
+      totals.set(category, (totals.get(category) || 0) + 1);
+      if (item.completed_at)
+        completed.set(category, (completed.get(category) || 0) + 1);
     });
-    knownChecklistCategoriesRef.current = categoryNames;
+    setCollapsedCategories(
+      new Set(
+        [...totals.keys()].filter(
+          (category) => completed.get(category) === totals.get(category),
+        ),
+      ),
+    );
   }
   async function load(
     targetTab: "checklist" | "documents" | "history" = tab,
@@ -299,7 +300,6 @@ export function TripWorkspace({
     }
   }
   useEffect(() => {
-    knownChecklistCategoriesRef.current = new Set();
     const frame = requestAnimationFrame(() => {
       const cached = peekClientResource<Partial<Workspace>>(
         workspaceResourceKey(tripId, initialTab),
@@ -354,6 +354,7 @@ export function TripWorkspace({
       invalidateWorkspaceTabs("history");
       invalidateClientResource(MASTER_CHECKLIST_RESOURCE_KEY);
       await load("checklist");
+      signalCompletionChanged();
       if (editingItem) notify("แก้ไข Checklist แล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "บันทึกไม่สำเร็จ");
@@ -374,6 +375,7 @@ export function TripWorkspace({
       setMasterOpen(false);
       invalidateWorkspaceTabs("history");
       await load("checklist");
+      signalCompletionChanged();
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "นำเข้ารายการไม่สำเร็จ",
@@ -412,6 +414,7 @@ export function TripWorkspace({
       invalidateWorkspaceTabs("checklist", "history");
       if ("title" in input || "categoryId" in input || "categoryName" in input)
         invalidateClientResource(MASTER_CHECKLIST_RESOURCE_KEY);
+      if ("completed" in input) signalCompletionChanged();
     } catch (reason) {
       setData((current) => ({
         ...current,
@@ -485,6 +488,7 @@ export function TripWorkspace({
       setTitle("");
       setAssignee("");
       invalidateWorkspaceTabs("checklist", "history");
+      signalCompletionChanged();
       notify("ลบ Checklist แล้ว");
     } catch (reason) {
       setData((current) => {
@@ -522,6 +526,7 @@ export function TripWorkspace({
       });
       setDeleteTarget(null);
       invalidateWorkspaceTabs("checklist", "history");
+      signalCompletionChanged();
       notify("ลบหมวด Checklist แล้ว");
     } catch (reason) {
       setData((current) => ({
@@ -633,6 +638,7 @@ export function TripWorkspace({
       setEditingDocument(null);
       invalidateWorkspaceTabs("documents", "history");
       invalidateClientResource(flightResourceKey(tripId));
+      signalCompletionChanged();
       notify("ลบไฟล์แล้ว");
     } catch (reason) {
       await load("documents");
@@ -773,6 +779,7 @@ export function TripWorkspace({
         flightResourceKey(tripId),
       );
       await load("history");
+      signalCompletionChanged();
       onUndo();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "ย้อนคืนไม่สำเร็จ");
@@ -907,15 +914,16 @@ export function TripWorkspace({
         return total > 0 && checklistView.completed.get(category) === total;
       }),
     );
-    const newlyCompleted = [...completedCategories].filter(
-      (category) => !completedCategoriesRef.current.has(category),
-    );
-    completedCategoriesRef.current = completedCategories;
-    if (!newlyCompleted.length) return;
     startTransition(() =>
       setCollapsedCategories((current) => {
-        const next = new Set(current);
-        newlyCompleted.forEach((category) => next.add(category));
+        const availableCategories = new Set(checklistView.allCategories);
+        const next = new Set(
+          [...current].filter((category) => availableCategories.has(category)),
+        );
+        checklistView.allCategories.forEach((category) => {
+          if (completedCategories.has(category)) next.add(category);
+          else next.delete(category);
+        });
         return next;
       }),
     );
@@ -1118,6 +1126,12 @@ export function TripWorkspace({
                       <span>
                         <ChevronRight size={14} />
                         <strong>{category}</strong>
+                        {progress < 100 && (
+                          <i
+                            className="notification-dot checklist-category-dot"
+                            aria-label={label("หมวดนี้ยังไม่ครบ 100%")}
+                          />
+                        )}
                       </span>
                       <div className="checklist-category-summary">
                         <small>

@@ -34,6 +34,7 @@ import {
   updateCurrentAccount,
 } from "@/src/lib/client-account";
 import { optimizedCanvasFile } from "@/src/lib/client-image-compression";
+import { invalidateClientResourcesContaining } from "@/src/lib/client-resource-cache";
 import {
   TRIP_COUNTRIES,
   countryByCode,
@@ -3409,6 +3410,10 @@ function TripHub({
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>(
     initialWorkspaceTab || "checklist",
   );
+  const [completion, setCompletion] = useState({
+    flightIncomplete: false,
+    checklistIncomplete: false,
+  });
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
@@ -3420,6 +3425,35 @@ function TripHub({
   const searchScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
+  useEffect(() => {
+    let active = true;
+    async function loadCompletion() {
+      try {
+        const response = await fetch(`/api/trips/${trip.id}/completion`, {
+          cache: "no-store",
+        });
+        const body = await response.json();
+        if (active && response.ok)
+          setCompletion({
+            flightIncomplete: Boolean(body.flightIncomplete),
+            checklistIncomplete: Boolean(body.checklistIncomplete),
+          });
+      } catch {
+        // The dots are a convenience indicator; the screens remain usable offline.
+      }
+    }
+    const handleChanged = (event: Event) => {
+      const changedTripId = (event as CustomEvent<{ tripId?: string }>).detail
+        ?.tripId;
+      if (!changedTripId || changedTripId === trip.id) void loadCompletion();
+    };
+    void loadCompletion();
+    window.addEventListener("trip-completion-changed", handleChanged);
+    return () => {
+      active = false;
+      window.removeEventListener("trip-completion-changed", handleChanged);
+    };
+  }, [trip.id, trip.has_flights]);
   function selectView(
     nextView: "plan" | "expenses" | "workspace" | "flights",
     nextWorkspaceTab = activeWorkspaceTab,
@@ -3438,6 +3472,25 @@ function TripHub({
       `${url.pathname}${url.search}${url.hash}`,
     );
   }
+  useEffect(() => {
+    const handleFlightsDisabled = (event: Event) => {
+      const changedTripId = (event as CustomEvent<{ tripId?: string }>).detail
+        ?.tripId;
+      if (changedTripId !== trip.id) return;
+      setView("plan");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("workspace");
+      url.searchParams.delete("view");
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    };
+    window.addEventListener("trip-flights-disabled", handleFlightsDisabled);
+    return () =>
+      window.removeEventListener("trip-flights-disabled", handleFlightsDisabled);
+  }, [trip.id]);
   useEffect(
     () =>
       setDay(
@@ -3535,12 +3588,14 @@ function TripHub({
                 </a>
               )}
               {trip.has_flights && (
-                <button type="button" onClick={() => selectView(view === "flights" ? "plan" : "flights")}>
+                <button className={completion.flightIncomplete ? "has-notification-dot" : ""} type="button" onClick={() => selectView(view === "flights" ? "plan" : "flights")}>
                   {view === "flights" ? <Navigation size={18} /> : <Plane size={18} />}
                   <span>{t(view === "flights" ? "แพลน" : "เที่ยวบิน")}</span>
+                  {completion.flightIncomplete && <i className="notification-dot" aria-label={t("ข้อมูลเที่ยวบินหรือประกันเดินทางยังไม่ครบ")} />}
                 </button>
               )}
               <button
+                className={completion.checklistIncomplete ? "has-notification-dot" : ""}
                 type="button"
                 onClick={() =>
                   selectView(view === "workspace" ? "plan" : "workspace")
@@ -3552,6 +3607,7 @@ function TripHub({
                   <FolderOpen size={18} />
                 )}
                 <span>{t(view === "workspace" ? "แพลน" : "เตรียมทริป")}</span>
+                {completion.checklistIncomplete && <i className="notification-dot" aria-label={t("Checklist ยังไม่ครบ 100%")} />}
               </button>
               <button
                 type="button"
@@ -3636,7 +3692,7 @@ function TripHub({
                 aria-label={t(`เพิ่มรายการวันที่ ${day}`)}
               >
                 <Plus size={22} />
-                <span>{t("เพิ่มแผน")}</span>
+                <span>{t("เพิ่มสถานที่")}</span>
               </button>
             </div>
             {dayItems.length === 0 ? (
@@ -3901,10 +3957,10 @@ function TimelineScreen({
         <button
           className="directory-fab timeline-fab"
           onClick={addPlace}
-          aria-label={t("เพิ่มแผน")}
+          aria-label={t("เพิ่มสถานที่")}
         >
           <Plus size={22} />
-          <span>{t("เพิ่มแผน")}</span>
+          <span>{t("เพิ่มสถานที่")}</span>
         </button>
       </div>
       {dayItems.length === 0 ? (
@@ -7560,7 +7616,7 @@ function ModalForm({
           confirmation={{
             title: "ปิดการเดินทางแบบมีเที่ยวบิน?",
             description:
-              "ข้อมูลเที่ยวบิน ผู้โดยสาร รายการ Timeline และค่าใช้จ่ายตั๋วเครื่องบินที่เชื่อมไว้จะถูกลบถาวร",
+              "ข้อมูลเที่ยวบิน ผู้โดยสาร รายการ Timeline ค่าใช้จ่ายตั๋ว ข้อมูลประกัน และไฟล์ประกันที่เชื่อมไว้จะถูกลบถาวร",
             confirmLabel: "ปิดและลบข้อมูล",
             onConfirm: () => {
               flightDisableConfirmed.current = true;
@@ -8008,7 +8064,21 @@ export function BNTripApp({
       });
       setTripRevision((value) => value + 1);
       if (!modal.trip) itineraryCache.set(saved.id, []);
-      else if (data.hasFlights === false) itineraryCache.delete(saved.id);
+      else if (data.hasFlights === false) {
+        itineraryCache.delete(saved.id);
+        invalidateClientResourcesContaining(`trip:${saved.id}:`);
+        window.dispatchEvent(
+          new CustomEvent("trip-flights-disabled", {
+            detail: { tripId: saved.id },
+          }),
+        );
+        window.dispatchEvent(
+          new CustomEvent("trip-completion-changed", {
+            detail: { tripId: saved.id },
+          }),
+        );
+        router.replace(`/trips/${saved.id}`);
+      }
       setSelected(saved);
       flash(
         modal.trip

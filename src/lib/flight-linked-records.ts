@@ -157,6 +157,19 @@ export async function removeAllFlightRecords(client: PoolClient, tripId: string)
       segment.itinerary_id,
       segment.ticket_cost_item_id,
     );
+  const insuranceDocuments = await client.query<{
+    stored_filename: string;
+    blob_url: string | null;
+  }>(`SELECT DISTINCT document.stored_filename,document.blob_url
+    FROM trip_travel_insurance_documents insurance_document
+    JOIN trip_documents document ON document.id=insurance_document.document_id
+    WHERE insurance_document.trip_id=$1`, [tripId]);
+  await client.query(`DELETE FROM trip_documents document USING trip_travel_insurance_documents insurance_document
+    WHERE insurance_document.trip_id=$1 AND document.id=insurance_document.document_id`, [tripId]);
+  await client.query("DELETE FROM trip_travel_insurance WHERE trip_id=$1", [tripId]);
   await client.query("DELETE FROM trip_flight_segments WHERE trip_id=$1", [tripId]);
-  return affectedDays.rows.map((row) => row.day_number);
+  return {
+    affectedDays: affectedDays.rows.map((row) => row.day_number),
+    insuranceDocuments: insuranceDocuments.rows,
+  };
 }
