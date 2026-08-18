@@ -7171,9 +7171,20 @@ button:disabled {
 .review-text-field {
   margin-top: 3px;
 }
-.review-member-card .primary-btn {
-  width: 100%;
+.review-form-actions {
   margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.review-form-actions .primary-btn {
+  width: 100%;
+  margin: 0;
+}
+.review-form-actions .secondary-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 14px;
 }
 .review-member-card > p {
   margin: 8px 1px 1px;
@@ -7188,6 +7199,27 @@ button:disabled {
 .review-read-score {
   color: var(--orange);
   font-size: 17px;
+}
+.review-member-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.review-edit-button {
+  width: 32px;
+  height: 32px;
+  border: 0.5px solid var(--line);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--orange);
+  background: var(--surface-solid);
+}
+.review-edit-button:active {
+  transform: scale(0.92);
+}
+.review-member-card > p.review-quote {
+  quotes: "“" "”";
 }
 
 .collaborator-form {

@@ -6145,6 +6145,7 @@ function ReviewsSheet({
   const [review, setReview] = useState("");
   const [originalRating, setOriginalRating] = useState(0);
   const [originalReview, setOriginalReview] = useState("");
+  const [editingOwnReview, setEditingOwnReview] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -6170,6 +6171,7 @@ function ReviewsSheet({
         setReview(savedReview);
         setOriginalRating(savedRating);
         setOriginalReview(savedReview);
+        setEditingOwnReview(!savedRating);
       })
       .catch((reason) => {
         if ((reason as Error).name !== "AbortError") setError("โหลดรีวิวไม่สำเร็จ");
@@ -6211,9 +6213,9 @@ function ReviewsSheet({
       setOriginalReview(savedReview);
       setAverage(Number(data.average || 0));
       setCount(Number(data.count || 0));
+      setEditingOwnReview(false);
       onSaved(Number(data.average || 0), Number(data.count || 0));
       notify("บันทึกรีวิวแล้ว");
-      close();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("บันทึกรีวิวไม่สำเร็จ"));
     } finally {
@@ -6224,6 +6226,12 @@ function ReviewsSheet({
     rating >= 1 &&
     rating <= 5 &&
     (rating !== originalRating || review !== originalReview);
+  function cancelEditingOwnReview() {
+    setRating(originalRating);
+    setReview(originalReview);
+    setEditingOwnReview(false);
+    setError("");
+  }
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
       <section className="modal reviews-sheet">
@@ -6249,7 +6257,7 @@ function ReviewsSheet({
               const itemRating = item.is_current_user
                 ? rating
                 : Number(item.rating || 0);
-              if (item.is_current_user)
+              if (item.is_current_user && editingOwnReview)
                 return (
                   <form className="review-member-card is-current" key={item.user_id} onSubmit={save}>
                     <div className="review-member-head">
@@ -6268,8 +6276,34 @@ function ReviewsSheet({
                       <label htmlFor={`trip-review-${item.user_id}`}>{t("เขียนรีวิวของคุณ")}</label>
                       <textarea id={`trip-review-${item.user_id}`} value={review} onChange={(event) => setReview(event.target.value)} maxLength={2000} rows={4} placeholder={t("เล่าความประทับใจ สิ่งที่ชอบ หรือสิ่งที่อยากปรับในทริปหน้า")} />
                     </div>
-                    <button className="primary-btn" disabled={saving || !hasChanges}>{saving ? t("กำลังบันทึก…") : t("บันทึกรีวิว")}</button>
+                    <div className="review-form-actions">
+                      <button className="primary-btn" disabled={saving || !hasChanges}>{saving ? t("กำลังบันทึก…") : t("บันทึกรีวิว")}</button>
+                      {originalRating > 0 && (
+                        <button type="button" className="secondary-btn" onClick={cancelEditingOwnReview} disabled={saving}>{t("ยกเลิก")}</button>
+                      )}
+                    </div>
                   </form>
+                );
+              if (item.is_current_user)
+                return (
+                  <article className="review-member-card is-current" key={item.user_id}>
+                    <div className="review-member-head">
+                      <ReviewMemberAvatar item={item} />
+                      <div><strong>{item.display_name}</strong><small>{t("รีวิวของคุณ")}</small></div>
+                      <span className="review-member-actions">
+                        <button
+                          type="button"
+                          className="review-edit-button"
+                          onClick={() => setEditingOwnReview(true)}
+                          aria-label={t("แก้ไขรีวิว")}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <b className="review-read-score">{item.rating ? Number(item.rating).toFixed(1) : "—"}</b>
+                      </span>
+                    </div>
+                    {item.rating ? <><ReviewStars value={itemRating} /><p className={item.review ? "review-quote" : "review-empty"}>{item.review ? `“${item.review}”` : t("ยังไม่ได้รีวิว")}</p></> : <p className="review-empty">{t("ยังไม่ได้รีวิว")}</p>}
+                  </article>
                 );
               return (
                 <article className="review-member-card" key={item.user_id}>
@@ -6278,7 +6312,7 @@ function ReviewsSheet({
                     <div><strong>{item.display_name}</strong><small>{item.role === "owner" ? t("เจ้าของ") : item.email}</small></div>
                     <b className="review-read-score">{item.rating ? Number(item.rating).toFixed(1) : "—"}</b>
                   </div>
-                  {item.rating ? <><ReviewStars value={itemRating} /><p>{item.review || t("ยังไม่ได้รีวิว")}</p></> : <p className="review-empty">{t("ยังไม่ได้รีวิว")}</p>}
+                  {item.rating ? <><ReviewStars value={itemRating} /><p className={item.review ? "review-quote" : "review-empty"}>{item.review ? `“${item.review}”` : t("ยังไม่ได้รีวิว")}</p></> : <p className="review-empty">{t("ยังไม่ได้รีวิว")}</p>}
                 </article>
               );
             })}
