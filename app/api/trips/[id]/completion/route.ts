@@ -19,11 +19,12 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   const result = await query<{
     has_flights: boolean;
+    country_code: string | null;
     flight_count: number;
     insurance_complete: boolean;
     checklist_incomplete: boolean;
   }>(
-    `SELECT trip.has_flights,
+    `SELECT trip.has_flights,trip.country_code,
       (SELECT count(*)::int FROM trip_flight_segments flight WHERE flight.trip_id=trip.id) AS flight_count,
       EXISTS(
         SELECT 1 FROM trip_travel_insurance insurance
@@ -61,7 +62,8 @@ export async function GET(
   return NextResponse.json({
     flightIncomplete:
       status.has_flights &&
-      (Number(status.flight_count) === 0 || !status.insurance_complete),
+      (Number(status.flight_count) === 0 ||
+        (status.country_code !== "TH" && !status.insurance_complete)),
     checklistIncomplete: status.checklist_incomplete,
   });
 }

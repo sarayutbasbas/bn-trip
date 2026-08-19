@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
-import { tripAccessSql,tripIncompleteSetupSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
+import { tripAccessSql,tripActualExpenseSql,tripIncompleteSetupSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { getDemoTrips } from "@/src/lib/demo-data";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode,formatTripDestination } from "@/src/lib/countries";
@@ -19,7 +19,7 @@ export async function GET(request:Request) {
   const mode=params.get("mode");
   if(mode==="dashboard")return NextResponse.json(await loadDashboard(session));
   await ensureLatestDatabaseSchema();
-  const access=tripAccessSql("t");const role=tripRoleSql("t");const members=tripMembersSql("t");const reviews=tripReviewSummarySql("t");const incomplete=tripIncompleteSetupSql("t");
+  const access=tripAccessSql("t");const role=tripRoleSql("t");const members=tripMembersSql("t");const reviews=tripReviewSummarySql("t");const actualExpense=tripActualExpenseSql("t");const incomplete=tripIncompleteSetupSql("t");
   if(mode==="list"){
     const status=params.get("status")||"all";
     const tripType=params.get("type")||"all";
@@ -40,14 +40,14 @@ export async function GET(request:Request) {
     const order=sort==="oldest"?"t.start_date ASC,t.id ASC":sort==="name"?"t.name ASC,t.id ASC":sort==="nearest"?"ABS(EXTRACT(EPOCH FROM (COALESCE(t.outbound_departure_at,t.start_date::timestamp)-(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))))) ASC,t.id ASC":"CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 0 WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 1 ELSE 2 END ASC,CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.outbound_departure_at,t.start_date::timestamp) END ASC,CASE WHEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) END DESC,t.id DESC";
     const clause=where.join(" AND ");
     const [items,total,years]=await Promise.all([
-      query(`SELECT t.*,${role},${members},${reviews},${incomplete} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,limit,offset]),
+      query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,limit,offset]),
       query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`,values),
       query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`,[session.userId]),
     ]);
     const count=Number(total.rows[0]?.count||0);
     return NextResponse.json({items:items.rows,total:count,years:years.rows.map(row=>row.year),hasMore:offset+items.rows.length<count});
   }
-  const result = await query(`SELECT t.*,${role},${members},${reviews},${incomplete} FROM trips t WHERE ${access} ORDER BY t.start_date DESC`,[session.userId]); return NextResponse.json(result.rows);
+  const result = await query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} ORDER BY t.start_date DESC`,[session.userId]); return NextResponse.json(result.rows);
 }
 
 export async function POST(request:Request) {

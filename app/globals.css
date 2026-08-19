@@ -3011,6 +3011,14 @@ button:disabled {
   background: var(--surface-2);
   font-size: 9px;
 }
+.compact-trip-meta .is-actual-spent {
+  color: #147a55;
+  background: #e9f8f1;
+}
+.compact-trip-meta .is-over-budget {
+  color: #c2410c;
+  background: #fff0e8;
+}
 .load-more-btn {
   width: 100%;
   min-height: 48px;
@@ -3247,6 +3255,7 @@ button:disabled {
   margin: 8px 0 0;
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .trip-meta span {
   padding: 5px 8px;
@@ -3257,6 +3266,14 @@ button:disabled {
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   font-size: 9px;
+}
+.trip-meta .is-actual-spent {
+  color: #d8ffed;
+  background: rgba(14, 116, 79, 0.5);
+}
+.trip-meta .is-over-budget {
+  color: #fff1e8;
+  background: rgba(194, 65, 12, 0.62);
 }
 
 .trip-hub-screen,

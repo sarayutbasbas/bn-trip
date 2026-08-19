@@ -181,6 +181,7 @@ export type Trip = {
   total_days: number;
   budget_thb: string;
   shopping_budget_thb: string;
+  actual_spent_thb?: number | string;
   outbound_departure_at: string | null;
   return_departure_at: string | null;
   cover_image_url: string | null;
@@ -440,6 +441,9 @@ const EN_TEXT: Record<string, string> = {
   กำลังโหลดรีวิว: "Loading reviews",
   "โหลดรีวิวไม่สำเร็จ": "Could not load reviews",
   "บันทึกรีวิวไม่สำเร็จ": "Could not save review",
+  ข้อมูลเที่ยวบินยังไม่ครบ: "Flight information is incomplete",
+  "ข้อมูลเที่ยวบินหรือประกันเดินทางยังไม่ครบ":
+    "Flight or travel insurance information is incomplete",
   แก้ไข: "Edit",
   ลบ: "Delete",
   เรื่องราวระหว่างทาง: "Stories along the way",
@@ -718,6 +722,8 @@ const EN_TEXT: Record<string, string> = {
 };
 Object.assign(EN_TEXT, {
   ทริปทั้งหมด: "All trips",
+  งบ: "Budget",
+  ใช้จริง: "Spent",
   ดูทั้งหมด: "View all",
   ดูทริปทั้งหมด: "View all trips",
   ทริปที่กำลังเดินทาง: "Ongoing trips",
@@ -1819,6 +1825,8 @@ function TripCard({
   const t = useT();
   const coverUrl = trip.cover_image_url || DEFAULT_TRIP_COVER;
   const temporal = tripTemporalStatus(trip, now);
+  const budget = Number(trip.budget_thb || 0);
+  const actualSpent = Number(trip.actual_spent_thb || 0);
   const ongoing = temporal.ongoing;
   const countdownLabel = !trip.outbound_departure_at
     ? t("ยังไม่กำหนดวัน")
@@ -1871,10 +1879,14 @@ function TripCard({
             trip.country_name,
           )}
         </p>
-        <span className="trip-duration">{tripRangeLabel(trip)}</span>
+        <span className="trip-duration">
+          {tripRangeLabel(trip)} · ({t(`${trip.total_days} วัน`)})
+        </span>
         <div className="trip-meta">
-          <span>{t(`${trip.total_days} วัน`)}</span>
-          <span>฿{Number(trip.budget_thb).toLocaleString()}</span>
+          <span>{t("งบ")} ฿{budget.toLocaleString("th-TH", { maximumFractionDigits: 2 })}</span>
+          <span className={actualSpent > budget && budget > 0 ? "is-over-budget" : "is-actual-spent"}>
+            {t("ใช้จริง")} ฿{actualSpent.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
+          </span>
         </div>
       </div>
     </article>
@@ -2704,6 +2716,8 @@ function CompactTripCard({
 }) {
   const t = useT();
   const temporal = tripTemporalStatus(trip, now);
+  const budget = Number(trip.budget_thb || 0);
+  const actualSpent = Number(trip.actual_spent_thb || 0);
   const ongoing = temporal.ongoing;
   const past = temporal.past;
   const status = past
@@ -2751,10 +2765,14 @@ function CompactTripCard({
             )}
           </span>
         </p>
-        <small>{tripRangeLabel(trip)}</small>
+        <small>
+          {tripRangeLabel(trip)} · ({t(`${trip.total_days} วัน`)})
+        </small>
         <div className="compact-trip-meta">
-          <span>{t(`${trip.total_days} วัน`)}</span>
-          <span>฿{Number(trip.budget_thb).toLocaleString()}</span>
+          <span>{t("งบ")} ฿{budget.toLocaleString("th-TH", { maximumFractionDigits: 2 })}</span>
+          <span className={actualSpent > budget && budget > 0 ? "is-over-budget" : "is-actual-spent"}>
+            {t("ใช้จริง")} ฿{actualSpent.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
+          </span>
         </div>
       </div>
       <SharedTripAvatars members={trip.members} variant="compact" limit={3} />
@@ -3902,7 +3920,9 @@ function TripHub({
                     <i
                       className="notification-dot"
                       aria-label={t(
-                        "ข้อมูลเที่ยวบินหรือประกันเดินทางยังไม่ครบ",
+                        trip.country_code === "TH"
+                          ? "ข้อมูลเที่ยวบินยังไม่ครบ"
+                          : "ข้อมูลเที่ยวบินหรือประกันเดินทางยังไม่ครบ",
                       )}
                     />
                   )}
@@ -4188,6 +4208,7 @@ function TripHub({
               members={trip.members || []}
               tripOutboundAt={trip.outbound_departure_at}
               tripReturnAt={trip.return_departure_at}
+              showTravelInsurance={trip.country_code !== "TH"}
               canDelete={trip.access_role !== "view"}
               notify={notify}
               onChanged={onFlightChanged}

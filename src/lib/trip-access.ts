@@ -52,6 +52,13 @@ export const tripReviewSummarySql=(alias="trips")=>`COALESCE((SELECT round(avg(r
       SELECT 1 FROM trip_collaborators review_member
       WHERE review_member.trip_id=${alias}.id AND review_member.user_id=review.user_id
     ))) AS review_count`;
+export const tripActualExpenseSql=(alias="trips")=>`COALESCE((
+    SELECT sum((cost.item->>'value')::numeric)
+    FROM itineraries itinerary
+    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(itinerary.cost_items,'[]'::jsonb)) AS cost(item)
+    WHERE itinerary.trip_id=${alias}.id
+      AND lower(COALESCE(cost.item->>'category',''))<>'shopping'
+  ),0)::float AS actual_spent_thb`;
 export const tripIncompleteSetupSql=(alias="trips")=>`(
     EXISTS(
       SELECT 1 FROM trip_checklist_items checklist_item
@@ -59,7 +66,7 @@ export const tripIncompleteSetupSql=(alias="trips")=>`(
     ) OR (
       ${alias}.has_flights=true AND (
         NOT EXISTS(SELECT 1 FROM trip_flight_segments flight WHERE flight.trip_id=${alias}.id)
-        OR NOT EXISTS(
+        OR (COALESCE(${alias}.country_code,'')<>'TH' AND NOT EXISTS(
           SELECT 1 FROM trip_travel_insurance insurance
           WHERE insurance.trip_id=${alias}.id
             AND NOT EXISTS (
@@ -81,7 +88,7 @@ export const tripIncompleteSetupSql=(alias="trips")=>`(
                   AND passenger.declined_insurance=true
               )
             )
-        )
+        ))
       )
     )
   ) AS has_incomplete_setup`;
