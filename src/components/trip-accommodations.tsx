@@ -101,9 +101,22 @@ function money(value: number | string, currency = "THB") {
   }).format(Number(value || 0));
 }
 function addDays(value: string, days: number) {
-  const date = new Date(`${value}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  const [year, month, date] = value.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !date) return "";
+  return new Date(Date.UTC(year, month - 1, date + days))
+    .toISOString()
+    .slice(0, 10);
+}
+function tripDateLabel(startDate: string, storedDay: number) {
+  const value = addDays(startDate, storedDay - 1);
+  if (!value) return "";
+  return new Intl.DateTimeFormat("th-TH", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
 }
 function moneyFormat(value: string | number) {
   const raw = String(value).replace(/[^\d.]/g, "");
@@ -688,7 +701,7 @@ export function TripAccommodations({
                         (_, index) => index + 1,
                       ).map((day) => (
                         <option value={day} key={day}>
-                          Day {displayDay(day)}
+                          Day {displayDay(day)} · {tripDateLabel(startDate, day)}
                         </option>
                       ))}
                     </select>
@@ -707,8 +720,8 @@ export function TripAccommodations({
                       ).map((day) => (
                         <option value={day} key={day}>
                           {day === totalDays + 1
-                            ? "หลังจบทริป"
-                            : `Day ${displayDay(day)}`}
+                            ? `หลังจบทริป · ${tripDateLabel(startDate, day)}`
+                            : `Day ${displayDay(day)} · ${tripDateLabel(startDate, day)}`}
                         </option>
                       ))}
                     </select>

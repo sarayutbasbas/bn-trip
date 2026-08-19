@@ -2715,6 +2715,7 @@ button:disabled {
 .filter-search-row {
   display: flex;
   align-items: stretch;
+  gap: 8px;
 }
 .trip-search {
   width: 100%;
@@ -2757,6 +2758,34 @@ button:disabled {
   place-items: center;
   color: var(--muted);
   background: var(--surface-2);
+}
+.trip-type-filter {
+  width: 116px;
+  min-height: 46px;
+  flex: 0 0 116px;
+  position: relative;
+  border: 0.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  box-shadow: 0 1px 0 var(--glass-highlight) inset;
+  overflow: hidden;
+}
+.trip-type-filter select {
+  width: 100%;
+  height: 100%;
+  min-height: 45px;
+  padding: 0 28px 0 11px;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.trip-type-filter option {
+  font-weight: 400;
 }
 .status-filter {
   margin-top: 9px;

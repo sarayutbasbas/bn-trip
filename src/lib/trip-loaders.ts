@@ -410,6 +410,7 @@ export async function loadTripDirectory(
   const reviews = tripReviewSummarySql("t");
   const incomplete = tripIncompleteSetupSql("t");
   const status = params.get("status") || "all";
+  const tripType = params.get("type") || "all";
   const year = Number(params.get("year") || 0);
   const search = (params.get("q") || "").trim().slice(0, 80);
   const sort = params.get("sort") || "latest";
@@ -422,6 +423,9 @@ export async function loadTripDirectory(
     where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
   if (status === "past")
     where.push("COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
+  if (tripType === "domestic") where.push("t.country_code='TH'");
+  if (tripType === "international")
+    where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
   if (year >= 2000 && year <= 2200) {
     values.push(year);
     where.push(`EXTRACT(YEAR FROM start_date)=$${values.length}`);

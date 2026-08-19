@@ -127,7 +127,14 @@ type Screen =
 type WorkspaceTab = "checklist" | "documents" | "history";
 type Lang = "TH" | "EN";
 type TripStatus = "all" | "ongoing" | "upcoming" | "past";
-type TripFilters = { status: string; year: string; q: string; sort: string };
+type TripType = "all" | "domestic" | "international";
+type TripFilters = {
+  status: string;
+  type: string;
+  year: string;
+  q: string;
+  sort: string;
+};
 export type DashboardCounts = {
   total: number;
   ongoing: number;
@@ -715,6 +722,8 @@ Object.assign(EN_TEXT, {
   ทริปที่กำลังเดินทาง: "Ongoing trips",
   "ค้นหาทริป เมือง หรือประเทศ": "Search trips, cities, or countries",
   ทั้งหมด: "All",
+  ประเภททริป: "Trip type",
+  ในประเทศ: "Domestic",
   กำลังจะมาถึง: "Upcoming",
   ที่ผ่านมา: "Past",
   ทุกปี: "All years",
@@ -2773,8 +2782,15 @@ function TripsDirectory({
     ["ongoing", "upcoming", "past"].includes(value)
       ? (value as TripStatus)
       : "all";
+  const validType = (value: string): TripType =>
+    ["domestic", "international"].includes(value)
+      ? (value as TripType)
+      : "all";
   const [status, setStatus] = useState<TripStatus>(() =>
     validStatus(initialFilters.status),
+  );
+  const [tripType, setTripType] = useState<TripType>(() =>
+    validType(initialFilters.type),
   );
   const [year, setYear] = useState(initialFilters.year || "all");
   const [queryText, setQueryText] = useState(initialFilters.q || "");
@@ -2837,6 +2853,7 @@ function TripsDirectory({
         const params = new URLSearchParams({
           mode: "list",
           status,
+          type: tripType,
           sort,
           limit: "20",
           offset: "0",
@@ -2848,6 +2865,7 @@ function TripsDirectory({
         visibleParams.delete("limit");
         visibleParams.delete("offset");
         if (status === "all") visibleParams.delete("status");
+        if (tripType === "all") visibleParams.delete("type");
         if (sort === "latest") visibleParams.delete("sort");
         router.replace(
           visibleParams.size ? `/trips?${visibleParams}` : "/trips",
@@ -2899,6 +2917,7 @@ function TripsDirectory({
     };
   }, [
     status,
+    tripType,
     year,
     queryText,
     sort,
@@ -2962,6 +2981,7 @@ function TripsDirectory({
     const params = new URLSearchParams({
       mode: "list",
       status,
+      type: tripType,
       sort,
       limit: "20",
       offset: String(items.length),
@@ -3044,6 +3064,18 @@ function TripsDirectory({
                 <X size={15} />
               </button>
             )}
+          </label>
+          <label className="trip-type-filter">
+            <span className="sr-only">{t("ประเภททริป")}</span>
+            <select
+              value={tripType}
+              onChange={(event) => setTripType(validType(event.target.value))}
+              aria-label={t("ประเภททริป")}
+            >
+              <option value="all">{t("ทั้งหมด")}</option>
+              <option value="domestic">{t("ในประเทศ")}</option>
+              <option value="international">{t("ต่างประเทศ")}</option>
+            </select>
           </label>
         </div>
         <div className="status-filter">
@@ -8146,7 +8178,7 @@ export function BNTripApp({
   initialTrip,
   initialItineraries,
   initialTripCards,
-  initialTripFilters = { status: "", year: "", q: "", sort: "" },
+  initialTripFilters = { status: "", type: "", year: "", q: "", sort: "" },
   initialTripDirectory,
 }: {
   authenticated?: boolean;
