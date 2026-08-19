@@ -39,6 +39,7 @@ type Accommodation = {
   name: string;
   location: string;
   description: string;
+  night_descriptions: Record<string, string>;
   check_in_day: number;
   check_out_day: number;
   check_in_time: string;
@@ -268,6 +269,7 @@ export function TripAccommodations({
   cards,
   locations,
   openAccommodationId,
+  openAccommodationDay,
   onAccommodationOpened,
   overlayOnly = false,
   refreshToken = 0,
@@ -283,6 +285,7 @@ export function TripAccommodations({
   cards: Card[];
   locations: LocationOption[];
   openAccommodationId?: string | null;
+  openAccommodationDay?: number | null;
   onAccommodationOpened?: () => void;
   overlayOnly?: boolean;
   refreshToken?: number;
@@ -302,6 +305,10 @@ export function TripAccommodations({
   const [deleteTarget, setDeleteTarget] = useState<Accommodation | null>(null);
   const [checkInDay, setCheckInDay] = useState(1);
   const [checkOutDay, setCheckOutDay] = useState(Math.min(2, totalDays + 1));
+  const [nightDescriptions, setNightDescriptions] = useState<
+    Record<string, string>
+  >({});
+  const [focusedDetailDay, setFocusedDetailDay] = useState<number | null>(null);
   const [currency, setCurrency] = useState("THB");
   const [exchangeRate, setExchangeRate] = useState(1);
   const [rateDate, setRateDate] = useState(startDate);
@@ -407,6 +414,8 @@ export function TripAccommodations({
   function openNew() {
     setCheckInDay(1);
     setCheckOutDay(2);
+    setNightDescriptions({});
+    setFocusedDetailDay(null);
     setCurrency("THB");
     setExchangeRate(1);
     setRateDate(startDate);
@@ -416,9 +425,27 @@ export function TripAccommodations({
     setSplitPickerOpen(false);
     setEditing("new");
   }
-  function openEdit(item: Accommodation) {
+  function openEdit(item: Accommodation, detailDay: number | null = null) {
     setCheckInDay(item.check_in_day);
     setCheckOutDay(item.check_out_day);
+    setNightDescriptions(
+      Object.fromEntries(
+        Array.from(
+          { length: item.check_out_day - item.check_in_day },
+          (_, index) => item.check_in_day + index,
+        ).map((day) => [
+          String(day),
+          item.night_descriptions?.[String(day)] ?? item.description ?? "",
+        ]),
+      ),
+    );
+    setFocusedDetailDay(
+      detailDay !== null &&
+        detailDay >= item.check_in_day &&
+        detailDay < item.check_out_day
+        ? detailDay
+        : null,
+    );
     setCurrency(item.currency);
     setExchangeRate(Number(item.exchange_rate || 1));
     setRateDate(String(item.rate_date || startDate).slice(0, 10));
@@ -436,11 +463,11 @@ export function TripAccommodations({
     const item = items.find((value) => value.id === openAccommodationId);
     if (!item) return;
     const frame = requestAnimationFrame(() => {
-      openEdit(item);
+      openEdit(item, openAccommodationDay ?? null);
       onAccommodationOpened?.();
     });
     return () => cancelAnimationFrame(frame);
-  }, [openAccommodationId, loading, items]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [openAccommodationId, openAccommodationDay, loading, items]); // eslint-disable-line react-hooks/exhaustive-deps
   async function loadRate(nextCurrency: string, day: number) {
     setCurrency(nextCurrency);
     const date = addDays(startDate, day - 1);
@@ -493,7 +520,16 @@ export function TripAccommodations({
     const body = {
       name: String(form.get("name") || ""),
       location: String(form.get("location") || ""),
-      description: String(form.get("description") || ""),
+      description: nightDescriptions[String(checkInDay)]?.trim() || "",
+      nightDescriptions: Object.fromEntries(
+        Array.from(
+          { length: checkOutDay - checkInDay },
+          (_, index) => checkInDay + index,
+        ).map((day) => [
+          String(day),
+          (nightDescriptions[String(day)] || "").trim(),
+        ]),
+      ),
       checkInDay,
       checkOutDay,
       checkInTime: String(form.get("checkInTime") || "15:00"),
@@ -558,6 +594,15 @@ export function TripAccommodations({
   }
   if (totalDays <= 1) return null;
   const edit = editing === "new" ? null : editing;
+  const detailDays =
+    focusedDetailDay !== null &&
+    focusedDetailDay >= checkInDay &&
+    focusedDetailDay < checkOutDay
+      ? [focusedDetailDay]
+      : Array.from(
+          { length: checkOutDay - checkInDay },
+          (_, index) => checkInDay + index,
+        );
   return (
     <section
       className={`accommodation-panel ${overlayOnly ? "accommodation-overlay-only" : ""}`}
@@ -578,38 +623,49 @@ export function TripAccommodations({
           <div className="card accommodation-empty">กำลังโหลดที่พัก…</div>
         ) : items.length ? (
           <div className="accommodation-list">
-            {items.map((item) => (
-              <button
-                type="button"
-                className="accommodation-card"
-                key={item.id}
-                onClick={() => openEdit(item)}
-              >
-                <span className="accommodation-card-icon">
-                  <BedDouble size={21} />
-                </span>
-                <span className="accommodation-card-copy">
-                  <strong>{item.name}</strong>
-                  <small>
-                    <MapPin size={12} />
-                    {item.location || "ยังไม่ได้ระบุโลเคชัน"}
-                  </small>
-                  <small>
-                    <CalendarDays size={12} />
-                    Day {displayDay(item.check_in_day)}–
-                    {displayDay(item.check_out_day)} · {item.nights}{" "}
-                    คืน
-                  </small>
-                </span>
-                <span className="accommodation-card-price">
-                  <strong>{money(item.foreign_amount, item.currency)}</strong>
-                  <small>{item.payment_method}</small>
-                  <i>
-                    <Pencil size={14} />
-                  </i>
-                </span>
-              </button>
-            ))}
+            {items.map((item) => {
+              const isBaht = item.currency === "THB";
+              const bahtAmount =
+                Number(item.foreign_amount) * Number(item.exchange_rate || 1);
+              return (
+                <button
+                  type="button"
+                  className="accommodation-card"
+                  key={item.id}
+                  onClick={() => openEdit(item)}
+                >
+                  <span className="accommodation-card-copy">
+                    <strong>{item.name}</strong>
+                    <small>
+                      <MapPin size={12} />
+                      {item.location || "ยังไม่ได้ระบุโลเคชัน"}
+                    </small>
+                    <small>
+                      <CalendarDays size={12} />
+                      {tripDateLabel(startDate, item.check_in_day)} –{" "}
+                      {tripDateLabel(startDate, item.check_out_day)}
+                    </small>
+                    <small>
+                      Day {displayDay(item.check_in_day)}–
+                      {displayDay(item.check_out_day)} · {item.nights} คืน
+                    </small>
+                  </span>
+                  <span className="accommodation-card-price">
+                    {!isBaht && (
+                      <small>{money(item.foreign_amount, item.currency)}</small>
+                    )}
+                    <strong>
+                      {isBaht ? "" : "≈ "}
+                      {money(isBaht ? item.foreign_amount : bahtAmount)}
+                    </strong>
+                    <small>{item.payment_method}</small>
+                    <i>
+                      <Pencil size={14} />
+                    </i>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <div className="card accommodation-empty">
@@ -674,15 +730,6 @@ export function TripAccommodations({
                   options={locations}
                   defaultValue={edit?.location || ""}
                 />
-                <div className="field accommodation-description-field">
-                  <label>รายละเอียด</label>
-                  <textarea
-                    name="description"
-                    maxLength={2000}
-                    defaultValue={edit?.description || ""}
-                    placeholder="เช่น วิธีเช็กอิน สิ่งอำนวยความสะดวก หรือหมายเหตุเกี่ยวกับที่พัก"
-                  />
-                </div>
                 <div className="form-row">
                   <div className="field">
                     <label>เช็กอิน</label>
@@ -727,6 +774,39 @@ export function TripAccommodations({
                     </select>
                   </div>
                 </div>
+                <section className="accommodation-night-details">
+                  <div>
+                    <strong>
+                      {focusedDetailDay === null
+                        ? "รายละเอียดแต่ละวัน"
+                        : `รายละเอียด Day ${displayDay(focusedDetailDay)}`}
+                    </strong>
+                    <small>
+                      {focusedDetailDay === null
+                        ? "แยกบันทึกใน Timeline ของแต่ละคืน"
+                        : `คืนที่ ${focusedDetailDay - checkInDay + 1}/${checkOutDay - checkInDay} · ${tripDateLabel(startDate, focusedDetailDay)}`}
+                    </small>
+                  </div>
+                  {detailDays.map((day) => (
+                    <div className="field" key={day}>
+                      <label>
+                        Day {displayDay(day)} · คืนที่ {day - checkInDay + 1}/
+                        {checkOutDay - checkInDay}
+                      </label>
+                      <textarea
+                        maxLength={2000}
+                        value={nightDescriptions[String(day)] || ""}
+                        onChange={(event) =>
+                          setNightDescriptions((current) => ({
+                            ...current,
+                            [String(day)]: event.target.value,
+                          }))
+                        }
+                        placeholder={`รายละเอียดสำหรับ Day ${displayDay(day)} เช่น วิธีเช็กอินหรือหมายเหตุ`}
+                      />
+                    </div>
+                  ))}
+                </section>
                 <div className="form-row flight-datetime-row">
                   <div className="field">
                     <label>เวลาเช็กอิน</label>

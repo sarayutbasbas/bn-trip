@@ -398,6 +398,19 @@ const migrations = [
       ),false)`,
     ],
   },
+  {
+    version: 29,
+    statements: [
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS night_descriptions JSONB NOT NULL DEFAULT '{}'::jsonb",
+      `UPDATE trip_accommodations accommodation
+       SET night_descriptions=COALESCE((
+         SELECT jsonb_object_agg(day_number::text,accommodation.description)
+         FROM generate_series(accommodation.check_in_day,accommodation.check_out_day-1) day_number
+       ),'{}'::jsonb)
+       WHERE accommodation.night_descriptions='{}'::jsonb
+         AND accommodation.description<>''`,
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

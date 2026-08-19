@@ -11,7 +11,10 @@ const reviewSchema = z.object({
     .number()
     .min(1)
     .max(5)
-    .refine(Number.isInteger, "Rating must be an integer"),
+    .refine(
+      (value) => Math.abs(value * 10 - Math.round(value * 10)) < 1e-9,
+      "Rating must use one decimal place",
+    ),
   review: z.string().trim().max(2000),
 });
 

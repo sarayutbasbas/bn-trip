@@ -7199,6 +7199,64 @@ button:disabled {
 .review-stars.is-editable button:active {
   transform: scale(0.88);
 }
+.review-rating-input {
+  margin: 11px 0 12px;
+  padding: 12px;
+  border: 0.5px solid var(--line);
+  border-radius: 17px;
+  display: grid;
+  gap: 10px;
+  background: var(--surface-solid);
+}
+.review-rating-value {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+}
+.review-rating-value button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0.5px solid var(--line);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--orange);
+  background: var(--brand-soft);
+}
+.review-rating-value button:disabled {
+  opacity: 0.38;
+}
+.review-rating-value output {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  color: var(--ink);
+}
+.review-rating-value output strong {
+  font-size: 25px;
+  line-height: 1;
+}
+.review-rating-value output small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.review-rating-input > input[type="range"] {
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--orange);
+  cursor: pointer;
+}
+.review-rating-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 9px;
+}
 .review-member-card textarea {
   min-height: 96px;
   resize: vertical;
@@ -9378,26 +9436,49 @@ html.sheet-open body {
 }
 .accommodation-card {
   position: relative;
-  min-height: 106px;
-  padding: 15px 16px;
+  min-height: 92px;
+  padding: 12px 14px;
   overflow: hidden;
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--brand-soft) 58%, transparent), transparent 42%),
-    var(--surface);
+  border: 0.5px solid var(--line);
+  border-radius: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, auto);
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 .accommodation-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 5px;
-  background: var(--brand-gradient);
+  display: none;
 }
-.accommodation-card-icon {
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--orange) 16%, transparent);
+.accommodation-card-copy {
+  gap: 2px;
 }
-.accommodation-card-copy strong { font-size: 15px; }
+.accommodation-card-copy strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.accommodation-card-copy small {
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+.accommodation-card-price {
+  min-width: 96px;
+  gap: 2px;
+}
+.accommodation-card-price strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.2;
+}
+.accommodation-card-price small {
+  max-width: 150px;
+  color: var(--muted);
+  font-size: 9px;
+}
 .accommodation-card-price i {
+  width: 26px;
+  height: 26px;
+  margin-top: 4px;
   color: var(--orange);
   background: var(--brand-soft);
 }
@@ -9412,6 +9493,30 @@ html.sheet-open body {
   background: transparent;
 }
 .accommodation-price-heading { display: none; }
+.accommodation-night-details {
+  padding: 12px;
+  border: 0.5px solid var(--line);
+  border-radius: 18px;
+  display: grid;
+  gap: 10px;
+  background: var(--surface-2);
+}
+.accommodation-night-details > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+.accommodation-night-details > div:first-child strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.accommodation-night-details > div:first-child small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.accommodation-night-details textarea {
+  min-height: 76px;
+  background: var(--surface-solid);
+}
 .accommodation-card-brand {
   background-color: #fff;
   background-position: center;

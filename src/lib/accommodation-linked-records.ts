@@ -8,6 +8,7 @@ export type AccommodationLinkedInput = {
   name: string;
   location: string;
   description: string;
+  nightDescriptions: Record<string, string>;
   checkInDay: number;
   checkOutDay: number;
   checkInTime: string;
@@ -86,7 +87,7 @@ export async function syncAccommodationLinkedRecords(
         dayNumber,
         input.name,
         input.location || null,
-        input.description || null,
+        (input.nightDescriptions[String(dayNumber)] ?? input.description) || null,
         JSON.stringify(night === 1 ? cost : []),
         input.id,
         night,

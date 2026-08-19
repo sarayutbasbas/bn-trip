@@ -81,6 +81,7 @@ import {
   LocateFixed,
   LogOut,
   MapPin,
+  Minus,
   Moon,
   Navigation,
   Pencil,
@@ -3635,6 +3636,9 @@ function TripHub({
   const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(
     initialAccommodationId || null,
   );
+  const [openAccommodationDay, setOpenAccommodationDay] = useState<
+    number | null
+  >(null);
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
@@ -4064,6 +4068,7 @@ function TripHub({
                               !(event.target as HTMLElement).closest("button,a")
                             ) {
                               if (item.accommodation_id) {
+                                setOpenAccommodationDay(item.day_number);
                                 setOpenAccommodationId(item.accommodation_id);
                               }
                               else editPlace(item);
@@ -4074,6 +4079,7 @@ function TripHub({
                             className="event-card-main"
                             onClick={() => {
                               if (item.accommodation_id) {
+                                setOpenAccommodationDay(item.day_number);
                                 setOpenAccommodationId(item.accommodation_id);
                               } else editPlace(item);
                             }}
@@ -4200,8 +4206,10 @@ function TripHub({
                   : [],
               )}
               openAccommodationId={openAccommodationId}
+              openAccommodationDay={openAccommodationDay}
               onAccommodationOpened={() => {
                 setOpenAccommodationId(null);
+                setOpenAccommodationDay(null);
                 const url = new URL(window.location.href);
                 url.searchParams.delete("accommodation");
                 window.history.replaceState(
@@ -4245,7 +4253,11 @@ function TripHub({
                 : [],
             )}
             openAccommodationId={openAccommodationId}
-            onAccommodationOpened={() => setOpenAccommodationId(null)}
+            openAccommodationDay={openAccommodationDay}
+            onAccommodationOpened={() => {
+              setOpenAccommodationId(null);
+              setOpenAccommodationDay(null);
+            }}
             overlayOnly
             refreshToken={accommodationRefreshToken}
             canDelete={trip.access_role !== "view"}
@@ -4292,6 +4304,7 @@ function TimelineScreen({
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
   const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(null);
+  const [openAccommodationDay, setOpenAccommodationDay] = useState<number | null>(null);
   const { pullDistance, refreshing } = usePullToRefresh(
     refreshEnabled,
     async () => {
@@ -4419,8 +4432,10 @@ function TimelineScreen({
                   <article
                     className="event-card"
                     onClick={() => {
-                      if (item.accommodation_id)
+                      if (item.accommodation_id) {
+                        setOpenAccommodationDay(item.day_number);
                         setOpenAccommodationId(item.accommodation_id);
+                      }
                     }}
                   >
                     <div className="event-copy">
@@ -4482,7 +4497,11 @@ function TimelineScreen({
               : [],
           )}
           openAccommodationId={openAccommodationId}
-          onAccommodationOpened={() => setOpenAccommodationId(null)}
+          openAccommodationDay={openAccommodationDay}
+          onAccommodationOpened={() => {
+            setOpenAccommodationId(null);
+            setOpenAccommodationDay(null);
+          }}
           overlayOnly
           canDelete={trip.access_role !== "view"}
           notify={notify}
@@ -6582,6 +6601,60 @@ function ReviewStars({ value, editable = false, onChange }: { value: number; edi
   );
 }
 
+function ReviewRatingInput({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const normalize = (next: number) =>
+    Math.round(Math.max(1, Math.min(5, next)) * 10) / 10;
+  const selected = value >= 1 && value <= 5;
+  const current = selected ? value : 1;
+  return (
+    <div className="review-rating-input">
+      <div className="review-rating-value">
+        <button
+          type="button"
+          onClick={() => onChange(normalize(selected ? value - 0.1 : 1))}
+          disabled={selected && value <= 1}
+          aria-label="ลดคะแนน 0.1"
+        >
+          <Minus size={17} />
+        </button>
+        <output aria-live="polite">
+          <strong>{selected ? value.toFixed(1) : "—"}</strong>
+          <small>/ 5.0</small>
+        </output>
+        <button
+          type="button"
+          onClick={() => onChange(normalize(selected ? value + 0.1 : 1))}
+          disabled={selected && value >= 5}
+          aria-label="เพิ่มคะแนน 0.1"
+        >
+          <Plus size={17} />
+        </button>
+      </div>
+      <input
+        type="range"
+        min="1"
+        max="5"
+        step="0.1"
+        value={current}
+        onChange={(event) => onChange(normalize(Number(event.target.value)))}
+        aria-label="คะแนนรีวิว 1.0 ถึง 5.0"
+        aria-valuetext={selected ? `${value.toFixed(1)} จาก 5` : "ยังไม่ได้เลือกคะแนน"}
+      />
+      <div className="review-rating-scale" aria-hidden="true">
+        <span>1.0</span>
+        <span>ปรับครั้งละ 0.1</span>
+        <span>5.0</span>
+      </div>
+    </div>
+  );
+}
+
 function ReviewsSheet({
   trip,
   close,
@@ -6722,12 +6795,11 @@ function ReviewsSheet({
                       <ReviewMemberAvatar item={item} />
                       <div><strong>{item.display_name}</strong><small>{t("รีวิวของคุณ")}</small></div>
                       <b className={`review-selected-score ${rating ? "has-rating" : ""}`}>
-                        {rating ? `${rating} / 5` : t("เลือกคะแนน")}
+                        {rating ? `${rating.toFixed(1)} / 5` : t("เลือกคะแนน")}
                       </b>
                     </div>
-                    <ReviewStars
+                    <ReviewRatingInput
                       value={itemRating}
-                      editable
                       onChange={setRating}
                     />
                     <div className="field review-text-field">
