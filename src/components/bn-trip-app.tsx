@@ -3063,6 +3063,17 @@ function TripsDirectory({
           <p>{t(`${total} ทริป`)}</p>
         </div>
       </div>
+      <div className="status-filter">
+        {statuses.map(([value, label]) => (
+          <button
+            key={value}
+            className={status === value ? "active" : ""}
+            onClick={() => setStatus(value)}
+          >
+            {t(label)}
+          </button>
+        ))}
+      </div>
       <section className="trip-filter-panel">
         <div className="filter-search-row">
           <label className="trip-search">
@@ -3096,17 +3107,6 @@ function TripsDirectory({
               <option value="international">{t("ต่างประเทศ")}</option>
             </select>
           </label>
-        </div>
-        <div className="status-filter">
-          {statuses.map(([value, label]) => (
-            <button
-              key={value}
-              className={status === value ? "active" : ""}
-              onClick={() => setStatus(value)}
-            >
-              {t(label)}
-            </button>
-          ))}
         </div>
         <div className="filter-bottom">
           <div className="year-filter">

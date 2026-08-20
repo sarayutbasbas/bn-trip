@@ -2788,7 +2788,7 @@ button:disabled {
   font-weight: 400;
 }
 .status-filter {
-  margin-top: 9px;
+  margin: 9px 0;
   padding: 3px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
