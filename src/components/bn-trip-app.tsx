@@ -35,9 +35,6 @@ import {
 } from "@/src/lib/client-account";
 import { optimizedCanvasFile } from "@/src/lib/client-image-compression";
 import {
-  accommodationResourceKey,
-  flightResourceKey,
-  invalidateClientResource,
   invalidateClientResourcesContaining,
 } from "@/src/lib/client-resource-cache";
 import {
@@ -504,6 +501,7 @@ const EN_TEXT: Record<string, string> = {
   เจ้าของ: "Owner",
   ยังไม่มีข้อมูลช่องทางชำระ: "No payment data yet",
   รวมค่าใช้จ่าย: "Total expenses",
+  กดเพื่อแสดงทั้งหมด: "Tap to show all",
   ยังไม่มีค่าใช้จ่าย: "No expenses yet",
   สรุปค่าใช้จ่ายจากแพลน: "Plan expense summary",
   ยอดรวมแปลงเป็นเงินบาทด้วยเรตของวันที่บันทึก:
@@ -513,6 +511,7 @@ const EN_TEXT: Record<string, string> = {
   "ต้องเพิ่ม Timeline ก่อน": "Add a Timeline item first",
   "วันนี้ยังไม่มี Timeline": "No Timeline items today",
   ยังไม่มีราคาที่กรอกในวันนี้: "No expenses recorded today",
+  วันนี้ไม่มีค่าใช้จ่ายหมวด: "No expenses in this category today:",
   "ยังไม่มี Timeline ในวันนี้": "No Timeline items today",
   ตั้งค่า: "Settings",
   ค่าของบัญชีและอุปกรณ์นี้: "Account and device preferences",
@@ -3477,112 +3476,6 @@ function TripTimelineSearch({
   );
 }
 
-function usePullToRefresh(enabled: boolean, onRefresh: () => Promise<void>) {
-  const [pullDistance, setPullDistance] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const pullDistanceRef = useRef(0);
-  const refreshRef = useRef(onRefresh);
-  useEffect(() => {
-    refreshRef.current = onRefresh;
-  }, [onRefresh]);
-  useEffect(() => {
-    if (!enabled || refreshing) return;
-    let startY: number | null = null;
-    let pulling = false;
-    const updateDistance = (distance: number) => {
-      pullDistanceRef.current = distance;
-      setPullDistance(distance);
-    };
-    const onTouchStart = (event: TouchEvent) => {
-      if (
-        event.touches.length !== 1 ||
-        window.scrollY > 0 ||
-        (event.target instanceof Element &&
-          event.target.closest("input,textarea,select"))
-      )
-        return;
-      startY = event.touches[0].clientY;
-      pulling = true;
-    };
-    const onTouchMove = (event: TouchEvent) => {
-      if (!pulling || startY === null || event.touches.length !== 1) return;
-      if (window.scrollY > 0) {
-        pulling = false;
-        startY = null;
-        updateDistance(0);
-        return;
-      }
-      const delta = event.touches[0].clientY - startY;
-      if (delta <= 0) {
-        updateDistance(0);
-        return;
-      }
-      event.preventDefault();
-      updateDistance(Math.min(92, delta * 0.44));
-    };
-    const runRefresh = async () => {
-      setRefreshing(true);
-      updateDistance(54);
-      try {
-        await refreshRef.current();
-      } finally {
-        setRefreshing(false);
-        updateDistance(0);
-      }
-    };
-    const onTouchEnd = () => {
-      if (!pulling) return;
-      pulling = false;
-      startY = null;
-      if (pullDistanceRef.current >= 68) void runRefresh();
-      else updateDistance(0);
-    };
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onTouchEnd, { passive: true });
-    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
-    return () => {
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-      window.removeEventListener("touchcancel", onTouchEnd);
-    };
-  }, [enabled, refreshing]);
-  return { pullDistance, refreshing };
-}
-
-function PullRefreshIndicator({
-  pullDistance,
-  refreshing,
-}: {
-  pullDistance: number;
-  refreshing: boolean;
-}) {
-  const t = useT();
-  if (!pullDistance && !refreshing) return null;
-  return (
-    <div
-      className={`pull-refresh-indicator ${refreshing ? "is-refreshing" : ""} ${pullDistance >= 68 ? "is-ready" : ""}`}
-      style={{
-        opacity: refreshing ? 1 : Math.min(1, pullDistance / 42),
-        transform: `translate(-50%, ${Math.max(-46, pullDistance - 54)}px)`,
-      }}
-      aria-live="polite"
-    >
-      <RefreshCw size={16} />
-      <span>
-        {t(
-          refreshing
-            ? "กำลังรีเฟรช…"
-            : pullDistance >= 68
-              ? "ปล่อยเพื่อรีเฟรช"
-              : "ดึงลงเพื่อรีเฟรช",
-        )}
-      </span>
-    </div>
-  );
-}
-
 function TripHub({
   trip,
   items,
@@ -3601,8 +3494,6 @@ function TripHub({
   openCost,
   onFlightChanged,
   notify,
-  onRefresh,
-  refreshEnabled,
   initialWorkspaceTab,
   initialView,
   initialAccommodationId,
@@ -3624,8 +3515,6 @@ function TripHub({
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
   onFlightChanged: () => void | Promise<void>;
   notify: (message: string) => void;
-  onRefresh: () => Promise<void>;
-  refreshEnabled: boolean;
   initialWorkspaceTab?: WorkspaceTab;
   initialView?: "plan" | "flights" | "stays";
   initialAccommodationId?: string;
@@ -3648,9 +3537,6 @@ function TripHub({
     flightIncomplete: false,
     checklistIncomplete: false,
   });
-  const [flightRefreshToken, setFlightRefreshToken] = useState(0);
-  const [accommodationRefreshToken, setAccommodationRefreshToken] =
-    useState(0);
   const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(
     initialAccommodationId || null,
   );
@@ -3668,36 +3554,6 @@ function TripHub({
   const searchScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
-  const { pullDistance, refreshing } = usePullToRefresh(
-    refreshEnabled &&
-      (view === "plan" || view === "flights" || view === "stays"),
-    async () => {
-      try {
-        await onRefresh();
-        if (view === "flights") {
-          invalidateClientResource(flightResourceKey(trip.id));
-          setFlightRefreshToken((value) => value + 1);
-        } else if (view === "stays") {
-          invalidateClientResource(accommodationResourceKey(trip.id));
-          setAccommodationRefreshToken((value) => value + 1);
-        }
-        window.dispatchEvent(
-          new CustomEvent("trip-completion-changed", {
-            detail: { tripId: trip.id },
-          }),
-        );
-        notify(
-          view === "flights"
-            ? "อัปเดตข้อมูลเที่ยวบินแล้ว"
-            : view === "stays"
-              ? "อัปเดตข้อมูลที่พักแล้ว"
-              : "อัปเดต Timeline แล้ว",
-        );
-      } catch {
-        notify("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
-      }
-    },
-  );
   useEffect(() => {
     let active = true;
     async function loadCompletion() {
@@ -3837,8 +3693,6 @@ function TripHub({
     [],
   );
   return (
-    <>
-      <PullRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
       <div ref={hubRef} className="screen trip-hub-screen">
       <div className="trip-cover-region">
         <TripHeader
@@ -4212,7 +4066,6 @@ function TripHub({
               canDelete={trip.access_role !== "view"}
               notify={notify}
               onChanged={onFlightChanged}
-              refreshToken={flightRefreshToken}
               onOpenDocuments={() => selectView("workspace", "documents")}
             /> : <TripAccommodations
               tripId={trip.id}
@@ -4239,7 +4092,6 @@ function TripHub({
                   `${url.pathname}${url.search}${url.hash}`,
                 );
               }}
-              refreshToken={accommodationRefreshToken}
               canDelete={trip.access_role !== "view"}
               notify={notify}
               onChanged={onFlightChanged}
@@ -4280,7 +4132,6 @@ function TripHub({
               setOpenAccommodationDay(null);
             }}
             overlayOnly
-            refreshToken={accommodationRefreshToken}
             canDelete={trip.access_role !== "view"}
             notify={notify}
             onChanged={onFlightChanged}
@@ -4288,7 +4139,6 @@ function TripHub({
         )}
       </div>
       </div>
-    </>
   );
 }
 
@@ -4300,8 +4150,6 @@ function TimelineScreen({
   setDay,
   addPlace,
   back,
-  onRefresh,
-  refreshEnabled,
   notify,
   onChanged,
 }: {
@@ -4312,8 +4160,6 @@ function TimelineScreen({
   setDay: (n: number) => void;
   addPlace: () => void;
   back: () => void;
-  onRefresh: () => Promise<void>;
-  refreshEnabled: boolean;
   notify: (message: string) => void;
   onChanged: () => void | Promise<void>;
 }) {
@@ -4326,17 +4172,6 @@ function TimelineScreen({
   const itinerariesByDay = useItinerariesByDay(items);
   const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(null);
   const [openAccommodationDay, setOpenAccommodationDay] = useState<number | null>(null);
-  const { pullDistance, refreshing } = usePullToRefresh(
-    refreshEnabled,
-    async () => {
-      try {
-        await onRefresh();
-        notify("อัปเดต Timeline แล้ว");
-      } catch {
-        notify("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
-      }
-    },
-  );
   useEffect(
     () =>
       setDay(
@@ -4367,8 +4202,6 @@ function TimelineScreen({
         }, -1)
       : -1;
   return (
-    <>
-      <PullRefreshIndicator pullDistance={pullDistance} refreshing={refreshing} />
       <div className="screen timeline-screen">
       <TripHeader trip={trip} back={back} />
       <div
@@ -4530,21 +4363,22 @@ function TimelineScreen({
         />
       )}
       </div>
-    </>
   );
 }
 
 function CategoryDonut({
   categories,
   total,
+  selectedCategory,
+  onSelectedCategoryChange,
 }: {
   categories: Array<[string, number]>;
   total: number;
+  selectedCategory: string | null;
+  onSelectedCategoryChange: (category: string | null) => void;
 }) {
   const t = useT();
-  const [activeIndex, setActiveIndex] = useState<number | null>(
-    categories.length ? 0 : null,
-  );
+  const [previewCategory, setPreviewCategory] = useState<string | null>(null);
   const colors = [
     "#ff4f0a",
     "#ff9f2d",
@@ -4584,12 +4418,17 @@ function CategoryDonut({
       }>,
     },
   ).items;
-  const selectedIndex = segments.length
-    ? Math.min(activeIndex ?? 0, segments.length - 1)
+  const selectedIndex = selectedCategory
+    ? segments.findIndex((segment) => segment.category === selectedCategory)
     : null;
-  const active =
-    selectedIndex === null ? null : segments[selectedIndex] || null;
+  const active = previewCategory
+    ? segments.find((segment) => segment.category === previewCategory) || null
+    : selectedCategory
+      ? segments.find((segment) => segment.category === selectedCategory) || null
+      : null;
   const money = (amount: number) => bahtFormat(amount);
+  const selectCategory = (category: string) =>
+    onSelectedCategoryChange(selectedCategory === category ? null : category);
   return (
     <section className="budget-donut-summary">
       <div className="expense-total-banner">
@@ -4630,20 +4469,22 @@ function CategoryDonut({
                 tabIndex={0}
                 aria-label={`${t(segment.category)} ฿${money(segment.amount)} ${segment.percent.toFixed(1)}%`}
                 aria-pressed={selectedIndex === segment.index}
-                onMouseEnter={() => setActiveIndex(segment.index)}
-                onFocus={() => setActiveIndex(segment.index)}
-                onClick={() => setActiveIndex(segment.index)}
+                onMouseEnter={() => setPreviewCategory(segment.category)}
+                onMouseLeave={() => setPreviewCategory(null)}
+                onFocus={() => setPreviewCategory(segment.category)}
+                onBlur={() => setPreviewCategory(null)}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  selectCategory(segment.category);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    setActiveIndex(segment.index);
+                    selectCategory(segment.category);
                   }
                 }}
               >
-                <title>
-                  {t(segment.category)} · ฿{money(segment.amount)} ·{" "}
-                  {segment.percent.toFixed(1)}%
-                </title>
+                <title>{`${t(segment.category)} · ฿${money(segment.amount)} · ${segment.percent.toFixed(1)}%`}</title>
               </circle>
             ))}
           </svg>
@@ -4657,32 +4498,52 @@ function CategoryDonut({
               </>
             ) : (
               <>
-                <span>{t("ยังไม่มีค่าใช้จ่าย")}</span>
-                <strong>฿0.00</strong>
+                <span>{t(segments.length ? "ทั้งหมด" : "ยังไม่มีค่าใช้จ่าย")}</span>
+                <strong>฿{money(total)}</strong>
+                {segments.length > 0 && <small>100%</small>}
               </>
             )}
           </div>
         </div>
         <div className="donut-legend">
           {segments.length ? (
-            segments.map((segment) => (
+            <>
               <button
                 type="button"
-                key={segment.category}
-                className={selectedIndex === segment.index ? "active" : ""}
-                onMouseEnter={() => setActiveIndex(segment.index)}
-                onFocus={() => setActiveIndex(segment.index)}
-                onClick={() => setActiveIndex(segment.index)}
-                aria-pressed={selectedIndex === segment.index}
+                className={`donut-legend-all ${selectedCategory === null ? "active" : ""}`}
+                onMouseEnter={() => setPreviewCategory(null)}
+                onFocus={() => setPreviewCategory(null)}
+                onClick={() => onSelectedCategoryChange(null)}
+                aria-pressed={selectedCategory === null}
               >
-                <i style={{ background: segment.color }} />
+                <i />
                 <span>
-                  <b>{t(segment.category)}</b>
-                  <small>{segment.percent.toFixed(1)}%</small>
+                  <b>{t("ทั้งหมด")}</b>
+                  <small>100%</small>
                 </span>
-                <strong>฿{money(segment.amount)}</strong>
+                <strong>฿{money(total)}</strong>
               </button>
-            ))
+              {segments.map((segment) => (
+                <button
+                  type="button"
+                  key={segment.category}
+                  className={selectedIndex === segment.index ? "active" : ""}
+                  onMouseEnter={() => setPreviewCategory(segment.category)}
+                  onMouseLeave={() => setPreviewCategory(null)}
+                  onFocus={() => setPreviewCategory(segment.category)}
+                  onBlur={() => setPreviewCategory(null)}
+                  onClick={() => selectCategory(segment.category)}
+                  aria-pressed={selectedIndex === segment.index}
+                >
+                  <i style={{ background: segment.color }} />
+                  <span>
+                    <b>{t(segment.category)}</b>
+                    <small>{segment.percent.toFixed(1)}%</small>
+                  </span>
+                  <strong>฿{money(segment.amount)}</strong>
+                </button>
+              ))}
+            </>
           ) : (
             <div className="donut-empty">
               <span>{t("ยังไม่มีค่าใช้จ่าย")}</span>
@@ -4705,6 +4566,7 @@ export function LegacyPlanExpensesContent({
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
 }) {
   const t = useT();
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const total = items.reduce(
     (sum, item) =>
       sum +
@@ -4757,7 +4619,12 @@ export function LegacyPlanExpensesContent({
           {t("เพิ่มค่าใช้จ่าย")}
         </button>
       </div>
-      <CategoryDonut categories={categories} total={total} />
+      <CategoryDonut
+        categories={categories}
+        total={total}
+        selectedCategory={selectedCategory}
+        onSelectedCategoryChange={setSelectedCategory}
+      />
       <div className="expense-days">
         {Array.from({ length: trip.total_days }, (_, index) => index + 1).map(
           (dayNumber) => {
@@ -5093,6 +4960,7 @@ function PlanExpensesContent({
 }) {
   const t = useT();
   const [showBackTop, setShowBackTop] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const allCosts = items.flatMap((item) => item.cost_items || []);
   const isShopping = (cost: CostItem) =>
     (cost.category || "").toLowerCase() === "shopping";
@@ -5121,6 +4989,9 @@ function PlanExpensesContent({
       new Map<string, number>(),
     ),
   ).sort((a, b) => b[1] - a[1]);
+  const selectedCategoryTotal = selectedCategory
+    ? categories.find(([category]) => category === selectedCategory)?.[1] || 0
+    : 0;
   const availableDays = Array.from(
     new Set(items.map((item) => item.day_number)),
   ).sort((a, b) => a - b);
@@ -5142,7 +5013,12 @@ function PlanExpensesContent({
         tripTotal={tripTotal}
         shoppingTotal={shoppingTotal}
       />
-      <CategoryDonut categories={categories} total={tripTotal} />
+      <CategoryDonut
+        categories={categories}
+        total={tripTotal}
+        selectedCategory={selectedCategory}
+        onSelectedCategoryChange={setSelectedCategory}
+      />
       <PaymentMethodSummary costs={allCosts} cards={cards} />
       <ExpenseMemberSummary
         costs={allCosts}
@@ -5159,13 +5035,22 @@ function PlanExpensesContent({
                 ),
               );
             const dayCosts = dayItems.flatMap((item) => item.cost_items || []);
+            const visibleDayCosts = selectedCategory
+              ? dayCosts.filter(
+                  (cost) => (cost.category || "อื่น ๆ") === selectedCategory,
+                )
+              : dayCosts;
             const dayTripTotal = dayCosts
               .filter((cost) => !isShopping(cost))
               .reduce((sum, cost) => sum + Number(cost.value || 0), 0);
             const dayShoppingTotal = dayCosts
               .filter(isShopping)
               .reduce((sum, cost) => sum + Number(cost.value || 0), 0);
-            const count = dayCosts.length;
+            const selectedDayTotal = visibleDayCosts.reduce(
+              (sum, cost) => sum + Number(cost.value || 0),
+              0,
+            );
+            const count = visibleDayCosts.length;
             return (
               <section
                 className={`expense-day-card ${dayItems.length ? "" : "without-timeline"}`}
@@ -5177,16 +5062,25 @@ function PlanExpensesContent({
                     <small>{t(`${count} รายการ`)}</small>
                   </div>
                   <div className="expense-day-actions">
-                    <div className="day-split-total">
-                      <span>
-                        {t("ค่าใช้จ่ายทริป")}{" "}
-                        <strong>฿{bahtFormat(dayTripTotal)}</strong>
-                      </span>
-                      <span>
-                        {t("ค่า Shopping")}{" "}
-                        <strong>฿{bahtFormat(dayShoppingTotal)}</strong>
-                      </span>
-                    </div>
+                    {selectedCategory ? (
+                      <div className="day-split-total is-category-filtered">
+                        <span>
+                          {t(selectedCategory)}{" "}
+                          <strong>฿{bahtFormat(selectedDayTotal)}</strong>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="day-split-total">
+                        <span>
+                          {t("ค่าใช้จ่ายทริป")}{" "}
+                          <strong>฿{bahtFormat(dayTripTotal)}</strong>
+                        </span>
+                        <span>
+                          {t("ค่า Shopping")}{" "}
+                          <strong>฿{bahtFormat(dayShoppingTotal)}</strong>
+                        </span>
+                      </div>
+                    )}
                     <button
                       type="button"
                       disabled={!dayItems.length}
@@ -5212,15 +5106,22 @@ function PlanExpensesContent({
                 {count === 0 ? (
                   <p className="expense-day-empty">
                     {t(
-                      dayItems.length
-                        ? "ยังไม่มีราคาที่กรอกในวันนี้"
-                        : "ยังไม่มี Timeline ในวันนี้",
+                      selectedCategory
+                        ? `${t("วันนี้ไม่มีค่าใช้จ่ายหมวด")} ${t(selectedCategory)}`
+                        : dayItems.length
+                          ? "ยังไม่มีราคาที่กรอกในวันนี้"
+                          : "ยังไม่มี Timeline ในวันนี้",
                     )}
                   </p>
                 ) : (
                   <div className="expense-day-list">
                     {dayItems.flatMap((item) =>
                       (item.cost_items || []).map((cost, costIndex) => {
+                        if (
+                          selectedCategory &&
+                          (cost.category || "อื่น ๆ") !== selectedCategory
+                        )
+                          return null;
                         const isBaht = (cost.currency || "THB") === "THB";
                         const card = findPaymentCard(cards, cost);
                         return (
@@ -5267,6 +5168,21 @@ function PlanExpensesContent({
           },
         )}
       </div>
+      {selectedCategory && (
+        <button
+          type="button"
+          className="expense-filter-fab"
+          onClick={() => setSelectedCategory(null)}
+          title={t("กดเพื่อแสดงทั้งหมด")}
+          aria-label={`${t(selectedCategory)} ฿${bahtFormat(selectedCategoryTotal)} — ${t("กดเพื่อแสดงทั้งหมด")}`}
+        >
+          <span className="expense-filter-fab-copy">
+            <strong>{t(selectedCategory)}</strong>
+            <b>฿{bahtFormat(selectedCategoryTotal)}</b>
+          </span>
+          <X size={16} aria-hidden="true" />
+        </button>
+      )}
       {showBackTop && (
         <button
           type="button"
@@ -9064,8 +8980,6 @@ export function BNTripApp({
         setItineraries(rows);
       }}
       notify={flash}
-      onRefresh={() => refreshActiveTrip(selected.id)}
-      refreshEnabled={!modal && !confirmation}
       initialWorkspaceTab={workspaceTab}
       initialView={tripView}
       initialAccommodationId={accommodationId}
@@ -9079,8 +8993,6 @@ export function BNTripApp({
       setDay={setActiveDay}
       addPlace={protect(() => setModal({ type: "place" }))}
       back={() => router.push(`/trips/${selected.id}`)}
-      onRefresh={() => refreshActiveTrip(selected.id)}
-      refreshEnabled={!modal && !confirmation}
       notify={flash}
       onChanged={() => refreshActiveTrip(selected.id)}
     />

@@ -2919,7 +2919,7 @@ button:disabled {
 }
 .compact-trip-body {
   min-width: 0;
-  padding: 13px 78px 13px 12px;
+  padding: 13px 12px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -2959,13 +2959,12 @@ button:disabled {
 }
 .compact-trip-body h3 {
   margin: 0;
-  overflow: hidden;
   color: var(--ink);
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 17px;
   font-weight: 700;
+  line-height: 1.2;
   letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
 }
 .compact-trip-body p {
   min-width: 0;
@@ -2978,9 +2977,8 @@ button:disabled {
 }
 .compact-trip-body p span {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 .compact-trip-body small {
   margin-top: 7px;
@@ -2991,8 +2989,8 @@ button:disabled {
   font-size: 9px;
 }
 .compact-trip-body > small {
-  width: calc(100% + 66px);
-  max-width: calc(100% + 66px);
+  width: 100%;
+  max-width: 100%;
   overflow: visible;
   line-height: 1.35;
   text-overflow: clip;
@@ -3003,6 +3001,9 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+}
+.compact-trip-card.has-shared-members .compact-trip-meta {
+  padding-right: 66px;
 }
 .compact-trip-meta span {
   padding: 4px 7px;
@@ -3063,6 +3064,58 @@ button:disabled {
 .directory-fab:disabled {
   opacity: 0.48;
   transform: none;
+}
+.expense-filter-fab {
+  position: fixed;
+  z-index: 40;
+  left: max(18px, calc((100vw - 1120px) / 2));
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  max-width: min(360px, calc(100vw - 190px));
+  min-height: 56px;
+  padding: 8px 12px 8px 15px;
+  border: 1px solid rgba(255, 126, 32, 0.38);
+  border-radius: 999px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface-solid) 92%, transparent);
+  box-shadow:
+    0 12px 30px rgba(20, 20, 22, 0.22),
+    0 0 0 4px rgba(255, 107, 0, 0.1);
+  text-align: left;
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  animation: back-top-in 180ms var(--ease-ios) both;
+}
+.expense-filter-fab-copy {
+  min-width: 0;
+  display: grid;
+  line-height: 1.15;
+}
+.expense-filter-fab-copy strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expense-filter-fab-copy b {
+  color: var(--orange);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.expense-filter-fab > svg {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--brand-gradient);
+}
+.expense-filter-fab:active {
+  transform: scale(0.97);
 }
 .expense-back-top {
   position: fixed;
@@ -4751,6 +4804,18 @@ button:disabled {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+}
+.donut-legend .donut-legend-all > i {
+  background: conic-gradient(
+    #ff4f0a,
+    #ff9f2d,
+    #ffcc4d,
+    #34c759,
+    #0a84ff,
+    #8e5cff,
+    #ff5c8a,
+    #ff4f0a
+  );
 }
 .donut-legend button > span {
   min-width: 0;
