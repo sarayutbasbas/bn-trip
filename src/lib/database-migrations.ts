@@ -411,6 +411,27 @@ const migrations = [
          AND accommodation.description<>''`,
     ],
   },
+  {
+    version: 30,
+    statements: [
+      "ALTER TABLE trips ADD COLUMN IF NOT EXISTS trip_destinations JSONB NOT NULL DEFAULT '[]'::jsonb",
+      "CREATE INDEX IF NOT EXISTS trips_trip_destinations_gin_idx ON trips USING GIN (trip_destinations)",
+    ],
+  },
+  {
+    version: 31,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS user_badge_visits (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        badge_id VARCHAR(120) NOT NULL,
+        visited_on DATE NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (user_id,badge_id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS user_badge_visits_user_date_idx ON user_badge_visits(user_id,visited_on DESC)",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

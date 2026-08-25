@@ -42,8 +42,12 @@ import {
   countryByCode,
   formatTripDestination,
   inferTripCountry,
-  tripCity,
 } from "@/src/lib/countries";
+import {
+  TRIP_DESTINATION_OPTIONS,
+  type TripDestinationOption,
+  type TripDestinationSelection,
+} from "@/src/lib/travel-badges";
 import { FlightPassengerInfoList } from "@/src/components/flight-passenger-info";
 import {
   AlertTriangle,
@@ -174,6 +178,7 @@ export type Trip = {
   destination: string;
   country_code?: string | null;
   country_name?: string | null;
+  trip_destinations?: TripDestinationSelection[];
   start_date: string;
   total_days: number;
   budget_thb: string;
@@ -2190,6 +2195,7 @@ function Dashboard({
   createTrip,
   viewAll,
   viewAnalytics,
+  viewBadges,
   onInvitationChanged,
   notify,
   confirmAction,
@@ -2203,6 +2209,7 @@ function Dashboard({
   createTrip: () => void;
   viewAll: (status: TripStatus) => void;
   viewAnalytics: () => void;
+  viewBadges: () => void;
   onInvitationChanged: () => void;
   notify: (message: string) => void;
   confirmAction: (confirmation: Confirmation) => void;
@@ -2272,15 +2279,26 @@ function Dashboard({
   return (
     <div className="screen">
       <section className="welcome">
-        <button
-          type="button"
-          className="welcome-insights-btn"
-          onClick={viewAnalytics}
-          aria-label={t("สถิติการเดินทาง")}
-        >
-          <ChartNoAxesColumnIncreasing size={15} />
-          <span>{t("สถิติ")}</span>
-        </button>
+        <div className="welcome-shortcuts">
+          <button
+            type="button"
+            className="welcome-insights-btn"
+            onClick={viewBadges}
+            aria-label={t("เข็มกลัดท่องเที่ยว")}
+          >
+            <MapPin size={15} />
+            <span>{t("เข็มกลัด")}</span>
+          </button>
+          <button
+            type="button"
+            className="welcome-insights-btn"
+            onClick={viewAnalytics}
+            aria-label={t("สถิติการเดินทาง")}
+          >
+            <ChartNoAxesColumnIncreasing size={15} />
+            <span>{t("สถิติ")}</span>
+          </button>
+        </div>
         <div className="welcome-content">
           <div className="welcome-topline">
             {profile && (
@@ -2515,15 +2533,37 @@ function TravelAnalyticsDashboard({
       ))}
     </nav>
   );
+  const analyticsHero = (
+    <header className="analytics-hero">
+      <nav className="welcome-shortcuts hero-shortcuts" aria-label={t("ทางลัด")}>
+        <Link className="welcome-insights-btn" href="/"><House size={15} /><span>Home</span></Link>
+        <Link className="welcome-insights-btn" href="/badges"><MapPin size={15} /><span>{t("เข็มกลัด")}</span></Link>
+      </nav>
+      <div className="analytics-hero-copy">
+        <span className="section-kicker">JOURNEY INSIGHTS</span>
+        <h1>{t("เรื่องราวการเดินทางของคุณ")}</h1>
+        <p>{t("ทุกประเทศ ทุกทริป และทุกความทรงจำในภาพเดียว")}</p>
+        <div>
+          <b>{data.totals.trips}</b>
+          <span>{t("ทริปที่ผ่านมา")}</span>
+        </div>
+      </div>
+      <div className="analytics-hero-art" aria-hidden="true">
+        <Cloud className="analytics-cloud analytics-cloud-one" />
+        <Cloud className="analytics-cloud analytics-cloud-two" />
+        <span className="analytics-sun" />
+        <span className="analytics-flight-path" />
+        <Plane className="analytics-plane" />
+        <span className="analytics-land analytics-land-one" />
+        <span className="analytics-land analytics-land-two" />
+      </div>
+    </header>
+  );
 
   if (!data.totals.trips)
     return (
       <div className="screen analytics-screen">
-        <header className="analytics-heading">
-          <span className="section-kicker">JOURNEY INSIGHTS</span>
-          <h1>{t("สถิติการเดินทาง")}</h1>
-          <p>{t("ภาพรวมจากทริปที่ผ่านมาแล้วเท่านั้น")}</p>
-        </header>
+        {analyticsHero}
         {scopeFilter}
         <article className="card analytics-empty">
           <ChartNoAxesColumnIncreasing size={28} />
@@ -2537,26 +2577,7 @@ function TravelAnalyticsDashboard({
 
   return (
     <div className="screen analytics-screen">
-      <header className="analytics-hero">
-        <div className="analytics-hero-copy">
-          <span className="section-kicker">JOURNEY INSIGHTS</span>
-          <h1>{t("เรื่องราวการเดินทางของคุณ")}</h1>
-          <p>{t("ทุกประเทศ ทุกทริป และทุกความทรงจำในภาพเดียว")}</p>
-          <div>
-            <b>{data.totals.trips}</b>
-            <span>{t("ทริปที่ผ่านมา")}</span>
-          </div>
-        </div>
-        <div className="analytics-hero-art" aria-hidden="true">
-          <Cloud className="analytics-cloud analytics-cloud-one" />
-          <Cloud className="analytics-cloud analytics-cloud-two" />
-          <span className="analytics-sun" />
-          <span className="analytics-flight-path" />
-          <Plane className="analytics-plane" />
-          <span className="analytics-land analytics-land-one" />
-          <span className="analytics-land analytics-land-two" />
-        </div>
-      </header>
+      {analyticsHero}
 
       {scopeFilter}
 
@@ -7660,6 +7681,77 @@ function TripLocationInput({
   );
 }
 
+function TripDestinationPicker({
+  countryCode,
+  selected,
+  onChange,
+}: {
+  countryCode: string;
+  selected: TripDestinationOption[];
+  onChange: (items: TripDestinationOption[]) => void;
+}) {
+  const t = useT();
+  const lang = useContext(LanguageContext);
+  const [query, setQuery] = useState("");
+  const [focused, setFocused] = useState(false);
+  const options = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return TRIP_DESTINATION_OPTIONS.filter((option) =>
+      option.countryCode === countryCode &&
+      !selected.some((item) => item.id === option.id) &&
+      (!normalized || [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => term.toLowerCase().includes(normalized)))
+    ).slice(0, 12);
+  }, [countryCode, query, selected]);
+  const add = (option: TripDestinationOption) => {
+    onChange([...selected, option]);
+    setQuery("");
+    setFocused(true);
+  };
+  return (
+    <div className="field trip-destination-picker">
+      <label>{t("เมือง / จังหวัดที่ไป")}</label>
+      {selected.map((option) => <input key={`hidden-${option.id}`} type="hidden" name="locationIds" value={option.id} />)}
+      <div className="trip-destination-control">
+        {selected.length > 0 && (
+          <div className="trip-destination-chips">
+            {selected.map((option) => (
+              <span key={option.id}>
+                <b>{lang === "EN" ? option.nameEn : option.nameTh}</b>
+                <button type="button" onClick={() => onChange(selected.filter((item) => item.id !== option.id))} aria-label={`${t("ลบ")} ${option.nameTh}`}><X size={12} /></button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="trip-destination-search">
+          <Search size={16} />
+          <input
+            value={query}
+            onFocus={() => setFocused(true)}
+            onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("ค้นหาเมืองหรือจังหวัด")}
+            role="combobox"
+            aria-expanded={focused}
+            aria-controls="trip-destination-options"
+          />
+        </div>
+        {focused && (
+          <div id="trip-destination-options" className="trip-destination-options" role="listbox">
+            {options.length ? options.map((option) => (
+              <button type="button" role="option" aria-selected="false" key={option.id} onMouseDown={(event) => event.preventDefault()} onClick={() => add(option)}>
+                <MapPin size={14} />
+                <span><strong>{lang === "EN" ? option.nameEn : option.nameTh}</strong><small>{lang === "EN" ? option.nameTh : option.nameEn}</small></span>
+                <Plus size={14} />
+              </button>
+            )) : <p>{t("ไม่พบเมืองในรายการ")}</p>}
+          </div>
+        )}
+      </div>
+      <small>{t("เมืองที่เลือกจะใช้ปลดล็อกเข็มกลัดโดยตรง ไม่เดาจากข้อความ")}</small>
+    </div>
+  );
+}
+
 function ModalForm({
   modal,
   trip,
@@ -7703,6 +7795,18 @@ function ModalForm({
         inferTripCountry(modal.trip?.destination, modal.trip?.timezone)
       : TRIP_COUNTRIES[0];
   const [countryCode, setCountryCode] = useState(initialCountry.code);
+  const [tripDestinations, setTripDestinations] = useState<TripDestinationOption[]>(() => {
+    if (modal.type !== "trip") return [];
+    const saved = modal.trip?.trip_destinations || [];
+    const resolved = saved.flatMap((destination) => {
+      const option = TRIP_DESTINATION_OPTIONS.find((candidate) => candidate.id === destination.id);
+      return option ? [option] : [];
+    });
+    if (resolved.length) return resolved;
+    const legacy = `${modal.trip?.destination || ""} ${modal.trip?.country_name || ""}`.toLowerCase();
+    const fallback = TRIP_DESTINATION_OPTIONS.find((option) => option.countryCode === initialCountry.code && [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => legacy.includes(term.toLowerCase())));
+    return fallback ? [fallback] : [];
+  });
   useEffect(() => {
     const root = document.documentElement;
     root.classList.add("sheet-open");
@@ -7769,6 +7873,7 @@ function ModalForm({
     setError("");
     try {
       if (modal.type === "trip") {
+        if (!tripDestinations.length) throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");
         let coverImageUrl = modal.trip?.cover_image_url || DEFAULT_TRIP_COVER;
         if (coverFile) {
           const upload = new FormData();
@@ -7784,8 +7889,8 @@ function ModalForm({
         }
         await submit({
           name: f.get("name"),
-          destination: f.get("destination"),
           countryCode: f.get("countryCode"),
+          locationIds: tripDestinations.map((destination) => destination.id),
           googlePhotosUrl: String(f.get("googlePhotosUrl") || "").trim(),
           outboundDate: f.get("outboundDate"),
           outboundTime: f.get("outboundTime"),
@@ -7879,33 +7984,33 @@ function ModalForm({
                 <label>{t("ชื่อทริป")}</label>
                 <input name="name" required defaultValue={modal.trip?.name} />
               </div>
-              <div className="form-row trip-destination-row">
-                <div className="field">
-                  <label>{t("เมือง")}</label>
-                  <input
-                    name="destination"
-                    required
-                    defaultValue={tripCity(modal.trip?.destination)}
-                  />
-                </div>
-                <div className="field country-select-field">
-                  <label>{t("ประเทศ")}</label>
-                  <select
-                    name="countryCode"
-                    value={countryCode}
-                    onChange={(event) => setCountryCode(event.target.value)}
-                  >
-                    {TRIP_COUNTRIES.map((country) => (
-                      <option key={country.code} value={country.code}>
-                        {country.flag} {lang === "EN" ? country.nameEn : country.nameTh}
-                      </option>
-                    ))}
-                  </select>
-                  <small>
-                    {t("เวลาอัตโนมัติ")}: {countryByCode(countryCode)?.timezone}
-                  </small>
-                </div>
+              <div className="field country-select-field">
+                <label>{t("ประเทศ")}</label>
+                <select
+                  name="countryCode"
+                  value={countryCode}
+                  onChange={(event) => {
+                    setCountryCode(event.target.value);
+                    setTripDestinations([]);
+                    window.setTimeout(checkForChanges, 0);
+                  }}
+                >
+                  {TRIP_COUNTRIES.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.flag} {lang === "EN" ? country.nameEn : country.nameTh}
+                    </option>
+                  ))}
+                </select>
+                <small>{t("เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง")} · {t("เวลาอัตโนมัติ")}: {countryByCode(countryCode)?.timezone}</small>
               </div>
+              <TripDestinationPicker
+                countryCode={countryCode}
+                selected={tripDestinations}
+                onChange={(next) => {
+                  setTripDestinations(next);
+                  window.setTimeout(checkForChanges, 0);
+                }}
+              />
               <div className="field">
                 <label>{t("ลิงก์โฟลเดอร์ Google Photos")}</label>
                 <input
@@ -8914,6 +9019,7 @@ export function BNTripApp({
         router.push(status === "all" ? "/trips" : `/trips?status=${status}`)
       }
       viewAnalytics={() => router.push("/analytics")}
+      viewBadges={() => router.push("/badges")}
       onInvitationChanged={() => setTripRevision((value) => value + 1)}
       notify={flash}
       confirmAction={setConfirmation}

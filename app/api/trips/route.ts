@@ -7,10 +7,11 @@ import { getDemoTrips } from "@/src/lib/demo-data";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode,formatTripDestination } from "@/src/lib/countries";
 import { loadDashboard } from "@/src/lib/trip-loaders";
+import { resolveTripDestinations } from "@/src/lib/travel-badges";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const countryCodeSchema=z.string().length(2).transform(value=>value.toUpperCase()).refine(value=>Boolean(countryByCode(value)),{message:"Invalid country"});
-const tripSchema = z.object({ name:z.string().min(2), destination:z.string().min(2), countryCode:countryCodeSchema, outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), googlePhotosUrl:googlePhotosUrlSchema.optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
+const tripSchema = z.object({ name:z.string().min(2), locationIds:z.array(z.string().min(3).max(100)).min(1).max(20), countryCode:countryCodeSchema, outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), googlePhotosUrl:googlePhotosUrlSchema.optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
 
 export async function GET(request:Request) {
   const session = await getSession(); if (!session) return NextResponse.json({error:"Unauthorized"},{status:401});
@@ -57,9 +58,11 @@ export async function POST(request:Request) {
   try {
     const input = tripSchema.parse(await request.json());
     const country=countryByCode(input.countryCode)!;
-    const destination=formatTripDestination(input.destination,country.code,country.nameEn);
+    const tripDestinations=resolveTripDestinations(country.code,input.locationIds);
+    if(tripDestinations.length!==new Set(input.locationIds).size)return NextResponse.json({error:"กรุณาเลือกเมืองจากรายการ"},{status:400});
+    const destination=formatTripDestination(tripDestinations.map(item=>item.nameEn).join(" · "),country.code,country.nameEn);
     const totalDays=Math.floor((new Date(`${input.returnDate}T00:00:00`).getTime()-new Date(`${input.outboundDate}T00:00:00`).getTime())/86400000)+1;
-    const result = await query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,google_photos_url,timezone,has_flights) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *",[session.userId,input.name,destination,country.code,country.nameEn,input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.googlePhotosUrl||null,country.timezone,input.hasFlights]);
+    const result = await query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,trip_destinations,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,google_photos_url,timezone,has_flights) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *",[session.userId,input.name,destination,country.code,country.nameEn,JSON.stringify(tripDestinations),input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.googlePhotosUrl||null,country.timezone,input.hasFlights]);
     const trip = {
       ...result.rows[0],
       access_role:"owner",

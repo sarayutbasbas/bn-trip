@@ -18,6 +18,12 @@ import {
   tripRoleSql,
 } from "@/src/lib/trip-access";
 import { inferTripCountry } from "@/src/lib/countries";
+import {
+  buildTravelBadgeCollection,
+  type BadgeTripSource,
+  type ManualBadgeVisit,
+  type TravelBadgeCollection,
+} from "@/src/lib/travel-badges";
 
 export type DashboardPayload = {
   ongoing: unknown[];
@@ -340,6 +346,34 @@ export async function loadTravelAnalytics(
   return clientSafe(
     aggregateTravelAnalyticsCollection(result.rows, flightResult.rows),
   );
+}
+
+export async function loadTravelBadges(
+  session: SessionUser,
+): Promise<TravelBadgeCollection> {
+  if (session.isDemo) {
+    const trips = getDemoTrips(new URLSearchParams()) as BadgeTripSource[];
+    return buildTravelBadgeCollection(trips);
+  }
+
+  await ensureLatestDatabaseSchema();
+  const [result, manualVisits] = await Promise.all([query<BadgeTripSource>(
+    `SELECT t.id,t.name,t.destination,t.country_code,t.country_name,t.trip_destinations,
+       t.start_date::text,t.total_days,t.return_departure_at::text
+     FROM trips t
+     WHERE ${tripAccessSql("t")}
+       AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)
+         <= (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
+    ORDER BY t.start_date DESC,t.id DESC`,
+    [session.userId],
+  ), query<ManualBadgeVisit>(
+    `SELECT badge_id,visited_on::text
+     FROM user_badge_visits
+     WHERE user_id=$1
+     ORDER BY visited_on DESC,badge_id`,
+    [session.userId],
+  )]);
+  return clientSafe(buildTravelBadgeCollection(result.rows, manualVisits.rows));
 }
 
 export async function loadDashboard(session: SessionUser): Promise<DashboardPayload> {
