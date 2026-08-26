@@ -20,6 +20,7 @@ import {
 import { inferTripCountry } from "@/src/lib/countries";
 import {
   buildTravelBadgeCollection,
+  TRIP_DESTINATION_OPTIONS,
   type BadgeTripSource,
   type ManualBadgeVisit,
   type TravelBadgeCollection,
@@ -52,6 +53,7 @@ export type TravelAnalyticsPayload = {
   totals: {
     trips: number;
     countries: number;
+    destinations: number;
     expense: number;
     travelExpense: number;
     shoppingExpense: number;
@@ -70,6 +72,12 @@ export type TravelAnalyticsPayload = {
     countryCode: string;
     trips: number;
     totalExpense: number;
+  }>;
+  destinations: Array<{
+    id: string;
+    nameTh: string;
+    nameEn: string;
+    trips: number;
   }>;
   flights: {
     totals: {
@@ -98,6 +106,13 @@ type AnalyticsTripRow = {
   year: number;
   country: string;
   country_code: string | null;
+  destination: string;
+  trip_destinations: Array<{
+    id?: string;
+    countryCode?: string;
+    nameTh?: string;
+    nameEn?: string;
+  }> | null;
   travel_expense: string | number;
   shopping_expense: string | number;
 };
@@ -181,6 +196,10 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
     string,
     { country: string; countryCode: string; trips: number; totalExpense: number }
   >();
+  const destinations = new Map<
+    string,
+    { id: string; nameTh: string; nameEn: string; trips: number }
+  >();
   let travelExpense = 0;
   let shoppingExpense = 0;
 
@@ -207,6 +226,48 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
     countryEntry.trips += 1;
     countryEntry.totalExpense += total;
     countries.set(countryKey, countryEntry);
+    const savedDestinations = Array.isArray(row.trip_destinations)
+      ? row.trip_destinations.filter(
+          (destination) =>
+            destination &&
+            (destination.nameTh?.trim() || destination.nameEn?.trim()),
+        )
+      : [];
+    const fallbackDestination = row.destination.split(",")[0]?.trim() || row.destination.trim();
+    const legacyDestination = row.destination.toLocaleLowerCase();
+    const legacyMatches = TRIP_DESTINATION_OPTIONS.filter(
+      (option) =>
+        option.countryCode === countryCode &&
+        [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => {
+          const normalized = term.trim().toLocaleLowerCase();
+          return normalized.length >= 3 && legacyDestination.includes(normalized);
+        }),
+    );
+    const tripDestinations = savedDestinations.length
+      ? savedDestinations
+      : legacyMatches.length
+        ? legacyMatches
+        : [{
+          id: fallbackDestination.toLocaleLowerCase(),
+          nameTh: fallbackDestination,
+          nameEn: fallbackDestination,
+        }];
+    const seenDestinations = new Set<string>();
+    for (const destination of tripDestinations) {
+      const id = String(destination.id || destination.nameEn || destination.nameTh || "")
+        .trim()
+        .toLocaleLowerCase();
+      if (!id || seenDestinations.has(id)) continue;
+      seenDestinations.add(id);
+      const entry = destinations.get(id) || {
+        id,
+        nameTh: destination.nameTh?.trim() || destination.nameEn?.trim() || fallbackDestination,
+        nameEn: destination.nameEn?.trim() || destination.nameTh?.trim() || fallbackDestination,
+        trips: 0,
+      };
+      entry.trips += 1;
+      destinations.set(id, entry);
+    }
   }
 
   const tripCount = rows.length;
@@ -215,6 +276,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
     totals: {
       trips: tripCount,
       countries: countries.size,
+      destinations: destinations.size,
       expense,
       travelExpense,
       shoppingExpense,
@@ -238,6 +300,10 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
           right.totalExpense - left.totalExpense ||
           left.country.localeCompare(right.country),
       ),
+    destinations: [...destinations.values()].sort(
+      (left, right) =>
+        right.trips - left.trips || left.nameTh.localeCompare(right.nameTh, "th"),
+    ),
     flights: emptyFlightAnalytics(),
   };
 }
@@ -297,6 +363,8 @@ export async function loadTravelAnalytics(
         country:
           inferTripCountry(trip.destination).nameEn,
         country_code: inferTripCountry(trip.destination).code,
+        destination: trip.destination,
+        trip_destinations: null,
         travel_expense: travelExpense,
         shopping_expense: shoppingExpense,
       };
@@ -309,13 +377,13 @@ export async function loadTravelAnalytics(
     `WITH accessible_past AS (
        SELECT t.id,EXTRACT(YEAR FROM t.start_date)::int AS year,
          COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ') AS country,
-         t.country_code
+         t.country_code,t.destination,t.trip_destinations
        FROM trips t
        WHERE ${tripAccessSql("t")}
          AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)
            < (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
      )
-     SELECT trip.id AS trip_id,trip.year,trip.country,trip.country_code,
+     SELECT trip.id AS trip_id,trip.year,trip.country,trip.country_code,trip.destination,trip.trip_destinations,
        COALESCE(SUM(CASE WHEN lower(COALESCE(cost.item->>'category',''))<>'shopping'
          AND COALESCE(cost.item->>'value','')~'^-?[0-9]+([.][0-9]+)?$'
          THEN (cost.item->>'value')::numeric ELSE 0 END),0)::text AS travel_expense,
@@ -325,7 +393,7 @@ export async function loadTravelAnalytics(
      FROM accessible_past trip
      LEFT JOIN itineraries itinerary ON itinerary.trip_id=trip.id
      LEFT JOIN LATERAL jsonb_array_elements(COALESCE(itinerary.cost_items,'[]'::jsonb)) AS cost(item) ON true
-     GROUP BY trip.id,trip.year,trip.country,trip.country_code
+     GROUP BY trip.id,trip.year,trip.country,trip.country_code,trip.destination,trip.trip_destinations
      ORDER BY trip.year DESC`,
     [session.userId],
   ),query<AnalyticsFlightRow>(

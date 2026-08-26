@@ -1689,8 +1689,8 @@ button:disabled {
   display: none;
 }
 .country-highlight-item {
-  width: 67px;
-  flex: 0 0 67px;
+  width: 96px;
+  flex: 0 0 96px;
   border: 0;
   display: flex;
   flex-direction: column;
@@ -1751,14 +1751,16 @@ button:disabled {
 }
 .country-highlight-item > strong {
   width: 100%;
-  margin-top: 8px;
-  overflow: hidden;
+  margin-top: 9px;
+  padding-inline: 2px;
+  overflow: visible;
   color: var(--ink);
   font-size: 10px;
   font-weight: 700;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 .country-highlight-item > small {
   margin-top: 2px;
@@ -1767,6 +1769,7 @@ button:disabled {
 }
 
 .analytics-screen {
+  --analytics-card-gap: 12px;
   max-width: 780px;
   margin: 0 auto;
   padding-bottom: calc(18px + env(safe-area-inset-bottom));
@@ -1961,11 +1964,14 @@ button:disabled {
 .analytics-scope-filter button:active {
   transform: scale(0.97);
 }
+.analytics-refresh-spinning {
+  animation: pull-refresh-spin 720ms linear infinite;
+}
 .analytics-kpis {
-  margin-bottom: 12px;
+  margin-bottom: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--analytics-card-gap);
 }
 .analytics-kpi {
   min-width: 0;
@@ -2029,8 +2035,29 @@ button:disabled {
 .analytics-expense-card,
 .analytics-chart-card,
 .analytics-country-card {
-  margin-top: 12px;
+  margin-top: 0;
   padding: 16px;
+}
+.analytics-screen > :is(
+  .analytics-kpis,
+  .analytics-expense-card,
+  .analytics-flight-overview,
+  .analytics-airline-card,
+  .analytics-flight-pattern-grid,
+  .analytics-route-card,
+  .analytics-chart-card,
+  .analytics-country-card
+) + :is(
+  .analytics-kpis,
+  .analytics-expense-card,
+  .analytics-flight-overview,
+  .analytics-airline-card,
+  .analytics-flight-pattern-grid,
+  .analytics-route-card,
+  .analytics-chart-card,
+  .analytics-country-card
+) {
+  margin-top: var(--analytics-card-gap);
 }
 .analytics-section-head {
   min-width: 0;
@@ -2098,7 +2125,7 @@ button:disabled {
   margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--analytics-card-gap);
 }
 .analytics-expense-kind {
   min-width: 0;
@@ -9803,7 +9830,7 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
 .analytics-airline-card,
 .analytics-pattern-card,
 .analytics-route-card {
-  padding: 17px;
+  padding: 16px;
 }
 .analytics-flight-badge {
   width: 42px;
@@ -9819,7 +9846,7 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
   margin-top: 14px;
   display: grid;
   grid-template-columns: repeat(3,minmax(0,1fr));
-  gap: 8px;
+  gap: var(--analytics-card-gap);
 }
 .analytics-flight-kpis > div {
   min-width: 0;
@@ -9895,7 +9922,7 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
 .analytics-flight-pattern-grid {
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: 12px;
+  gap: var(--analytics-card-gap);
 }
 .analytics-period-list { margin-top:10px;display:grid;gap:9px; }
 .analytics-period-list > div { display:grid;grid-template-columns:minmax(0,1fr) 82px;align-items:center;gap:8px; }

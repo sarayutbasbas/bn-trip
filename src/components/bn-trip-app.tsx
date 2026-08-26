@@ -816,6 +816,9 @@ Object.assign(EN_TEXT, {
     "An overview of completed trips only",
   ทริปที่ผ่านมา: "Past trips",
   ประเทศที่เคยไป: "Countries visited",
+  จังหวัดที่เคยไป: "Destinations visited",
+  จังหวัดและจำนวนทริป: "Destinations and trip counts",
+  เรียงจากจุดหมายที่ไปบ่อยที่สุด: "Sorted by most visited destination",
   ค่าใช้จ่ายเฉลี่ยต่อทริป: "Average spend per trip",
   ค่าใช้จ่ายทั้งหมด: "Total expenses",
   "ไม่รวมค่า Shopping": "Excluding shopping",
@@ -897,6 +900,7 @@ Object.assign(EN_TEXT, {
   ย้อนคืนแล้ว: "Undone",
   ยังไม่มีประวัติการแก้ไข: "No activity yet",
   รีเฟรช: "Refresh",
+  "อัปเดตสถิติล่าสุดแล้ว": "Statistics updated",
   Undo: "Undo",
   ดาวน์โหลดเอกสารไม่สำเร็จ: "Could not download document",
   เฉพาะเจ้าของทริปที่ย้อนคืนประวัติได้: "Only the trip owner can undo changes",
@@ -2556,12 +2560,53 @@ function TravelAnalyticsDashboard({
   datasets: TravelAnalyticsCollection;
 }) {
   const t = useT();
+  const lang = useContext(LanguageContext);
+  const [analytics, setAnalytics] = useState(datasets);
   const [scope, setScope] = useState<TravelAnalyticsScope>("all");
-  const data = datasets[scope];
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState("");
+  const refreshMessageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const data = analytics[scope];
+  useEffect(
+    () => () => {
+      if (refreshMessageTimer.current) clearTimeout(refreshMessageTimer.current);
+    },
+    [],
+  );
+  const refreshAnalytics = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const response = await fetch("/api/analytics", { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || "รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
+      }
+      setAnalytics(body as TravelAnalyticsCollection);
+      setRefreshMessage("อัปเดตสถิติล่าสุดแล้ว");
+    } catch (error) {
+      setRefreshMessage(
+        error instanceof Error
+          ? error.message
+          : "รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง",
+      );
+    } finally {
+      setRefreshing(false);
+      if (refreshMessageTimer.current) clearTimeout(refreshMessageTimer.current);
+      refreshMessageTimer.current = setTimeout(
+        () => setRefreshMessage(""),
+        2400,
+      );
+    }
+  };
   const money = (value: number) => `฿${bahtFormat(value)}`;
   const maxCountryTrips = Math.max(
     1,
     ...data.countries.map((item) => item.trips),
+  );
+  const maxDestinationTrips = Math.max(
+    1,
+    ...data.destinations.map((item) => item.trips),
   );
   const expenseTotal = data.totals.travelExpense + data.totals.shoppingExpense;
   const travelShare = expenseTotal
@@ -2596,6 +2641,10 @@ function TravelAnalyticsDashboard({
       <nav className="welcome-shortcuts hero-shortcuts" aria-label={t("ทางลัด")}>
         <Link className="welcome-insights-btn" href="/"><House size={15} /><span>Home</span></Link>
         <Link className="welcome-insights-btn" href="/badges"><MapPin size={15} /><span>{t("เข็มกลัด")}</span></Link>
+        <button className="welcome-insights-btn" type="button" onClick={() => void refreshAnalytics()} disabled={refreshing}>
+          <RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={15} />
+          <span>{t(refreshing ? "กำลังอัปเดต…" : "รีเฟรช")}</span>
+        </button>
       </nav>
       <div className="analytics-hero-copy">
         <span className="section-kicker">JOURNEY INSIGHTS</span>
@@ -2635,6 +2684,12 @@ function TravelAnalyticsDashboard({
 
   return (
     <div className="screen analytics-screen">
+      {refreshMessage && (
+        <div className="toast toast-success" role="status" aria-live="polite">
+          <CheckCircle2 size={17} />
+          {t(refreshMessage)}
+        </div>
+      )}
       {analyticsHero}
 
       {scopeFilter}
@@ -2646,9 +2701,9 @@ function TravelAnalyticsDashboard({
           <strong>{data.totals.trips}</strong>
         </article>
         <article className="analytics-kpi">
-          <span><Globe2 size={17} /></span>
-          <small>{t("ประเทศที่เคยไป")}</small>
-          <strong>{data.totals.countries}</strong>
+          <span>{scope === "domestic" ? <MapPin size={17} /> : <Globe2 size={17} />}</span>
+          <small>{t(scope === "domestic" ? "จังหวัดที่เคยไป" : "ประเทศที่เคยไป")}</small>
+          <strong>{scope === "domestic" ? data.totals.destinations : data.totals.countries}</strong>
         </article>
         <article className="analytics-kpi analytics-kpi-wide">
           <span><ReceiptText size={17} /></span>
@@ -2753,12 +2808,23 @@ function TravelAnalyticsDashboard({
       <section className="card analytics-country-card">
         <div className="analytics-section-head">
           <div>
-            <h2>{t("ประเทศและจำนวนครั้งที่ไป")}</h2>
-            <p>{t("เรียงจากประเทศที่ไปบ่อยที่สุด")}</p>
+            <h2>{t(scope === "domestic" ? "จังหวัดและจำนวนทริป" : "ประเทศและจำนวนครั้งที่ไป")}</h2>
+            <p>{t(scope === "domestic" ? "เรียงจากจุดหมายที่ไปบ่อยที่สุด" : "เรียงจากประเทศที่ไปบ่อยที่สุด")}</p>
           </div>
         </div>
         <div className="analytics-country-list">
-          {data.countries.map((item) => (
+          {scope === "domestic" ? data.destinations.map((item) => (
+            <div className="analytics-country-row" key={item.id}>
+              <b className="analytics-country-flag"><MapPin size={21} /></b>
+              <div>
+                <strong>{lang === "EN" ? item.nameEn : item.nameTh}</strong>
+                <span>
+                  <i style={{ width: `${(item.trips / maxDestinationTrips) * 100}%` }} />
+                </span>
+              </div>
+              <small><b>{item.trips} {t("ทริป")}</b></small>
+            </div>
+          )) : data.countries.map((item) => (
             <div className="analytics-country-row" key={item.country}>
               <b className="analytics-country-flag">
                 {countryByCode(item.countryCode)?.flag || "🌍"}
@@ -8100,8 +8166,13 @@ function ModalForm({
     });
     if (resolved.length) return resolved;
     const legacy = `${modal.trip?.destination || ""} ${modal.trip?.country_name || ""}`.toLowerCase();
-    const fallback = TRIP_DESTINATION_OPTIONS.find((option) => option.countryCode === initialCountry.code && [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => legacy.includes(term.toLowerCase())));
-    return fallback ? [fallback] : [];
+    return TRIP_DESTINATION_OPTIONS.filter((option) =>
+      option.countryCode === initialCountry.code &&
+      [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => {
+        const normalized = term.trim().toLowerCase();
+        return normalized.length >= 3 && legacy.includes(normalized);
+      }),
+    );
   });
   useEffect(() => {
     const root = document.documentElement;
