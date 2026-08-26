@@ -8145,6 +8145,8 @@ function ModalForm({
   const modalBackdropRef = useRef<HTMLDivElement>(null);
   const focusedTripFieldRef = useRef<HTMLElement | null>(null);
   const focusVisibilityTimerRef = useRef<number | null>(null);
+  const canDeleteCurrent =
+    modal.type === "trip" ? modal.trip?.access_role === "owner" : canDelete;
   const formDirtyKey =
     modal.type === "trip"
       ? `trip:${modal.trip?.id || "new"}`
@@ -8620,7 +8622,7 @@ function ModalForm({
           >
             {t(saving ? "กำลังบันทึก…" : "บันทึก")}
           </button>
-          {canDelete &&
+          {canDeleteCurrent &&
             ((modal.type === "place" && modal.item) ||
               (modal.type === "trip" && modal.trip)) && (
               <button
@@ -8636,7 +8638,7 @@ function ModalForm({
             )}
         </div>
       </form>
-      {canDelete && pendingDelete && modal.type === "place" && modal.item && (
+      {canDeleteCurrent && pendingDelete && modal.type === "place" && modal.item && (
         <ConfirmDialog
           confirmation={{
             title: `ลบ “${modal.item.place_name}”?`,
@@ -8668,7 +8670,7 @@ function ModalForm({
           close={() => setConfirmDisableFlights(false)}
         />
       )}
-      {canDelete && pendingDelete && modal.type === "trip" && modal.trip && (
+      {canDeleteCurrent && pendingDelete && modal.type === "trip" && modal.trip && (
         <ConfirmDialog
           confirmation={{
             title: `ลบทริป “${modal.trip.name}”?`,
