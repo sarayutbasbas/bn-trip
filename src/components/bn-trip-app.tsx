@@ -8235,8 +8235,8 @@ function ModalForm({
       ? localDate(modal.trip?.return_departure_at, returnFallback)
       : "";
   const initialReturnDate =
-    initialOutboundDate && savedReturnDate <= initialOutboundDate
-      ? addDays(initialOutboundDate, 1)
+    initialOutboundDate && savedReturnDate < initialOutboundDate
+      ? initialOutboundDate
       : savedReturnDate;
   const [outboundDate, setOutboundDate] = useState(initialOutboundDate);
   const [returnDate, setReturnDate] = useState(initialReturnDate);
@@ -8459,7 +8459,7 @@ function ModalForm({
                     value={outboundDate}
                     onValueChange={(value) => {
                       setOutboundDate(value);
-                      setReturnDate(value ? addDays(value, 1) : "");
+                      setReturnDate(value);
                     }}
                     label={t("วันเดินทางไป")}
                   />
@@ -8487,7 +8487,7 @@ function ModalForm({
                     defaultValue={initialReturnDate}
                     value={returnDate}
                     onValueChange={setReturnDate}
-                    min={outboundDate ? addDays(outboundDate, 1) : undefined}
+                    min={outboundDate || undefined}
                     disabled={!outboundDate}
                     label={t("วันเดินทางกลับ")}
                   />
