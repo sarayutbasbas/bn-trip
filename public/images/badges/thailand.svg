@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180" role="img" aria-labelledby="title">
+  <title id="title">Thailand travel badge</title>
+  <defs><linearGradient id="g" x1=".1" y1=".1" x2=".9" y2="1"><stop stop-color="#ff5a1f"/><stop offset="1" stop-color="#ffb43b"/></linearGradient></defs>
+  <path fill="#bf3b12" d="M62 7h36l5 25H57z"/><circle cx="80" cy="96" r="70" fill="url(#g)" stroke="#fff7e8" stroke-width="7"/>
+  <path fill="#fff" d="M45 118h70v11H45zM52 84h56v34H52zM47 80h66L80 55zM75 93h10v25H75z" opacity=".95"/>
+  <circle cx="80" cy="96" r="57" fill="none" stroke="#fff" stroke-width="2" opacity=".45"/>
+</svg>

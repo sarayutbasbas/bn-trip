@@ -38,6 +38,10 @@ function formatDate(value: string) {
 type MapGeometry = { type: "Polygon" | "MultiPolygon"; coordinates: unknown };
 type MapFeature = { properties: { shapeName?: string; shapeISO?: string }; geometry: MapGeometry };
 type MapCollection = { features: MapFeature[] };
+type MapViewport = { zoom: number; centerX: number; centerY: number };
+
+const MIN_MAP_ZOOM = 1;
+const MAX_MAP_ZOOM = 4;
 
 function geometryRings(geometry: MapGeometry): number[][][][] {
   return geometry.type === "Polygon"
@@ -47,6 +51,24 @@ function geometryRings(geometry: MapGeometry): number[][][][] {
 
 function normalizedMapName(value: string) {
   return value.toLowerCase().replace(/province|prefecture|metropolis|fu|to|do|ken/gi, "").replace(/[^a-z0-9]/g, "");
+}
+
+function normalizedViewport(viewport: MapViewport, width: number, height: number): MapViewport {
+  const zoom = Number.isFinite(viewport.zoom)
+    ? Math.min(MAX_MAP_ZOOM, Math.max(MIN_MAP_ZOOM, viewport.zoom))
+    : MIN_MAP_ZOOM;
+  const viewWidth = width / zoom;
+  const viewHeight = height / zoom;
+  const clampCenter = (center: number, size: number, viewSize: number) => {
+    const fallback = size / 2;
+    const safeCenter = Number.isFinite(center) ? center : fallback;
+    return Math.min(size - viewSize / 2, Math.max(viewSize / 2, safeCenter));
+  };
+  return {
+    zoom,
+    centerX: clampCenter(viewport.centerX, width, viewWidth),
+    centerY: clampCenter(viewport.centerY, height, viewHeight),
+  };
 }
 
 function AdministrativeMap({
@@ -63,7 +85,7 @@ function AdministrativeMap({
   const [features, setFeatures] = useState<MapFeature[]>([]);
   const mapWidth = 900;
   const mapHeight = category === "thailand" ? 720 : 620;
-  const [viewport, setViewport] = useState({ zoom: 1, centerX: mapWidth / 2, centerY: mapHeight / 2 });
+  const [viewport, setViewport] = useState<MapViewport>({ zoom: MIN_MAP_ZOOM, centerX: mapWidth / 2, centerY: mapHeight / 2 });
   const drag = useRef<{ pointerX: number; pointerY: number; centerX: number; centerY: number } | null>(null);
   const dragged = useRef(false);
   useEffect(() => {
@@ -80,10 +102,12 @@ function AdministrativeMap({
     const height = mapHeight;
     const coordinates = features.flatMap((feature) => geometryRings(feature.geometry).flat(2));
     if (!coordinates.length) return { width, height, paths: [] as Array<{ feature: MapFeature; path: string }> };
-    const longitudes = coordinates.map((point) => point[0]);
-    const latitudes = coordinates.map((point) => point[1]);
-    const minLng = Math.min(...longitudes); const maxLng = Math.max(...longitudes);
-    const minLat = Math.min(...latitudes); const maxLat = Math.max(...latitudes);
+    let minLng = Infinity; let maxLng = -Infinity;
+    let minLat = Infinity; let maxLat = -Infinity;
+    for (const point of coordinates) {
+      minLng = Math.min(minLng, point[0]); maxLng = Math.max(maxLng, point[0]);
+      minLat = Math.min(minLat, point[1]); maxLat = Math.max(maxLat, point[1]);
+    }
     const padding = 26;
     const scale = Math.min((width - padding * 2) / (maxLng - minLng), (height - padding * 2) / (maxLat - minLat));
     const contentWidth = (maxLng - minLng) * scale;
@@ -101,13 +125,13 @@ function AdministrativeMap({
     };
   }, [features, mapHeight, mapWidth]);
 
-  const viewWidth = projected.width / viewport.zoom;
-  const viewHeight = projected.height / viewport.zoom;
-  const clampCenter = (center: number, size: number, viewSize: number) => Math.min(size - viewSize / 2, Math.max(viewSize / 2, center));
-  const viewBox = `${clampCenter(viewport.centerX, projected.width, viewWidth) - viewWidth / 2} ${clampCenter(viewport.centerY, projected.height, viewHeight) - viewHeight / 2} ${viewWidth} ${viewHeight}`;
+  const safeViewport = normalizedViewport(viewport, projected.width, projected.height);
+  const viewWidth = projected.width / safeViewport.zoom;
+  const viewHeight = projected.height / safeViewport.zoom;
+  const viewBox = `${safeViewport.centerX - viewWidth / 2} ${safeViewport.centerY - viewHeight / 2} ${viewWidth} ${viewHeight}`;
 
   function changeZoom(nextZoom: number) {
-    setViewport((current) => ({ ...current, zoom: Math.min(4, Math.max(1, nextZoom)) }));
+    setViewport((current) => normalizedViewport({ ...current, zoom: nextZoom }, projected.width, projected.height));
   }
 
   const badgeForFeature = (feature: MapFeature) => {
@@ -121,32 +145,41 @@ function AdministrativeMap({
   return (
     <div className={`administrative-map administrative-map-${category}`}>
       <div className="administrative-map-controls" aria-label="เครื่องมือซูมแผนที่">
-        <button type="button" onClick={() => changeZoom(viewport.zoom + .5)} disabled={viewport.zoom >= 4} aria-label="ซูมเข้า"><ZoomIn size={16} /></button>
-        <button type="button" onClick={() => changeZoom(viewport.zoom - .5)} disabled={viewport.zoom <= 1} aria-label="ซูมออก"><ZoomOut size={16} /></button>
-        <button type="button" onClick={() => setViewport({ zoom: 1, centerX: mapWidth / 2, centerY: mapHeight / 2 })} disabled={viewport.zoom === 1} aria-label="แสดงแผนที่ทั้งหมด"><Maximize2 size={15} /></button>
+        <button type="button" onClick={() => changeZoom(safeViewport.zoom + .5)} disabled={safeViewport.zoom >= MAX_MAP_ZOOM} aria-label="ซูมเข้า"><ZoomIn size={16} /></button>
+        <button type="button" onClick={() => changeZoom(safeViewport.zoom - .5)} disabled={safeViewport.zoom <= MIN_MAP_ZOOM} aria-label="ซูมออก"><ZoomOut size={16} /></button>
+        <button type="button" onClick={() => setViewport({ zoom: MIN_MAP_ZOOM, centerX: mapWidth / 2, centerY: mapHeight / 2 })} disabled={safeViewport.zoom === MIN_MAP_ZOOM} aria-label="แสดงแผนที่ทั้งหมด"><Maximize2 size={15} /></button>
       </div>
       {features.length ? (
         <svg
           viewBox={viewBox}
-          className={viewport.zoom > 1 ? "is-zoomed" : ""}
+          className={safeViewport.zoom > MIN_MAP_ZOOM ? "is-zoomed" : ""}
           role="img"
           aria-label={category === "thailand" ? "แผนที่จังหวัดประเทศไทย" : "แผนที่จังหวัดประเทศญี่ปุ่น"}
           onPointerDown={(event) => {
-            if (viewport.zoom <= 1) return;
+            if (safeViewport.zoom <= MIN_MAP_ZOOM) return;
             event.currentTarget.setPointerCapture(event.pointerId);
-            drag.current = { pointerX: event.clientX, pointerY: event.clientY, centerX: viewport.centerX, centerY: viewport.centerY };
+            drag.current = { pointerX: event.clientX, pointerY: event.clientY, centerX: safeViewport.centerX, centerY: safeViewport.centerY };
             dragged.current = false;
           }}
           onPointerMove={(event) => {
             if (!drag.current) return;
             const rect = event.currentTarget.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
             const deltaX = (event.clientX - drag.current.pointerX) * viewWidth / rect.width;
             const deltaY = (event.clientY - drag.current.pointerY) * viewHeight / rect.height;
             if (Math.abs(deltaX) + Math.abs(deltaY) > 2) dragged.current = true;
-            setViewport((current) => ({ ...current, centerX: drag.current!.centerX - deltaX, centerY: drag.current!.centerY - deltaY }));
+            setViewport((current) => normalizedViewport({
+              ...current,
+              centerX: drag.current!.centerX - deltaX,
+              centerY: drag.current!.centerY - deltaY,
+            }, projected.width, projected.height));
           }}
           onPointerUp={() => { drag.current = null; window.setTimeout(() => { dragged.current = false; }, 0); }}
           onPointerCancel={() => { drag.current = null; dragged.current = false; }}
+          onLostPointerCapture={() => {
+            drag.current = null;
+            window.setTimeout(() => { dragged.current = false; }, 0);
+          }}
         >
           {projected.paths.map(({ feature, path }) => {
             const badge = badgeForFeature(feature);

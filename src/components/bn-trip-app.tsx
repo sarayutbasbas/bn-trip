@@ -98,6 +98,7 @@ import {
   Sun,
   TrainFront,
   Trash2,
+  UserRound,
   UserPlus,
   X,
 } from "lucide-react";
@@ -172,6 +173,10 @@ type TripMember = {
   role: "owner" | "collaborator";
   access_level?: "owner" | "view" | "admin";
 };
+type ExpenseGuest = {
+  id: string;
+  name: string;
+};
 export type Trip = {
   id: string;
   name: string;
@@ -181,6 +186,7 @@ export type Trip = {
   trip_destinations?: TripDestinationSelection[];
   start_date: string;
   total_days: number;
+  traveller_count?: number;
   budget_thb: string;
   shopping_budget_thb: string;
   actual_spent_thb?: number | string;
@@ -245,6 +251,8 @@ type CostItem = {
   creditCardId?: string;
   paymentOwnerName?: string;
   splitMemberIds?: string[];
+  splitGuestIds?: string[];
+  splitCount?: number;
 };
 type NearbyFlight = {
   id: string;
@@ -1520,6 +1528,56 @@ function bahtFormat(value: number | string) {
 }
 function costSourceLabel(cost: CostItem) {
   return `${Number(cost.foreignAmount ?? cost.value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })} ${cost.currency || "THB"}`;
+}
+
+function costSplitCount(cost: CostItem, fallback = 1) {
+  if (Array.isArray(cost.splitGuestIds)) {
+    return Math.max(
+      1,
+      (cost.splitMemberIds?.length || 0) + cost.splitGuestIds.length,
+    );
+  }
+  const saved = Number(cost.splitCount);
+  if (Number.isInteger(saved) && saved >= 1 && saved <= 100) return saved;
+  const selectedMembers = cost.splitMemberIds?.length || 0;
+  if (selectedMembers) return selectedMembers;
+  return Math.min(100, Math.max(1, Math.floor(Number(fallback) || 1)));
+}
+
+const EXPENSE_GUESTS_CHANGED_EVENT = "bn-trip:expense-guests-changed";
+
+function useExpenseGuests(tripId: string) {
+  const [guests, setGuests] = useState<ExpenseGuest[]>([]);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/trips/${tripId}/expense-guests`);
+        const data = await response.json();
+        if (active && response.ok && Array.isArray(data)) setGuests(data);
+      } catch {
+        // The cost form stays usable for joined members if guest loading fails.
+      }
+    };
+    void load();
+    const onChanged = (event: Event) => {
+      const changedTripId = (event as CustomEvent<{ tripId?: string }>).detail
+        ?.tripId;
+      if (!changedTripId || changedTripId === tripId) void load();
+    };
+    window.addEventListener(EXPENSE_GUESTS_CHANGED_EVENT, onChanged);
+    return () => {
+      active = false;
+      window.removeEventListener(EXPENSE_GUESTS_CHANGED_EVENT, onChanged);
+    };
+  }, [tripId]);
+  return { guests, setGuests };
+}
+
+function costSplitLabel(cost: CostItem, fallback = 1) {
+  const count = costSplitCount(cost, fallback);
+  if (count <= 1) return "";
+  return `หาร ${count} คน · ฿${bahtFormat(Number(cost.value || 0) / count)}/คน`;
 }
 function MoneyInput({
   name,
@@ -4716,6 +4774,7 @@ export function LegacyPlanExpensesContent({
                     {dayItems.flatMap((item) =>
                       (item.cost_items || []).map((cost, index) => {
                         const isBaht = (cost.currency || "THB") === "THB";
+                        const splitLabel = costSplitLabel(cost, trip.traveller_count);
                         return (
                           <button
                             type="button"
@@ -4739,6 +4798,7 @@ export function LegacyPlanExpensesContent({
                                 {isBaht ? "" : "≈ "}฿
                                 {Number(cost.value).toLocaleString()}
                               </b>
+                              {splitLabel ? <small className="expense-row-split">{splitLabel}</small> : null}
                             </span>
                           </button>
                         );
@@ -4895,69 +4955,107 @@ function PaymentMethodSummary({
 function ExpenseMemberSummary({
   costs,
   members,
+  guests,
 }: {
   costs: CostItem[];
   members: TripMember[];
+  guests: ExpenseGuest[];
 }) {
   const t = useT();
   const orderedMembers = ownerLastTripMembers(members);
   const memberIds = new Set(orderedMembers.map((member) => member.id));
-  const totals = new Map(
+  const guestIds = new Set(guests.map((guest) => guest.id));
+  const memberTotals = new Map(
     orderedMembers.map((member) => [
       member.id,
       { trip: 0, shopping: 0 },
     ]),
   );
+  const guestTotals = new Map(
+    guests.map((guest) => [guest.id, { trip: 0, shopping: 0 }]),
+  );
   for (const cost of costs) {
-    const selected = (cost.splitMemberIds || []).filter((id) =>
+    const hasExplicitMembers = Array.isArray(cost.splitMemberIds);
+    const selectedMembers = (cost.splitMemberIds || []).filter((id) =>
       memberIds.has(id),
     );
-    const participants = selected.length
-      ? selected
+    const selectedGuests = (cost.splitGuestIds || []).filter((id) =>
+      guestIds.has(id),
+    );
+    const participants = hasExplicitMembers
+      ? selectedMembers
       : orderedMembers.map((member) => member.id);
-    if (!participants.length) continue;
-    const share = Number(cost.value || 0) / participants.length;
+    const divisor = costSplitCount(
+      cost,
+      participants.length + selectedGuests.length,
+    );
+    if (!participants.length && !selectedGuests.length) continue;
+    const share = Number(cost.value || 0) / divisor;
     const shopping = (cost.category || "").toLowerCase() === "shopping";
     for (const memberId of participants) {
-      const total = totals.get(memberId);
+      const total = memberTotals.get(memberId);
+      if (!total) continue;
+      if (shopping) total.shopping += share;
+      else total.trip += share;
+    }
+    for (const guestId of selectedGuests) {
+      const total = guestTotals.get(guestId);
       if (!total) continue;
       if (shopping) total.shopping += share;
       else total.trip += share;
     }
   }
-  if (!orderedMembers.length) return null;
+  if (!orderedMembers.length && !guests.length) return null;
+  const rows = [
+    ...orderedMembers.map((member) => ({
+      id: `member:${member.id}`,
+      label: member.display_name || member.email || "-",
+      avatarUrl: member.avatar_url,
+      guest: false,
+      total: memberTotals.get(member.id) || { trip: 0, shopping: 0 },
+    })),
+    ...guests.map((guest) => ({
+      id: `guest:${guest.id}`,
+      label: guest.name,
+      avatarUrl: null,
+      guest: true,
+      total: guestTotals.get(guest.id) || { trip: 0, shopping: 0 },
+    })),
+  ];
   return (
     <section className="expense-member-summary">
       <div className="expense-member-summary-head">
         <h3>{t("สรุปค่าใช้จ่ายแยกตามคน")}</h3>
-        <p>{t("คำนวณจากผู้ที่เลือกหารในแต่ละรายการ")}</p>
+        <p>{t("รวมทั้งสมาชิกในทริปและคนนอกที่เลือกหาร")}</p>
       </div>
       <div>
-        {orderedMembers.map((member) => {
-          const label = member.display_name || member.email || "-";
-          const total = totals.get(member.id) || { trip: 0, shopping: 0 };
+        {rows.map((row) => {
           return (
-            <article key={member.id}>
+            <article key={row.id}>
               <span
-                className="expense-member-avatar"
+                className={`expense-member-avatar ${row.guest ? "is-guest" : ""}`}
                 style={
-                  member.avatar_url
-                    ? { backgroundImage: `url("${member.avatar_url}")` }
+                  row.avatarUrl
+                    ? { backgroundImage: `url("${row.avatarUrl}")` }
                     : undefined
                 }
               >
-                {!member.avatar_url && label.charAt(0).toUpperCase()}
+                {row.guest ? (
+                  <UserRound size={19} aria-hidden="true" />
+                ) : (
+                  !row.avatarUrl && row.label.charAt(0).toUpperCase()
+                )}
               </span>
               <div className="expense-member-copy">
-                <strong>{label}</strong>
-                <small>{t("รวมที่ต้องรับผิดชอบ")}</small>
+                <strong>{row.label}</strong>
+                <small>{t(row.guest ? "คนนอกทริป" : "รวมที่ต้องรับผิดชอบ")}</small>
               </div>
               <div className="expense-member-totals">
                 <span>
-                  {t("ค่าใช้จ่ายทริป")} <b>฿{bahtFormat(total.trip)}</b>
+                  {t("ค่าใช้จ่ายทริป")} <b>฿{bahtFormat(row.total.trip)}</b>
                 </span>
                 <span>
-                  {t("ค่า Shopping")} <b>฿{bahtFormat(total.shopping)}</b>
+                  {t("ค่า Shopping")} <b>฿{bahtFormat(row.total.shopping)}</b>
                 </span>
               </div>
             </article>
@@ -4980,6 +5078,7 @@ function PlanExpensesContent({
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
 }) {
   const t = useT();
+  const { guests: expenseGuests } = useExpenseGuests(trip.id);
   const [showBackTop, setShowBackTop] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const allCosts = items.flatMap((item) => item.cost_items || []);
@@ -5044,6 +5143,7 @@ function PlanExpensesContent({
       <ExpenseMemberSummary
         costs={allCosts}
         members={trip.members || []}
+        guests={expenseGuests}
       />
       <div className="expense-days">
         {Array.from({ length: trip.total_days }, (_, index) => index + 1).map(
@@ -5145,6 +5245,7 @@ function PlanExpensesContent({
                           return null;
                         const isBaht = (cost.currency || "THB") === "THB";
                         const card = findPaymentCard(cards, cost);
+                        const splitLabel = costSplitLabel(cost, trip.traveller_count);
                         return (
                           <button
                             type="button"
@@ -5167,6 +5268,7 @@ function PlanExpensesContent({
                               {!isBaht && (
                                 <small>{costSourceLabel(cost)}</small>
                               )}
+                              {splitLabel ? <small className="expense-row-split">{splitLabel}</small> : null}
                               <small className="expense-row-payment">
                                 {card ? (
                                   <PaymentOwnerAvatar card={card} />
@@ -7149,16 +7251,29 @@ function CostSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { guests: expenseGuests, setGuests: setExpenseGuests } =
+    useExpenseGuests(trip.id);
+  const [guestName, setGuestName] = useState("");
+  const [addingGuest, setAddingGuest] = useState(false);
   const splitMembers = ownerLastTripMembers(trip.members || []);
   const allSplitMemberIds = splitMembers.map((member) => member.id);
   const existingSplitMemberIds = (existing?.splitMemberIds || []).filter(
     (id) => allSplitMemberIds.includes(id),
   );
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>(
-    existingSplitMemberIds.length
+    existing && Array.isArray(existing.splitMemberIds)
       ? existingSplitMemberIds
       : allSplitMemberIds,
   );
+  const [splitGuestIds, setSplitGuestIds] = useState<string[]>(
+    existing?.splitGuestIds || [],
+  );
+  const initializedGuestSelection = useRef(Boolean(existing));
+  useEffect(() => {
+    if (initializedGuestSelection.current || !expenseGuests.length) return;
+    initializedGuestSelection.current = true;
+    setSplitGuestIds(expenseGuests.map((guest) => guest.id));
+  }, [expenseGuests]);
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
   const splitPickerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -7215,6 +7330,40 @@ function CostSheet({
       setRateLoading(false);
     }
   }
+  async function addExpenseGuest() {
+    const name = guestName.trim();
+    if (!name || addingGuest) return;
+    setAddingGuest(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/trips/${trip.id}/expense-guests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "เพิ่มคนนอกทริปไม่สำเร็จ");
+      const guest = data as ExpenseGuest;
+      setExpenseGuests((current) =>
+        current.some((item) => item.id === guest.id)
+          ? current
+          : [...current, guest],
+      );
+      setSplitGuestIds((current) => [...new Set([...current, guest.id])]);
+      setGuestName("");
+      window.dispatchEvent(
+        new CustomEvent(EXPENSE_GUESTS_CHANGED_EVENT, {
+          detail: { tripId: trip.id },
+        }),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "เพิ่มคนนอกทริปไม่สำเร็จ",
+      );
+    } finally {
+      setAddingGuest(false);
+    }
+  }
   async function handle(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -7235,8 +7384,8 @@ function CostSheet({
       setError("กรุณากรอกอัตราแลกเปลี่ยนให้ถูกต้อง");
       return;
     }
-    if (allSplitMemberIds.length && !splitMemberIds.length) {
-      setError("กรุณาเลือกผู้ร่วมทริปอย่างน้อย 1 คน");
+    if (splitMemberIds.length + splitGuestIds.length < 1) {
+      setError("กรุณาเลือกอย่างน้อย 1 คนสำหรับหารค่าใช้จ่าย");
       return;
     }
     const paymentSource = String(form.get("paymentSource") || "cash");
@@ -7254,7 +7403,8 @@ function CostSheet({
         : "เงินสด",
       creditCardId: selectedCard?.id,
       paymentOwnerName: selectedCard?.owner_name,
-      splitMemberIds: splitMemberIds.length ? splitMemberIds : undefined,
+      splitMemberIds,
+      splitGuestIds,
       value: Math.round(foreignAmount * rate * 100) / 100,
     };
     setSaving(true);
@@ -7376,30 +7526,29 @@ function CostSheet({
               placeholder={t("เช่น ค่าอาหารเย็น")}
             />
           </div>
-          <div className="form-row expense-category-split-row">
-            <div className="field">
-              <label>{t("หมวดหมู่")}</label>
-              {modal.item?.accommodation_id && (
-                <input type="hidden" name="category" value="ที่พัก" />
-              )}
-              <select
-                name="category"
-                defaultValue={
-                  modal.item?.accommodation_id
-                    ? "ที่พัก"
-                    : existing?.category || "อาหาร"
-                }
-                disabled={Boolean(modal.item?.accommodation_id)}
-              >
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {t(category)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field split-member-field" ref={splitPickerRef}>
-              <label>{t("หารกับ")}</label>
+          <div className="field">
+            <label>{t("หมวดหมู่")}</label>
+            {modal.item?.accommodation_id && (
+              <input type="hidden" name="category" value="ที่พัก" />
+            )}
+            <select
+              name="category"
+              defaultValue={
+                modal.item?.accommodation_id
+                  ? "ที่พัก"
+                  : existing?.category || "อาหาร"
+              }
+              disabled={Boolean(modal.item?.accommodation_id)}
+            >
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {t(category)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field split-member-field" ref={splitPickerRef}>
+              <label>{t("หารค่าใช้จ่ายกับ")}</label>
               <button
                 type="button"
                 className={`split-member-trigger ${splitPickerOpen ? "is-open" : ""}`}
@@ -7407,34 +7556,39 @@ function CostSheet({
                 aria-expanded={splitPickerOpen}
               >
                 <span>
-                  {splitMemberIds.length === allSplitMemberIds.length
-                    ? t("หารทุกคน")
-                    : splitMemberIds.length === 1
-                      ? splitMembers.find(
-                          (member) => member.id === splitMemberIds[0],
-                        )?.display_name || t("1 คน")
-                      : t(`${splitMemberIds.length} คน`)}
+                  {splitMemberIds.length + splitGuestIds.length === 0
+                    ? t("ยังไม่ได้เลือก")
+                    : splitMemberIds.length + splitGuestIds.length ===
+                        allSplitMemberIds.length + expenseGuests.length
+                      ? t("ทุกคน")
+                      : t(`${splitMemberIds.length + splitGuestIds.length} คน`)}
                 </span>
                 <ChevronDown size={16} />
               </button>
               {splitPickerOpen && (
                 <div className="split-member-menu">
-                  <label>
+                  <label className="split-all-option">
                     <input
                       type="checkbox"
                       name="splitAll"
                       checked={
                         allSplitMemberIds.length > 0 &&
-                        splitMemberIds.length === allSplitMemberIds.length
+                        splitMemberIds.length === allSplitMemberIds.length &&
+                        splitGuestIds.length === expenseGuests.length
                       }
-                      onChange={(event) =>
+                      onChange={(event) => {
                         setSplitMemberIds(
                           event.target.checked ? allSplitMemberIds : [],
-                        )
-                      }
+                        );
+                        setSplitGuestIds(
+                          event.target.checked
+                            ? expenseGuests.map((guest) => guest.id)
+                            : [],
+                        );
+                      }}
                     />
                     <span className="split-checkmark" aria-hidden="true" />
-                    <span>{t("หารทุกคน")}</span>
+                    <span>{t("ทุกคน")}</span>
                   </label>
                   {splitMembers.map((member) => {
                     const label = member.display_name || member.email || "-";
@@ -7445,13 +7599,12 @@ function CostSheet({
                           name="splitMember"
                           value={member.id}
                           checked={splitMemberIds.includes(member.id)}
-                          onChange={(event) =>
-                            setSplitMemberIds((current) =>
-                              event.target.checked
-                                ? [...new Set([...current, member.id])]
-                                : current.filter((id) => id !== member.id),
-                            )
-                          }
+                          onChange={(event) => {
+                            const next = event.target.checked
+                              ? [...new Set([...splitMemberIds, member.id])]
+                              : splitMemberIds.filter((id) => id !== member.id);
+                            setSplitMemberIds(next);
+                          }}
                         />
                         <span className="split-checkmark" aria-hidden="true" />
                         <span
@@ -7470,10 +7623,56 @@ function CostSheet({
                       </label>
                     );
                   })}
+                  {expenseGuests.map((guest) => (
+                    <label key={guest.id}>
+                      <input
+                        type="checkbox"
+                        name="splitGuest"
+                        value={guest.id}
+                        checked={splitGuestIds.includes(guest.id)}
+                        onChange={(event) =>
+                          setSplitGuestIds((current) =>
+                            event.target.checked
+                              ? [...new Set([...current, guest.id])]
+                              : current.filter((id) => id !== guest.id),
+                          )
+                        }
+                      />
+                      <span className="split-checkmark" aria-hidden="true" />
+                      <span className="split-member-avatar is-guest">
+                        <UserRound size={16} aria-hidden="true" />
+                      </span>
+                      <span>{guest.name}</span>
+                      <small className="split-guest-tag">{t("คนนอก")}</small>
+                    </label>
+                  ))}
+                  <div className="split-guest-add">
+                    <UserPlus size={17} aria-hidden="true" />
+                    <input
+                      type="text"
+                      maxLength={120}
+                      value={guestName}
+                      onChange={(event) => setGuestName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        void addExpenseGuest();
+                      }}
+                      placeholder={t("เพิ่มชื่อ เช่น พ่อ แม่")}
+                      aria-label={t("ชื่อคนนอกทริป")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void addExpenseGuest()}
+                      disabled={!guestName.trim() || addingGuest}
+                    >
+                      {addingGuest ? t("กำลังเพิ่ม…") : t("เพิ่ม")}
+                    </button>
+                  </div>
                 </div>
               )}
+              <small>{t("เพิ่มคนนอกได้โดยไม่ต้องเชิญอีเมลหรือจอยทริป")}</small>
             </div>
-          </div>
           <div className="form-row money-currency-row">
             <div className="field">
               <label>{t("ยอดเงิน")}</label>
@@ -7726,6 +7925,11 @@ function TripDestinationPicker({
           <Search size={16} />
           <input
             value={query}
+            type="search"
+            inputMode="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            autoCorrect="off"
             onFocus={() => setFocused(true)}
             onBlur={() => window.setTimeout(() => setFocused(false), 120)}
             onChange={(event) => setQuery(event.target.value)}
@@ -7738,7 +7942,7 @@ function TripDestinationPicker({
         {focused && (
           <div id="trip-destination-options" className="trip-destination-options" role="listbox">
             {options.length ? options.map((option) => (
-              <button type="button" role="option" aria-selected="false" key={option.id} onMouseDown={(event) => event.preventDefault()} onClick={() => add(option)}>
+              <button type="button" role="option" aria-selected="false" key={option.id} onPointerDown={(event) => event.preventDefault()} onClick={() => add(option)}>
                 <MapPin size={14} />
                 <span><strong>{lang === "EN" ? option.nameEn : option.nameTh}</strong><small>{lang === "EN" ? option.nameTh : option.nameEn}</small></span>
                 <Plus size={14} />
@@ -7781,6 +7985,7 @@ function ModalForm({
   const [pendingDelete, setPendingDelete] = useState(false);
   const [confirmDisableFlights, setConfirmDisableFlights] = useState(false);
   const flightDisableConfirmed = useRef(false);
+  const modalBackdropRef = useRef<HTMLDivElement>(null);
   const formDirtyKey =
     modal.type === "trip"
       ? `trip:${modal.trip?.id || "new"}`
@@ -7811,6 +8016,22 @@ function ModalForm({
     const root = document.documentElement;
     root.classList.add("sheet-open");
     return () => root.classList.remove("sheet-open");
+  }, []);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const backdrop = modalBackdropRef.current;
+    if (!viewport || !backdrop) return;
+    const syncViewport = () => {
+      backdrop.style.setProperty("--modal-viewport-height", `${viewport.height}px`);
+      backdrop.style.setProperty("--modal-viewport-top", `${viewport.offsetTop}px`);
+    };
+    syncViewport();
+    viewport.addEventListener("resize", syncViewport, { passive: true });
+    viewport.addEventListener("scroll", syncViewport, { passive: true });
+    return () => {
+      viewport.removeEventListener("resize", syncViewport);
+      viewport.removeEventListener("scroll", syncViewport);
+    };
   }, []);
   const initialOutboundDate =
     modal.type === "trip"
@@ -7948,7 +8169,8 @@ function ModalForm({
   ];
   return (
     <div
-      className="modal-backdrop"
+      ref={modalBackdropRef}
+      className="modal-backdrop trip-modal-backdrop"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}

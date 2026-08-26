@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 180" role="img" aria-labelledby="title">
+  <title id="title">International travel badge</title>
+  <defs><linearGradient id="g" x1=".1" y1=".1" x2=".9" y2="1"><stop stop-color="#2078ed"/><stop offset="1" stop-color="#43caa1"/></linearGradient></defs>
+  <path fill="#1758b3" d="M62 7h36l5 25H57z"/><circle cx="80" cy="96" r="70" fill="url(#g)" stroke="#f2fbff" stroke-width="7"/>
+  <circle cx="80" cy="95" r="40" fill="none" stroke="#fff" stroke-width="6"/><path d="M40 95h80M80 55c17 18 17 62 0 80M80 55c-17 18-17 62 0 80" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="80" cy="96" r="57" fill="none" stroke="#fff" stroke-width="2" opacity=".35"/>
+</svg>

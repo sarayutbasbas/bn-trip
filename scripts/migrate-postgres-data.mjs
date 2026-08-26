@@ -18,6 +18,7 @@ const tables = [
   "users",
   "trips",
   "trip_collaborators",
+  "trip_expense_guests",
   "collaborator_contacts",
   "itineraries",
   "credit_cards",

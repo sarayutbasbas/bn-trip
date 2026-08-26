@@ -40,6 +40,15 @@ export async function tripMemberIdsAreMembers(tripId:string,userIds:string[]){
   return Number(result.rows[0]?.count||0)===uniqueIds.length;
 }
 
+export async function tripExpenseGuestIdsBelongToTrip(tripId:string,guestIds:string[]){
+  const uniqueIds=[...new Set(guestIds)];
+  if(!uniqueIds.length)return true;
+  const result=await query<{count:number}>(`SELECT count(DISTINCT guest.id)::int AS count
+    FROM trip_expense_guests guest
+    WHERE guest.trip_id=$1 AND guest.id=ANY($2::uuid[])`,[tripId,uniqueIds]);
+  return Number(result.rows[0]?.count||0)===uniqueIds.length;
+}
+
 export const tripAccessSql=(alias="trips")=>`(${alias}.owner_id=$1 OR EXISTS (SELECT 1 FROM trip_collaborators access_member WHERE access_member.trip_id=${alias}.id AND access_member.user_id=$1))`;
 export const tripRoleSql=(alias="trips")=>`CASE WHEN ${alias}.owner_id=$1 THEN 'owner' ELSE COALESCE((SELECT access_member.access_level FROM trip_collaborators access_member WHERE access_member.trip_id=${alias}.id AND access_member.user_id=$1 LIMIT 1),'view') END AS access_role`;
 export const tripReviewSummarySql=(alias="trips")=>`COALESCE((SELECT round(avg(review.rating),1) FROM trip_reviews review

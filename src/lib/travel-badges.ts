@@ -157,7 +157,7 @@ function seedToBadge(seed: BadgeSeed, category: TravelBadgeCategory, countryCode
 export const TRAVEL_BADGE_CATALOG: readonly TravelBadgeDefinition[] = [
   ...THAILAND.map((seed, index) => seedToBadge(seed, "thailand", "TH", index)),
   ...JAPAN.map((seed, index) => seedToBadge(seed, "japan", "JP", index)),
-  ...TRIP_COUNTRIES.filter((country) => country.code !== "TH" && country.code !== "JP").map((country, artworkIndex) => {
+  ...TRIP_COUNTRIES.filter((country) => country.code !== "TH").map((country, artworkIndex) => {
     const [latitude, longitude] = COUNTRY_CENTERS[country.code] || [0, 0];
     const slug = country.nameEn.toLowerCase().replaceAll(/[^a-z0-9]+/g, "_").replaceAll(/^_|_$/g, "");
     return {
