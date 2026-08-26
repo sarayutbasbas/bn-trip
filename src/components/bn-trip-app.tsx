@@ -8143,6 +8143,8 @@ function ModalForm({
   const [confirmDisableFlights, setConfirmDisableFlights] = useState(false);
   const flightDisableConfirmed = useRef(false);
   const modalBackdropRef = useRef<HTMLDivElement>(null);
+  const focusedTripFieldRef = useRef<HTMLElement | null>(null);
+  const focusVisibilityTimerRef = useRef<number | null>(null);
   const formDirtyKey =
     modal.type === "trip"
       ? `trip:${modal.trip?.id || "new"}`
@@ -8183,9 +8185,28 @@ function ModalForm({
     const viewport = window.visualViewport;
     const backdrop = modalBackdropRef.current;
     if (!viewport || !backdrop) return;
+    const keepFocusedFieldVisible = () => {
+      const modalElement = formRef.current;
+      const focused = focusedTripFieldRef.current;
+      if (!modalElement || !focused || !modalElement.contains(focused)) return;
+      const field = focused.closest<HTMLElement>(".field") || focused;
+      const fieldRect = field.getBoundingClientRect();
+      const modalRect = modalElement.getBoundingClientRect();
+      const visibleTop = Math.max(modalRect.top + 18, viewport.offsetTop + 14);
+      const visibleBottom = Math.min(
+        modalRect.bottom - 86,
+        viewport.offsetTop + viewport.height - 14,
+      );
+      if (fieldRect.top < visibleTop) {
+        modalElement.scrollTop += fieldRect.top - visibleTop;
+      } else if (fieldRect.bottom > visibleBottom) {
+        modalElement.scrollTop += fieldRect.bottom - visibleBottom;
+      }
+    };
     const syncViewport = () => {
       backdrop.style.setProperty("--modal-viewport-height", `${viewport.height}px`);
       backdrop.style.setProperty("--modal-viewport-top", `${viewport.offsetTop}px`);
+      requestAnimationFrame(keepFocusedFieldVisible);
     };
     syncViewport();
     viewport.addEventListener("resize", syncViewport, { passive: true });
@@ -8193,8 +8214,11 @@ function ModalForm({
     return () => {
       viewport.removeEventListener("resize", syncViewport);
       viewport.removeEventListener("scroll", syncViewport);
+      if (focusVisibilityTimerRef.current) {
+        window.clearTimeout(focusVisibilityTimerRef.current);
+      }
     };
-  }, []);
+  }, [formRef]);
   const initialOutboundDate =
     modal.type === "trip"
       ? localDate(
@@ -8211,7 +8235,7 @@ function ModalForm({
       ? localDate(modal.trip?.return_departure_at, returnFallback)
       : "";
   const initialReturnDate =
-    initialOutboundDate && savedReturnDate < initialOutboundDate
+    initialOutboundDate && savedReturnDate <= initialOutboundDate
       ? addDays(initialOutboundDate, 1)
       : savedReturnDate;
   const [outboundDate, setOutboundDate] = useState(initialOutboundDate);
@@ -8341,6 +8365,16 @@ function ModalForm({
         ref={formRef}
         className="modal"
         onChange={checkForChanges}
+        onFocusCapture={(event) => {
+          if (!(event.target instanceof HTMLElement)) return;
+          focusedTripFieldRef.current = event.target;
+          if (focusVisibilityTimerRef.current) {
+            window.clearTimeout(focusVisibilityTimerRef.current);
+          }
+          focusVisibilityTimerRef.current = window.setTimeout(() => {
+            event.target.scrollIntoView({ block: "center", inline: "nearest" });
+          }, 260);
+        }}
         onSubmit={handle}
       >
         <div className="modal-head">
@@ -8425,13 +8459,7 @@ function ModalForm({
                     value={outboundDate}
                     onValueChange={(value) => {
                       setOutboundDate(value);
-                      setReturnDate((current) =>
-                        !value
-                          ? ""
-                          : current && current >= value
-                            ? current
-                            : addDays(value, 1),
-                      );
+                      setReturnDate(value ? addDays(value, 1) : "");
                     }}
                     label={t("วันเดินทางไป")}
                   />
@@ -8459,7 +8487,7 @@ function ModalForm({
                     defaultValue={initialReturnDate}
                     value={returnDate}
                     onValueChange={setReturnDate}
-                    min={outboundDate || undefined}
+                    min={outboundDate ? addDays(outboundDate, 1) : undefined}
                     disabled={!outboundDate}
                     label={t("วันเดินทางกลับ")}
                   />

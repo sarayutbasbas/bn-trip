@@ -1677,7 +1677,7 @@ button:disabled {
   margin-inline: calc(var(--screen-padding, 0px) * -1);
   padding: 2px var(--screen-padding, 0px) 4px;
   display: flex;
-  gap: 11px;
+  gap: 5px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
@@ -1689,8 +1689,8 @@ button:disabled {
   display: none;
 }
 .country-highlight-item {
-  width: 96px;
-  flex: 0 0 96px;
+  width: 84px;
+  flex: 0 0 84px;
   border: 0;
   display: flex;
   flex-direction: column;
@@ -6107,6 +6107,16 @@ button:disabled {
   bottom: auto;
   height: var(--modal-viewport-height, 100dvh);
 }
+.trip-modal-backdrop .modal {
+  scroll-padding-top: 22px;
+  scroll-padding-bottom: 110px;
+}
+.trip-modal-backdrop .field input,
+.trip-modal-backdrop .field select,
+.trip-modal-backdrop .field textarea {
+  scroll-margin-top: 22px;
+  scroll-margin-bottom: 110px;
+}
 .modal {
   --sheet-inline-padding: 20px;
   width: 100%;
@@ -7906,6 +7916,8 @@ html:has(.confirm-backdrop) .flow-header {
 }
 html.sheet-open,
 html.sheet-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
   background: var(--surface-solid);
 }
 
