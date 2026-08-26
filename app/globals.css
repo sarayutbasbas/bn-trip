@@ -6746,6 +6746,37 @@ button:disabled {
   font-size: 8px !important;
   white-space: nowrap;
 }
+.split-guest-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+}
+.split-guest-option > label {
+  min-width: 0;
+}
+.split-guest-option > label > span:not(.split-checkmark):not(.split-member-avatar) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.split-guest-delete {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: #ff3b30;
+  background: transparent;
+}
+.split-guest-delete:active {
+  background: color-mix(in srgb, #ff3b30 12%, transparent);
+  transform: scale(0.92);
+}
+.split-guest-delete:disabled {
+  opacity: 0.4;
+}
 .split-guest-add {
   min-height: 46px;
   margin-top: 5px;

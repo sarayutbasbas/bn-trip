@@ -7200,6 +7200,8 @@ function CostSheet({
   saveCost,
   deleteCost,
   canDelete,
+  notify,
+  onChanged,
 }: {
   modal: Extract<NonNullable<Modal>, { type: "cost" }>;
   trip: Trip;
@@ -7214,6 +7216,8 @@ function CostSheet({
   ) => Promise<void>;
   deleteCost: (item: Itinerary, index: number) => Promise<void>;
   canDelete: boolean;
+  notify: (message: string) => void;
+  onChanged: () => void | Promise<void>;
 }) {
   const t = useT();
   const existing =
@@ -7255,6 +7259,13 @@ function CostSheet({
     useExpenseGuests(trip.id);
   const [guestName, setGuestName] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
+  const [deletingGuestId, setDeletingGuestId] = useState<string | null>(null);
+  const [guestDeleteTarget, setGuestDeleteTarget] = useState<{
+    guest: ExpenseGuest;
+    affectedCosts: number;
+    affectedTotal: number;
+    reassignedToOwner: number;
+  } | null>(null);
   const splitMembers = ownerLastTripMembers(trip.members || []);
   const allSplitMemberIds = splitMembers.map((member) => member.id);
   const existingSplitMemberIds = (existing?.splitMemberIds || []).filter(
@@ -7362,6 +7373,59 @@ function CostSheet({
       );
     } finally {
       setAddingGuest(false);
+    }
+  }
+  function requestDeleteExpenseGuest(guest: ExpenseGuest) {
+    const linkedCosts = items
+      .flatMap((item) => item.cost_items || [])
+      .filter((cost) => cost.splitGuestIds?.includes(guest.id));
+    setSplitPickerOpen(false);
+    setGuestDeleteTarget({
+      guest,
+      affectedCosts: linkedCosts.length,
+      affectedTotal: linkedCosts.reduce(
+        (sum, cost) => sum + Number(cost.value || 0),
+        0,
+      ),
+      reassignedToOwner: linkedCosts.filter(
+        (cost) =>
+          (cost.splitMemberIds?.length || 0) +
+            (cost.splitGuestIds?.length || 0) ===
+          1,
+      ).length,
+    });
+  }
+  async function deleteExpenseGuest(guest: ExpenseGuest) {
+    if (deletingGuestId) return;
+    setDeletingGuestId(guest.id);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/trips/${trip.id}/expense-guests/${guest.id}`,
+        { method: "DELETE" },
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "ลบคนนอกทริปไม่สำเร็จ");
+      setExpenseGuests((current) =>
+        current.filter((item) => item.id !== guest.id),
+      );
+      setSplitGuestIds((current) => current.filter((id) => id !== guest.id));
+      window.dispatchEvent(
+        new CustomEvent(EXPENSE_GUESTS_CHANGED_EVENT, {
+          detail: { tripId: trip.id },
+        }),
+      );
+      await onChanged();
+      notify(
+        data.affectedCosts
+          ? `ลบ ${guest.name} แล้ว · คำนวณค่าใช้จ่ายใหม่ ${data.affectedCosts} รายการ`
+          : `ลบ ${guest.name} แล้ว`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ลบคนนอกทริปไม่สำเร็จ");
+      throw err;
+    } finally {
+      setDeletingGuestId(null);
     }
   }
   async function handle(event: React.FormEvent<HTMLFormElement>) {
@@ -7624,27 +7688,39 @@ function CostSheet({
                     );
                   })}
                   {expenseGuests.map((guest) => (
-                    <label key={guest.id}>
-                      <input
-                        type="checkbox"
-                        name="splitGuest"
-                        value={guest.id}
-                        checked={splitGuestIds.includes(guest.id)}
-                        onChange={(event) =>
-                          setSplitGuestIds((current) =>
-                            event.target.checked
-                              ? [...new Set([...current, guest.id])]
-                              : current.filter((id) => id !== guest.id),
-                          )
-                        }
-                      />
-                      <span className="split-checkmark" aria-hidden="true" />
-                      <span className="split-member-avatar is-guest">
-                        <UserRound size={16} aria-hidden="true" />
-                      </span>
-                      <span>{guest.name}</span>
-                      <small className="split-guest-tag">{t("คนนอก")}</small>
-                    </label>
+                    <div className="split-guest-option" key={guest.id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          name="splitGuest"
+                          value={guest.id}
+                          checked={splitGuestIds.includes(guest.id)}
+                          onChange={(event) =>
+                            setSplitGuestIds((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, guest.id])]
+                                : current.filter((id) => id !== guest.id),
+                            )
+                          }
+                        />
+                        <span className="split-checkmark" aria-hidden="true" />
+                        <span className="split-member-avatar is-guest">
+                          <UserRound size={16} aria-hidden="true" />
+                        </span>
+                        <span>{guest.name}</span>
+                        <small className="split-guest-tag">{t("คนนอก")}</small>
+                      </label>
+                      <button
+                        type="button"
+                        className="split-guest-delete"
+                        onClick={() => requestDeleteExpenseGuest(guest)}
+                        disabled={Boolean(deletingGuestId)}
+                        aria-label={`${t("ลบ")} ${guest.name}`}
+                        title={t("ลบคนนอกทริป")}
+                      >
+                        <Trash2 size={15} aria-hidden="true" />
+                      </button>
+                    </div>
                   ))}
                   <div className="split-guest-add">
                     <UserPlus size={17} aria-hidden="true" />
@@ -7787,6 +7863,21 @@ function CostSheet({
             close={() => setConfirmDelete(false)}
           />
         )}
+      {guestDeleteTarget && (
+        <ConfirmDialog
+          confirmation={{
+            title: `ลบ “${guestDeleteTarget.guest.name}” ออกจากทริป?`,
+            description:
+              guestDeleteTarget.affectedCosts > 0
+                ? `ชื่อนี้จะหายจากผู้หาร ${guestDeleteTarget.affectedCosts} รายการ รวมยอด ฿${bahtFormat(guestDeleteTarget.affectedTotal)} และระบบจะคำนวณส่วนหารใหม่ทั้งหมด การเชื่อมโยงชื่อจะหายไปแต่รายการค่าใช้จ่ายยังอยู่${guestDeleteTarget.reassignedToOwner > 0 ? ` โดย ${guestDeleteTarget.reassignedToOwner} รายการที่มีชื่อนี้เป็นผู้หารคนเดียวจะย้ายยอดให้เจ้าของทริป` : ""}`
+                : "รายชื่อนี้ยังไม่เชื่อมกับค่าใช้จ่าย จึงลบได้โดยไม่กระทบยอดรายการอื่น",
+            confirmLabel: "ลบและคำนวณใหม่",
+            busyLabel: "กำลังลบและคำนวณ…",
+            onConfirm: () => deleteExpenseGuest(guestDeleteTarget.guest),
+          }}
+          close={() => setGuestDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
@@ -9405,6 +9496,8 @@ export function BNTripApp({
         saveCost={saveCost}
         deleteCost={deleteCost}
         canDelete={selected.access_role !== "view"}
+        notify={flash}
+        onChanged={() => refreshActiveTrip(selected.id)}
       />
     ) : null
   ) : (
