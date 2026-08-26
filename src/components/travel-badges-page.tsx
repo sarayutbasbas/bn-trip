@@ -207,11 +207,19 @@ function AdministrativeMap({
   );
 }
 
-function BadgeArtwork({ badge, size = 104 }: { badge: TravelBadge; size?: number }) {
+function BadgeArtwork({
+  badge,
+  size = 104,
+  width = size,
+}: {
+  badge: TravelBadge;
+  size?: number;
+  width?: number;
+}) {
   return (
     <span
       className="travel-badge-artwork"
-      style={{ width: size, height: size }}
+      style={{ width, height: size }}
       role="img"
       aria-label={`เข็มกลัด ${badge.nameTh}${badge.unlocked ? " ปลดล็อกแล้ว" : " ยังไม่ปลดล็อก"}`}
     >
@@ -405,7 +413,7 @@ function BadgeGridCard({
           }}
           aria-label={`เลือกและดูรูปเข็มกลัด ${badge.nameTh} แบบเต็มจอ`}
         >
-          <BadgeArtwork badge={badge} />
+          <BadgeArtwork badge={badge} size={102} width={96} />
         </button>
       ) : (
         <button
@@ -414,7 +422,7 @@ function BadgeGridCard({
           onClick={selectCard}
           aria-label={`เลือก ${badge.nameTh} และแสดงปุ่มเคยไปแล้ว`}
         >
-          <BadgeArtwork badge={badge} />
+          <BadgeArtwork badge={badge} size={102} width={96} />
         </button>
       )}
       <button

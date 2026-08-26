@@ -8421,7 +8421,6 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
   .badge-preview-dialog { width: 100%; padding-inline: 14px; border-radius: 25px; }
   .badge-preview-image { width: 84vw; height: min(64vh,84vw); }
   .badge-preview-dialog .travel-badge-artwork { width: 84vw !important; height: min(64vh,84vw) !important; }
-  .travel-badge-artwork { width: 78px !important; height: 78px !important; }
 }
 
 @media (min-width: 768px) {
