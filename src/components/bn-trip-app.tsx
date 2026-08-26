@@ -67,7 +67,6 @@ import {
   ClipboardList,
   Clock,
   Cloud,
-  Copy,
   Crown,
   Database,
   FolderOpen,
@@ -312,7 +311,12 @@ export type Itinerary = {
 };
 type Modal =
   | { type: "trip"; trip?: Trip }
-  | { type: "place"; item?: Itinerary; duplicateOf?: Itinerary }
+  | {
+      type: "place";
+      item?: Itinerary;
+      defaultDay?: number;
+      defaultTime?: string;
+    }
   | { type: "cost"; item?: Itinerary; costIndex?: number; defaultDay?: number }
   | { type: "collaborators"; trip: Trip }
   | { type: "reviews"; trip: Trip }
@@ -489,6 +493,7 @@ const EN_TEXT: Record<string, string> = {
   แพลน: "Plan",
   วันนี้: "Today",
   เพิ่มสถานที่: "Add place",
+  เพิ่มสถานที่ระหว่างจุด: "Add place between stops",
   เพิ่มแผน: "Add plan",
   "เพิ่มสถานที่และเวลา รายการใหม่จะถูกเรียงใน Timeline อัตโนมัติ":
     "Add a place and time. New items are sorted automatically",
@@ -874,8 +879,6 @@ Object.assign(EN_TEXT, {
   "รูปีอินเดีย (INR)": "Indian Rupee (INR)",
 });
 Object.assign(EN_TEXT, {
-  ทำสำเนาแผน: "Duplicate plan",
-  ทำสำเนาแผนแล้ว: "Plan duplicated",
   "วันและเวลานี้มีแผนอยู่แล้ว กรุณาเลือกเวลาอื่น":
     "A plan already exists at this date and time. Choose another time.",
 });
@@ -1106,6 +1109,29 @@ function applyCachedTripReviewSummaries(trips: Trip[]): Trip[] {
 }
 const itineraryCache = new Map<string, Itinerary[]>();
 
+function CountryFlagImage({
+  code,
+  label,
+  className = "",
+}: {
+  code: string;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <Image
+      className={`country-flag-image ${className}`.trim()}
+      src={`/flags/${code.toLowerCase()}.svg`}
+      alt={label}
+      width={64}
+      height={64}
+      loading="eager"
+      decoding="sync"
+      unoptimized
+    />
+  );
+}
+
 function TripCountryFlag({ trip }: { trip: Trip }) {
   const country =
     countryByCode(trip.country_code) ||
@@ -1120,7 +1146,7 @@ function TripCountryFlag({ trip }: { trip: Trip }) {
       aria-label={country.nameEn}
       title={country.nameEn}
     >
-      {country.flag}
+      <CountryFlagImage code={country.code} label="" />
     </span>
   );
 }
@@ -1748,8 +1774,8 @@ function timeInMinutes(value: string | null) {
 }
 function shiftedPlanTime(value: string | null | undefined) {
   const minutes = timeInMinutes(value?.slice(0, 5) || null);
-  if (minutes === null || minutes + 60 >= 24 * 60) return "09:00";
-  const next = minutes + 60;
+  if (minutes === null) return "09:00";
+  const next = Math.min(minutes + 60, 23 * 60 + 59);
   return `${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`;
 }
 function nextPlanTime(items: Itinerary[], day: number) {
@@ -1759,6 +1785,27 @@ function nextPlanTime(items: Itinerary[], day: number) {
     .sort()
     .at(-1);
   return latest ? shiftedPlanTime(latest) : "09:00";
+}
+function timeFromMinutes(minutes: number) {
+  const safe = Math.max(0, Math.min(23 * 60 + 59, minutes));
+  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+}
+function itineraryPlanTime(item: Itinerary) {
+  return item.start_time?.slice(0, 5) || (item.accommodation_id ? "23:30" : null);
+}
+function insertionPlanTime(previous: Itinerary, next: Itinerary) {
+  const previousMinutes = timeInMinutes(itineraryPlanTime(previous));
+  const nextMinutes = timeInMinutes(itineraryPlanTime(next));
+  if (previousMinutes === null) return "09:00";
+  if (nextMinutes === null || nextMinutes <= previousMinutes + 1) {
+    return timeFromMinutes(previousMinutes + 10);
+  }
+  for (const increment of [60, 30, 10]) {
+    if (previousMinutes + increment < nextMinutes) {
+      return timeFromMinutes(previousMinutes + increment);
+    }
+  }
+  return timeFromMinutes(previousMinutes + Math.floor((nextMinutes - previousMinutes) / 2));
 }
 function withoutFirstTransport(items: Itinerary[]) {
   const firstByDay = new Map<number, Itinerary>();
@@ -2483,7 +2530,7 @@ function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
               aria-label={`${t("ดูทริปทั้งหมดใน")} ${name}`}
             >
               <div className="country-highlight-flag" role="img" aria-label={name}>
-                <span>{country.flag}</span>
+                <CountryFlagImage code={country.code} label="" />
                 {item.reviewCount > 0 && (
                   <b><Star size={9} fill="currentColor" />{item.averageRating.toFixed(1)}</b>
                 )}
@@ -2829,7 +2876,11 @@ function TravelAnalyticsDashboard({
           )) : data.countries.map((item) => (
             <div className="analytics-country-row" key={item.country}>
               <b className="analytics-country-flag">
-                {countryByCode(item.countryCode)?.flag || "🌍"}
+                {countryByCode(item.countryCode) ? (
+                  <CountryFlagImage code={item.countryCode} label={item.country} />
+                ) : (
+                  "🌍"
+                )}
               </b>
               <div>
                 <strong>{item.country}</strong>
@@ -3657,6 +3708,30 @@ function TripTimelineSearch({
   );
 }
 
+function TimelineInsertPlaceButton({
+  previous,
+  next,
+  onClick,
+}: {
+  previous: Itinerary;
+  next: Itinerary;
+  onClick: (defaultTime: string) => void;
+}) {
+  const t = useT();
+  const defaultTime = insertionPlanTime(previous, next);
+  return (
+    <button
+      type="button"
+      className="timeline-insert-place"
+      onClick={() => onClick(defaultTime)}
+      aria-label={`${t("เพิ่มสถานที่ระหว่างจุด")} · ${defaultTime}`}
+      title={`${t("เพิ่มสถานที่ระหว่างจุด")} · ${defaultTime}`}
+    >
+      <Plus size={14} />
+    </button>
+  );
+}
+
 function TripHub({
   trip,
   items,
@@ -3671,7 +3746,6 @@ function TripHub({
   leaveTrip,
   addPlace,
   editPlace,
-  duplicatePlace,
   openCost,
   onFlightChanged,
   notify,
@@ -3690,9 +3764,8 @@ function TripHub({
   openReviews: () => void;
   manageCollaborators: () => void;
   leaveTrip: () => void;
-  addPlace: (day: number) => void;
+  addPlace: (day: number, defaultTime?: string) => void;
   editPlace: (item: Itinerary) => void;
-  duplicatePlace: (item: Itinerary) => void;
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
   onFlightChanged: () => void | Promise<void>;
   notify: (message: string) => void;
@@ -4106,6 +4179,13 @@ function TripHub({
                       className={`timeline-stop ${item.accommodation_id ? "accommodation-stop" : ""} ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                       key={item.id}
                     >
+                      {previous && (
+                        <TimelineInsertPlaceButton
+                          previous={previous}
+                          next={item}
+                          onClick={(defaultTime) => addPlace(day, defaultTime)}
+                        />
+                      )}
                       {index > 0 && item.transport_mode && (
                         <div className="transport transport-to-stop">
                           <TransportModeIcon mode={item.transport_mode} />
@@ -4208,15 +4288,6 @@ function TripHub({
                             >
                               <LocateFixed size={17} />
                             </a>
-                            {!item.accommodation_id && <button
-                              type="button"
-                              className="navigate-point-btn"
-                              onClick={() => duplicatePlace(item)}
-                              aria-label={t("ทำสำเนาแผน")}
-                              title={t("ทำสำเนาแผน")}
-                            >
-                              <Copy size={16} />
-                            </button>}
                             <button
                               type="button"
                               className="navigate-point-btn expense-point-btn"
@@ -4339,7 +4410,7 @@ function TimelineScreen({
   cards: PaymentCard[];
   day: number;
   setDay: (n: number) => void;
-  addPlace: () => void;
+  addPlace: (day: number, defaultTime?: string) => void;
   back: () => void;
   notify: (message: string) => void;
   onChanged: () => void | Promise<void>;
@@ -4427,7 +4498,7 @@ function TimelineScreen({
         </div>
         <button
           className="directory-fab timeline-fab"
-          onClick={addPlace}
+          onClick={() => addPlace(day)}
           aria-label={t("เพิ่มสถานที่")}
         >
           <Plus size={22} />
@@ -4439,7 +4510,7 @@ function TimelineScreen({
           title={t(`Day ${displayTripDay(trip, day)} ยังว่างอยู่`)}
           description={t("เพิ่มสถานที่ เวลา และวิธีเดินทางสำหรับวันนี้")}
           action={t("เพิ่มสถานที่")}
-          onClick={addPlace}
+          onClick={() => addPlace(day)}
         />
       ) : (
         <div className="timeline">
@@ -4449,11 +4520,19 @@ function TimelineScreen({
               tripDay !== null &&
               (tripDay > day ||
                 (tripDay === day && currentIndex >= 0 && index < currentIndex));
+            const previous = index > 0 ? dayItems[index - 1] : null;
             return (
               <div
                 className={`timeline-stop ${item.accommodation_id ? "accommodation-stop" : ""} ${isCurrent ? "current-stop" : ""} ${isPast ? "past-stop" : ""}`}
                 key={item.id}
               >
+                {previous && (
+                  <TimelineInsertPlaceButton
+                    previous={previous}
+                    next={item}
+                    onClick={(defaultTime) => addPlace(day, defaultTime)}
+                  />
+                )}
                 {index > 0 && item.transport_mode && (
                   <div className="transport transport-to-stop">
                     <TransportModeIcon mode={item.transport_mode} />
@@ -8186,11 +8265,8 @@ function ModalForm({
   const formDirtyKey =
     modal.type === "trip"
       ? `trip:${modal.trip?.id || "new"}`
-      : `place:${modal.item?.id || modal.duplicateOf?.id || "new"}`;
-  const { formRef, hasChanges, checkForChanges } = useFormDirty(
-    formDirtyKey,
-    modal.type === "place" && Boolean(modal.duplicateOf),
-  );
+      : `place:${modal.item?.id || "new"}`;
+  const { formRef, hasChanges, checkForChanges } = useFormDirty(formDirtyKey);
   const initialCountry =
     modal.type === "trip"
       ? countryByCode(modal.trip?.country_code) ||
@@ -8298,18 +8374,17 @@ function ModalForm({
       : savedReturnDate;
   const [outboundDate, setOutboundDate] = useState(initialOutboundDate);
   const [returnDate, setReturnDate] = useState(initialReturnDate);
-  const placeSource =
-    modal.type === "place" ? modal.item || modal.duplicateOf : undefined;
+  const placeSource = modal.type === "place" ? modal.item : undefined;
   const initialPlaceDay =
-    modal.type === "place" ? placeSource?.day_number || day : day;
+    modal.type === "place"
+      ? placeSource?.day_number || modal.defaultDay || day
+      : day;
   const [placeDay, setPlaceDay] = useState(initialPlaceDay);
   const [placeStartTime, setPlaceStartTime] = useState(
     modal.type === "place"
       ? modal.item
         ? modal.item.start_time?.slice(0, 5) || "09:00"
-        : modal.duplicateOf
-          ? shiftedPlanTime(modal.duplicateOf.start_time)
-          : nextPlanTime(items, initialPlaceDay)
+        : modal.defaultTime || nextPlanTime(items, initialPlaceDay)
       : "09:00",
   );
   const placeIsFirst =
@@ -8398,9 +8473,7 @@ function ModalForm({
         : "สร้างทริปใหม่"
       : modal.item
         ? "แก้ไขรายการ"
-        : modal.duplicateOf
-          ? "ทำสำเนาแผน"
-          : "เพิ่มแผนเที่ยว",
+        : "เพิ่มแผนเที่ยว",
   );
   const transportOptions = [
     "เดิน",
@@ -8452,21 +8525,28 @@ function ModalForm({
               </div>
               <div className="field country-select-field">
                 <label>{t("ประเทศ")}</label>
-                <select
-                  name="countryCode"
-                  value={countryCode}
-                  onChange={(event) => {
-                    setCountryCode(event.target.value);
-                    setTripDestinations([]);
-                    window.setTimeout(checkForChanges, 0);
-                  }}
-                >
-                  {TRIP_COUNTRIES.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.flag} {lang === "EN" ? country.nameEn : country.nameTh}
-                    </option>
-                  ))}
-                </select>
+                <div className="country-select-control">
+                  <CountryFlagImage
+                    code={countryCode}
+                    label=""
+                    className="country-select-flag"
+                  />
+                  <select
+                    name="countryCode"
+                    value={countryCode}
+                    onChange={(event) => {
+                      setCountryCode(event.target.value);
+                      setTripDestinations([]);
+                      window.setTimeout(checkForChanges, 0);
+                    }}
+                  >
+                    {TRIP_COUNTRIES.map((country) => (
+                      <option key={country.code} value={country.code}>
+                        {lang === "EN" ? country.nameEn : country.nameTh}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <small>{t("เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง")} · {t("เวลาอัตโนมัติ")}: {countryByCode(countryCode)?.timezone}</small>
               </div>
               <TripDestinationPicker
@@ -8628,7 +8708,7 @@ function ModalForm({
                 />
               </div>
               <TripLocationInput
-                key={`${modal.item ? "edit" : modal.duplicateOf ? "duplicate" : "new"}-${placeSource?.id || "location"}`}
+                key={`${modal.item ? "edit" : "new"}-${placeSource?.id || "location"}`}
                 items={items}
                 currentItem={placeSource}
               />
@@ -9223,9 +9303,7 @@ export function BNTripApp({
       flash(
         editing
           ? "อัปเดตวัน เวลา และรายละเอียดแล้ว"
-          : modal.duplicateOf
-            ? "ทำสำเนาแผนแล้ว"
-            : "เพิ่มแผนเที่ยวและเรียง Timeline แล้ว",
+          : "เพิ่มแผนเที่ยวและเรียง Timeline แล้ว",
       );
     }
   }
@@ -9528,17 +9606,13 @@ export function BNTripApp({
       leaveTrip={protect(() =>
         setModal({ type: "collaborators", trip: selected }),
       )}
-      addPlace={protect((day) => {
+      addPlace={protect((day, defaultTime?: string) => {
         setActiveDay(day);
-        setModal({ type: "place" });
+        setModal({ type: "place", defaultDay: day, defaultTime });
       })}
       editPlace={protect((item) => {
         setActiveDay(item.day_number);
         setModal({ type: "place", item });
-      })}
-      duplicatePlace={protect((item) => {
-        setActiveDay(item.day_number);
-        setModal({ type: "place", duplicateOf: item });
       })}
       openCost={protect(openCost)}
       onFlightChanged={async () => {
@@ -9563,7 +9637,10 @@ export function BNTripApp({
       cards={tripCards}
       day={activeDay}
       setDay={setActiveDay}
-      addPlace={protect(() => setModal({ type: "place" }))}
+      addPlace={protect((day, defaultTime?: string) => {
+        setActiveDay(day);
+        setModal({ type: "place", defaultDay: day, defaultTime });
+      })}
       back={() => router.push(`/trips/${selected.id}`)}
       notify={flash}
       onChanged={() => refreshActiveTrip(selected.id)}
