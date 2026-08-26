@@ -2955,6 +2955,12 @@ button:disabled {
 .compact-trip-card:active {
   transform: scale(0.985);
 }
+.compact-trip-card:focus-within {
+  border-color: color-mix(in srgb, var(--orange) 72%, var(--line));
+  box-shadow:
+    0 0 0 3px var(--brand-soft),
+    var(--shadow-sm);
+}
 .compact-trip-link {
   position: absolute;
   z-index: 1;
@@ -6108,8 +6114,10 @@ button:disabled {
   height: var(--modal-viewport-height, 100dvh);
 }
 .trip-modal-backdrop .modal {
+  max-height: 100%;
   scroll-padding-top: 22px;
   scroll-padding-bottom: 110px;
+  -webkit-overflow-scrolling: touch;
 }
 .trip-modal-backdrop .field input,
 .trip-modal-backdrop .field select,

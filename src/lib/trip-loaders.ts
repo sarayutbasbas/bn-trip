@@ -501,8 +501,12 @@ export async function loadTripDirectory(
   session: SessionUser,
   params: URLSearchParams,
 ): Promise<TripDirectoryPayload> {
+  const requestedLimit = Number(params.get("limit") || 20);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(200, Math.max(20, Math.trunc(requestedLimit)))
+    : 20;
   params.set("mode", "list");
-  params.set("limit", "20");
+  params.set("limit", String(limit));
   params.set("offset", "0");
   if (session.isDemo)
     return getDemoTrips(params) as TripDirectoryPayload;
@@ -519,7 +523,6 @@ export async function loadTripDirectory(
   const year = Number(params.get("year") || 0);
   const search = (params.get("q") || "").trim().slice(0, 80);
   const sort = params.get("sort") || "latest";
-  const limit = 20;
   const values: Array<string | number> = [session.userId];
   const where = [access];
   if (status === "ongoing")

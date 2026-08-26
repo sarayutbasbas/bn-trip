@@ -137,6 +137,8 @@ type TripFilters = {
   year: string;
   q: string;
   sort: string;
+  focus: string;
+  loaded: string;
 };
 export type DashboardCounts = {
   total: number;
@@ -2871,6 +2873,7 @@ function CompactTripCard({
       : t(`กำลังจะมาถึงในอีก ${temporal.daysUntil} วัน`);
   return (
     <article
+      id={`trip-card-${trip.id}`}
       className={`compact-trip-card ${ongoing ? "is-ongoing" : past ? "is-past" : "is-upcoming"} ${trip.members?.length ? "has-shared-members" : ""}`}
     >
       <button
@@ -2935,7 +2938,7 @@ function TripsDirectory({
   initialFilters: TripFilters;
   initialData?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
   revision: number;
-  selectTrip: (trip: Trip) => void;
+  selectTrip: (trip: Trip, origin: string) => void;
   createTrip: () => void;
   refreshEnabled: boolean;
 }) {
@@ -2974,6 +2977,18 @@ function TripsDirectory({
   const hasContentRef = useRef(Boolean(initialData));
   const pullDistanceRef = useRef(0);
   const lastRestoreRefreshRef = useRef(0);
+  const restoredFocusRef = useRef(false);
+  const focusTripId = /^[0-9a-f-]{36}$/i.test(initialFilters.focus)
+    ? initialFilters.focus
+    : "";
+  const openTrip = (trip: Trip) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("focus", trip.id);
+    params.set("loaded", String(Math.max(20, items.length)));
+    const origin = `/trips?${params.toString()}`;
+    window.history.replaceState(window.history.state, "", origin);
+    selectTrip(trip, origin);
+  };
   useEffect(() => {
     const restoreLatestTrips = () => {
       if (tripListCache?.length) {
@@ -3003,6 +3018,27 @@ function TripsDirectory({
       window.removeEventListener("popstate", restoreLatestTrips);
     };
   }, []);
+  useEffect(() => {
+    if (loading || restoredFocusRef.current || !focusTripId) return;
+    const target = document.getElementById(`trip-card-${focusTripId}`);
+    if (!target) return;
+    restoredFocusRef.current = true;
+    const timer = window.setTimeout(() => {
+      target.scrollIntoView({ block: "center", behavior: "auto" });
+      target
+        .querySelector<HTMLElement>(".compact-trip-link")
+        ?.focus({ preventScroll: true });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("focus");
+      url.searchParams.delete("loaded");
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${url.pathname}${url.search}`,
+      );
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [focusTripId, items, loading]);
   useEffect(() => {
     if (skipInitialFetch.current) {
       skipInitialFetch.current = false;
@@ -3295,7 +3331,7 @@ function TripsDirectory({
                     trip={trip}
                     now={now}
                     priority={index < 3}
-                    selectTrip={selectTrip}
+                    selectTrip={openTrip}
                   />
                 </Fragment>
               );
@@ -8200,20 +8236,40 @@ function ModalForm({
         viewport.offsetTop + viewport.height - 14,
       );
       if (fieldRect.top < visibleTop) {
-        modalElement.scrollTop += fieldRect.top - visibleTop;
+        modalElement.scrollTop = Math.max(
+          0,
+          modalElement.scrollTop + fieldRect.top - visibleTop,
+        );
       } else if (fieldRect.bottom > visibleBottom) {
         modalElement.scrollTop += fieldRect.bottom - visibleBottom;
       }
     };
+    const scheduleFocusedFieldVisibility = () => {
+      requestAnimationFrame(keepFocusedFieldVisible);
+      if (focusVisibilityTimerRef.current) {
+        window.clearTimeout(focusVisibilityTimerRef.current);
+      }
+      focusVisibilityTimerRef.current = window.setTimeout(
+        keepFocusedFieldVisible,
+        380,
+      );
+    };
     const syncViewport = () => {
       backdrop.style.setProperty("--modal-viewport-height", `${viewport.height}px`);
       backdrop.style.setProperty("--modal-viewport-top", `${viewport.offsetTop}px`);
-      requestAnimationFrame(keepFocusedFieldVisible);
+      scheduleFocusedFieldVisibility();
+    };
+    const handleFocus = (event: FocusEvent) => {
+      if (!(event.target instanceof HTMLElement)) return;
+      focusedTripFieldRef.current = event.target;
+      scheduleFocusedFieldVisibility();
     };
     syncViewport();
+    backdrop.addEventListener("focusin", handleFocus);
     viewport.addEventListener("resize", syncViewport, { passive: true });
     viewport.addEventListener("scroll", syncViewport, { passive: true });
     return () => {
+      backdrop.removeEventListener("focusin", handleFocus);
       viewport.removeEventListener("resize", syncViewport);
       viewport.removeEventListener("scroll", syncViewport);
       if (focusVisibilityTimerRef.current) {
@@ -8367,16 +8423,6 @@ function ModalForm({
         ref={formRef}
         className="modal"
         onChange={checkForChanges}
-        onFocusCapture={(event) => {
-          if (!(event.target instanceof HTMLElement)) return;
-          focusedTripFieldRef.current = event.target;
-          if (focusVisibilityTimerRef.current) {
-            window.clearTimeout(focusVisibilityTimerRef.current);
-          }
-          focusVisibilityTimerRef.current = window.setTimeout(() => {
-            event.target.scrollIntoView({ block: "center", inline: "nearest" });
-          }, 260);
-        }}
         onSubmit={handle}
       >
         <div className="modal-head">
@@ -8706,7 +8752,15 @@ export function BNTripApp({
   initialTrip,
   initialItineraries,
   initialTripCards,
-  initialTripFilters = { status: "", type: "", year: "", q: "", sort: "" },
+  initialTripFilters = {
+    status: "",
+    type: "",
+    year: "",
+    q: "",
+    sort: "",
+    focus: "",
+    loaded: "",
+  },
   initialTripDirectory,
 }: {
   authenticated?: boolean;
@@ -9445,9 +9499,7 @@ export function BNTripApp({
       initialFilters={initialTripFilters}
       initialData={initialTripDirectory}
       revision={tripRevision}
-      selectTrip={(trip) =>
-        selectTrip(trip, `${window.location.pathname}${window.location.search}`)
-      }
+      selectTrip={selectTrip}
       createTrip={protect(() => setModal({ type: "trip" }))}
       refreshEnabled={!modal && !confirmation}
     />
