@@ -1677,7 +1677,7 @@ button:disabled {
   margin-inline: calc(var(--screen-padding, 0px) * -1);
   padding: 2px var(--screen-padding, 0px) 4px;
   display: flex;
-  gap: 5px;
+  gap: 2px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
@@ -1689,8 +1689,8 @@ button:disabled {
   display: none;
 }
 .country-highlight-item {
-  width: 84px;
-  flex: 0 0 84px;
+  width: 76px;
+  flex: 0 0 76px;
   border: 0;
   display: flex;
   flex-direction: column;
