@@ -3561,7 +3561,11 @@ function TravelStayIcon({ size = 23 }: { size?: number }) {
 function AccommodationBookingText({ platform }: { platform?: string | null }) {
   const bookingPlatform = bookingPlatformByValue(platform);
   if (!bookingPlatform) return null;
-  return <> · จองผ่าน {bookingPlatform.label}</>;
+  return (
+    <span className="accommodation-booking-text">
+      จองผ่าน {bookingPlatform.label}
+    </span>
+  );
 }
 
 function useActiveDayScroll(day: number, tripId: string) {
@@ -4236,12 +4240,7 @@ function TripHub({
                                 {item.accommodation_id
                                   ? "23:30"
                                   : item.start_time?.slice(0, 5) ||
-                                    t("ไม่ระบุเวลา")}
-                                {item.accommodation_id && (
-                                  <AccommodationBookingText
-                                    platform={item.accommodation_booking_platform}
-                                  />
-                                )}{" "}
+                                    t("ไม่ระบุเวลา")}{" "}
                                 · {slots[item.time_slot]}
                                 {item.accommodation_id && (
                                   <>
@@ -4252,6 +4251,9 @@ function TripHub({
                                   </>
                                 )}
                               </span>
+                              <AccommodationBookingText
+                                platform={item.accommodation_booking_platform}
+                              />
                               <div className="timeline-title-row">
                                 <h3>{item.place_name}</h3>
                               </div>
@@ -4580,12 +4582,7 @@ function TimelineScreen({
                         {item.accommodation_id
                           ? "23:30"
                           : item.start_time?.slice(0, 5) ||
-                            t("ไม่ระบุเวลา")}
-                        {item.accommodation_id && (
-                          <AccommodationBookingText
-                            platform={item.accommodation_booking_platform}
-                          />
-                        )}{" "}
+                            t("ไม่ระบุเวลา")}{" "}
                         · {slots[item.time_slot]}
                         {item.accommodation_id && (
                           <>
@@ -4595,6 +4592,9 @@ function TimelineScreen({
                           </>
                         )}
                       </span>
+                      <AccommodationBookingText
+                        platform={item.accommodation_booking_platform}
+                      />
                       <div className="timeline-title-row">
                         <h3>{item.place_name}</h3>
                       </div>
