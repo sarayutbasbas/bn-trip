@@ -20,6 +20,11 @@ import {
   loadClientResource,
   peekClientResource,
 } from "@/src/lib/client-resource-cache";
+import {
+  BOOKING_PLATFORMS,
+  type BookingPlatform,
+  bookingPlatformByValue,
+} from "@/src/lib/booking-platforms";
 
 type Member = {
   id: string;
@@ -36,7 +41,6 @@ type Card = {
   owner_email?: string | null;
 };
 type LocationOption = { name: string; address: string };
-type BookingPlatform = "agoda" | "trip.com" | "booking.com" | "klook";
 type Accommodation = {
   id: string;
   name: string;
@@ -60,17 +64,6 @@ type Accommodation = {
   cost_item_id: string;
   nights: number;
 };
-
-const bookingPlatforms: Array<{
-  value: BookingPlatform;
-  label: string;
-  icon: string;
-}> = [
-  { value: "agoda", label: "Agoda", icon: "/booking-platforms/agoda.svg" },
-  { value: "trip.com", label: "Trip.com", icon: "/booking-platforms/trip-dot-com.svg" },
-  { value: "booking.com", label: "Booking.com", icon: "/booking-platforms/booking-dot-com.svg" },
-  { value: "klook", label: "Klook", icon: "/booking-platforms/klook.svg" },
-];
 
 const currencyOptions = [
   ["THB", "บาท (THB)"],
@@ -267,7 +260,7 @@ function BookingPlatformPicker({
 }) {
   const [open, setOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const selected = bookingPlatforms.find((option) => option.value === value);
+  const selected = bookingPlatformByValue(value);
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => {
@@ -300,7 +293,7 @@ function BookingPlatformPicker({
       </button>
       {open && (
         <div className="split-member-menu booking-platform-menu" role="listbox">
-          {bookingPlatforms.map((option) => (
+          {BOOKING_PLATFORMS.map((option) => (
             <label key={option.value}>
               <input
                 type="radio"
@@ -714,6 +707,9 @@ export function TripAccommodations({
               const isBaht = item.currency === "THB";
               const bahtAmount =
                 Number(item.foreign_amount) * Number(item.exchange_rate || 1);
+              const bookingPlatform = bookingPlatformByValue(
+                item.booking_platform,
+              );
               return (
                 <button
                   type="button"
@@ -735,6 +731,9 @@ export function TripAccommodations({
                     <small>
                       Day {displayDay(item.check_in_day)}–
                       {displayDay(item.check_out_day)} · {item.nights} คืน
+                      {bookingPlatform
+                        ? ` · จองผ่าน ${bookingPlatform.label}`
+                        : ""}
                     </small>
                   </span>
                   <span className="accommodation-card-price">

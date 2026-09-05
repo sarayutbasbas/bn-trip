@@ -577,9 +577,14 @@ export async function loadTrip(session: SessionUser, id: string) {
 
 export async function loadItineraries(session: SessionUser, id: string) {
   if (session.isDemo) return isDemoTrip(id) ? getDemoItineraries(id) : [];
+  await ensureLatestDatabaseSchema();
   if (!(await getTripRole(id, session.userId))) return [];
   const result = await query(
-    "SELECT i.* FROM itineraries i WHERE i.trip_id=$1 AND i.place_name IS NOT NULL ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order",
+    `SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform
+     FROM itineraries i
+     LEFT JOIN trip_accommodations accommodation ON accommodation.id=i.accommodation_id
+     WHERE i.trip_id=$1 AND i.place_name IS NOT NULL
+     ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order`,
     [id],
   );
   return clientSafe(result.rows);

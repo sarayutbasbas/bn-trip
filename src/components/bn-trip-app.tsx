@@ -48,6 +48,7 @@ import {
   type TripDestinationOption,
   type TripDestinationSelection,
 } from "@/src/lib/travel-badges";
+import { bookingPlatformByValue } from "@/src/lib/booking-platforms";
 import { FlightPassengerInfoList } from "@/src/components/flight-passenger-info";
 import {
   AlertTriangle,
@@ -308,6 +309,7 @@ export type Itinerary = {
   accommodation_id?: string | null;
   accommodation_night?: number | null;
   accommodation_nights?: number | null;
+  accommodation_booking_platform?: string | null;
 };
 type Modal =
   | { type: "trip"; trip?: Trip }
@@ -3556,6 +3558,22 @@ function TravelStayIcon({ size = 23 }: { size?: number }) {
   );
 }
 
+function AccommodationBookingSource({ platform }: { platform?: string | null }) {
+  const bookingPlatform = bookingPlatformByValue(platform);
+  if (!bookingPlatform) return null;
+  return (
+    <span className="accommodation-booking-source">
+      <Image
+        src={bookingPlatform.icon}
+        alt=""
+        width={38}
+        height={22}
+      />
+      <span>จองผ่าน {bookingPlatform.label}</span>
+    </span>
+  );
+}
+
 function useActiveDayScroll(day: number, tripId: string) {
   const stripRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -4239,6 +4257,9 @@ function TripHub({
                                   </>
                                 )}
                               </span>
+                              <AccommodationBookingSource
+                                platform={item.accommodation_booking_platform}
+                              />
                               <div className="timeline-title-row">
                                 <h3>{item.place_name}</h3>
                               </div>
@@ -4577,6 +4598,9 @@ function TimelineScreen({
                           </>
                         )}
                       </span>
+                      <AccommodationBookingSource
+                        platform={item.accommodation_booking_platform}
+                      />
                       <div className="timeline-title-row">
                         <h3>{item.place_name}</h3>
                       </div>

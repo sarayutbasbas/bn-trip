@@ -16,8 +16,12 @@ const schema=z.object({dayNumber:z.number().int().min(1),timeSlot:z.enum(["morni
 export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});const {id}=await params;
   if(session.isDemo)return isDemoTrip(id)?NextResponse.json(getDemoItineraries(id)):NextResponse.json({error:"Not found"},{status:404});
+  await ensureLatestDatabaseSchema();
   if(!await getTripRole(id,session.userId))return NextResponse.json({error:"Not found"},{status:404});
-  const result=await query("SELECT i.* FROM itineraries i WHERE i.trip_id=$1 AND i.place_name IS NOT NULL ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order",[id]);return NextResponse.json(result.rows);
+  const result=await query(`SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform
+    FROM itineraries i LEFT JOIN trip_accommodations accommodation ON accommodation.id=i.accommodation_id
+    WHERE i.trip_id=$1 AND i.place_name IS NOT NULL
+    ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order`,[id]);return NextResponse.json(result.rows);
 }
 
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){
