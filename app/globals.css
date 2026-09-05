@@ -4288,34 +4288,6 @@ button:disabled {
 .dark .event-time {
   color: #ffc39f;
 }
-.accommodation-booking-source {
-  width: fit-content;
-  max-width: 100%;
-  margin-top: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-.accommodation-booking-source img {
-  width: 38px;
-  height: 22px;
-  padding: 3px;
-  flex: 0 0 38px;
-  border: 0.5px solid rgba(0, 0, 0, 0.08);
-  border-radius: 6px;
-  display: block;
-  object-fit: contain;
-  background: #fff;
-}
-.accommodation-booking-source > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .event-copy h3 {
   margin: 4px 0 3px;
   overflow: hidden;
