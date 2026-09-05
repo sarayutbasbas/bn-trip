@@ -1684,6 +1684,7 @@ button:disabled {
   scroll-snap-type: x proximity;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
 }
 .country-highlights-scroll::-webkit-scrollbar {
   display: none;
@@ -1702,6 +1703,13 @@ button:disabled {
   text-align: center;
   text-decoration: none;
   -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+.country-highlight-item .country-flag-image {
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 .country-highlight-item:focus-visible .country-highlight-flag {
   outline: 3px solid rgba(255, 107, 0, 0.28);
@@ -4090,6 +4098,10 @@ button:disabled {
 }
 .timeline-insert-place:active {
   transform: scale(0.88);
+}
+.timeline-insert-place.is-terminal {
+  top: auto;
+  bottom: 0;
 }
 .dark .timeline-insert-place {
   background: #2c2c2e;
@@ -10055,6 +10067,93 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
 .accommodation-card-brand.card-brand-mastercard { color: #e94d23; }
 .accommodation-card-brand.card-brand-jcb { color: #16734f; }
 .accommodation-sheet .trip-location-suggestions { z-index: 45; }
+.accommodation-booking-row {
+  align-items: start;
+}
+.accommodation-booking-field {
+  position: relative;
+  z-index: 7;
+}
+.booking-platform-trigger {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 11px;
+  border: 0.5px solid var(--line);
+  border-radius: 14px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  background: var(--surface-2);
+  box-shadow: 0 1px 0 var(--glass-highlight) inset;
+  text-align: left;
+}
+.booking-platform-trigger.is-open {
+  border-color: var(--line-strong);
+  background: var(--surface-solid);
+  outline: 3px solid var(--brand-soft);
+}
+.booking-platform-trigger img,
+.booking-platform-menu img {
+  width: 38px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 6px;
+  display: block;
+  object-fit: contain;
+  background: #fff;
+}
+.booking-platform-trigger strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.booking-platform-trigger > svg {
+  color: var(--muted);
+  transition: transform 180ms var(--ease-ios);
+}
+.booking-platform-trigger.is-open > svg {
+  transform: rotate(180deg);
+}
+.booking-platform-placeholder {
+  color: var(--muted);
+  font-size: 9px;
+}
+.booking-platform-menu {
+  right: auto;
+  left: 0;
+  width: 100%;
+  min-width: 190px;
+}
+.booking-platform-menu label {
+  margin: 0;
+  color: var(--ink);
+}
+.booking-platform-menu img {
+  width: 42px;
+  height: 25px;
+}
+.accommodation-breakfast-toggle {
+  padding: 8px 13px !important;
+}
+.accommodation-breakfast-toggle > svg {
+  flex: 0 0 auto;
+  color: var(--orange);
+}
+.accommodation-breakfast-toggle > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.accommodation-breakfast-toggle small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.35;
+}
 .accommodation-panel > .expense-toolbar h2 {
   margin: 0;
   font-size: 21px;

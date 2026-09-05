@@ -8,6 +8,11 @@ const nightDescriptionsSchema = z
 export const accommodationSchema = z.object({
   name: z.string().trim().min(1).max(180),
   location: z.string().trim().max(1000).default(""),
+  bookingPlatform: z
+    .enum(["agoda", "trip.com", "booking.com", "klook"])
+    .or(z.literal(""))
+    .default(""),
+  includesBreakfast: z.boolean().default(false),
   description: z.string().trim().max(2000).default(""),
   nightDescriptions: nightDescriptionsSchema,
   checkInDay: z.number().int().min(1),

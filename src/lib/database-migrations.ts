@@ -447,6 +447,13 @@ const migrations = [
       "CREATE INDEX IF NOT EXISTS trip_expense_guests_trip_created_idx ON trip_expense_guests(trip_id,created_at,id)",
     ],
   },
+  {
+    version: 33,
+    statements: [
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS booking_platform VARCHAR(40) NOT NULL DEFAULT ''",
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS includes_breakfast BOOLEAN NOT NULL DEFAULT false",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

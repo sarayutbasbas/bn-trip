@@ -1,11 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BedDouble,
   CalendarDays,
   ChevronDown,
   Clock,
+  Coffee,
   MapPin,
   Pencil,
   Plus,
@@ -34,10 +36,13 @@ type Card = {
   owner_email?: string | null;
 };
 type LocationOption = { name: string; address: string };
+type BookingPlatform = "agoda" | "trip.com" | "booking.com" | "klook";
 type Accommodation = {
   id: string;
   name: string;
   location: string;
+  booking_platform: BookingPlatform | "";
+  includes_breakfast: boolean;
   description: string;
   night_descriptions: Record<string, string>;
   check_in_day: number;
@@ -55,6 +60,17 @@ type Accommodation = {
   cost_item_id: string;
   nights: number;
 };
+
+const bookingPlatforms: Array<{
+  value: BookingPlatform;
+  label: string;
+  icon: string;
+}> = [
+  { value: "agoda", label: "Agoda", icon: "/booking-platforms/agoda.svg" },
+  { value: "trip.com", label: "Trip.com", icon: "/booking-platforms/trip-dot-com.svg" },
+  { value: "booking.com", label: "Booking.com", icon: "/booking-platforms/booking-dot-com.svg" },
+  { value: "klook", label: "Klook", icon: "/booking-platforms/klook.svg" },
+];
 
 const currencyOptions = [
   ["THB", "บาท (THB)"],
@@ -242,6 +258,70 @@ function LocationSearch({
     </div>
   );
 }
+function BookingPlatformPicker({
+  value,
+  onChange,
+}: {
+  value: BookingPlatform | "";
+  onChange: (value: BookingPlatform) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const selected = bookingPlatforms.find((option) => option.value === value);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !pickerRef.current?.contains(event.target)
+      )
+        setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+  return (
+    <div className="field accommodation-booking-field" ref={pickerRef}>
+      <label>จองจากแอป</label>
+      <button
+        type="button"
+        className={`booking-platform-trigger ${open ? "is-open" : ""}`}
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {selected ? (
+          <Image src={selected.icon} alt="" width={40} height={24} />
+        ) : (
+          <span className="booking-platform-placeholder">เลือก</span>
+        )}
+        <strong>{selected?.label || "เลือกแอป"}</strong>
+        <ChevronDown size={16} aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="split-member-menu booking-platform-menu" role="listbox">
+          {bookingPlatforms.map((option) => (
+            <label key={option.value}>
+              <input
+                type="radio"
+                name="bookingPlatform"
+                value={option.value}
+                checked={value === option.value}
+                onChange={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+              />
+              <span className="split-checkmark" aria-hidden="true" />
+              <Image src={option.icon} alt="" width={42} height={25} />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 function CardLogo({ brand }: { brand?: Card["brand"] }) {
   const label =
     brand === "visa"
@@ -314,6 +394,9 @@ export function TripAccommodations({
   const [rateDate, setRateDate] = useState(startDate);
   const [rateEstimated, setRateEstimated] = useState(false);
   const [rateLoading, setRateLoading] = useState(false);
+  const [bookingPlatform, setBookingPlatform] = useState<BookingPlatform | "">(
+    "agoda",
+  );
   const [paymentSource, setPaymentSource] = useState("cash");
   const allMemberIds = useMemo(
     () => members.map((member) => member.id),
@@ -420,6 +503,7 @@ export function TripAccommodations({
     setExchangeRate(1);
     setRateDate(startDate);
     setRateEstimated(false);
+    setBookingPlatform("agoda");
     setPaymentSource("cash");
     setSplitMemberIds(allMemberIds);
     setSplitPickerOpen(false);
@@ -450,6 +534,7 @@ export function TripAccommodations({
     setExchangeRate(Number(item.exchange_rate || 1));
     setRateDate(String(item.rate_date || startDate).slice(0, 10));
     setRateEstimated(false);
+    setBookingPlatform(item.booking_platform || "");
     setPaymentSource(item.credit_card_id || "cash");
     const validIds = (item.split_member_ids || []).filter((id) =>
       allMemberIds.includes(id),
@@ -520,6 +605,8 @@ export function TripAccommodations({
     const body = {
       name: String(form.get("name") || ""),
       location: String(form.get("location") || ""),
+      bookingPlatform,
+      includesBreakfast: form.get("includesBreakfast") === "true",
       description: nightDescriptions[String(checkInDay)]?.trim() || "",
       nightDescriptions: Object.fromEntries(
         Array.from(
@@ -726,10 +813,31 @@ export function TripAccommodations({
                     placeholder="เช่น APA Hotel Hakata"
                   />
                 </div>
-                <LocationSearch
-                  options={locations}
-                  defaultValue={edit?.location || ""}
-                />
+                <div className="form-row accommodation-booking-row">
+                  <LocationSearch
+                    options={locations}
+                    defaultValue={edit?.location || ""}
+                  />
+                  <BookingPlatformPicker
+                    value={bookingPlatform}
+                    onChange={setBookingPlatform}
+                  />
+                </div>
+                <label className="trip-flight-checkbox accommodation-breakfast-toggle">
+                  <input
+                    key={`breakfast-${edit?.id || "new"}`}
+                    name="includesBreakfast"
+                    type="checkbox"
+                    value="true"
+                    defaultChecked={Boolean(edit?.includes_breakfast)}
+                  />
+                  <span className="split-checkmark" aria-hidden="true" />
+                  <Coffee size={19} aria-hidden="true" />
+                  <span>
+                    <strong>มีอาหารเช้า</strong>
+                    <small>ที่พักรวมอาหารเช้าไว้ในการจอง</small>
+                  </span>
+                </label>
                 <div className="form-row">
                   <div className="field">
                     <label>เช็กอิน</label>

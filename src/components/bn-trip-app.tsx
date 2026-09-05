@@ -494,6 +494,7 @@ const EN_TEXT: Record<string, string> = {
   วันนี้: "Today",
   เพิ่มสถานที่: "Add place",
   เพิ่มสถานที่ระหว่างจุด: "Add place between stops",
+  เพิ่มสถานที่ถัดไป: "Add next place",
   เพิ่มแผน: "Add plan",
   "เพิ่มสถานที่และเวลา รายการใหม่จะถูกเรียงใน Timeline อัตโนมัติ":
     "Add a place and time. New items are sorted automatically",
@@ -1128,6 +1129,7 @@ function CountryFlagImage({
       loading="eager"
       decoding="sync"
       unoptimized
+      draggable={false}
     />
   );
 }
@@ -1793,10 +1795,11 @@ function timeFromMinutes(minutes: number) {
 function itineraryPlanTime(item: Itinerary) {
   return item.start_time?.slice(0, 5) || (item.accommodation_id ? "23:30" : null);
 }
-function insertionPlanTime(previous: Itinerary, next: Itinerary) {
+function insertionPlanTime(previous: Itinerary, next?: Itinerary) {
   const previousMinutes = timeInMinutes(itineraryPlanTime(previous));
-  const nextMinutes = timeInMinutes(itineraryPlanTime(next));
   if (previousMinutes === null) return "09:00";
+  if (!next) return shiftedPlanTime(itineraryPlanTime(previous));
+  const nextMinutes = timeInMinutes(itineraryPlanTime(next));
   if (nextMinutes === null || nextMinutes <= previousMinutes + 1) {
     return timeFromMinutes(previousMinutes + 10);
   }
@@ -3714,18 +3717,19 @@ function TimelineInsertPlaceButton({
   onClick,
 }: {
   previous: Itinerary;
-  next: Itinerary;
+  next?: Itinerary;
   onClick: (defaultTime: string) => void;
 }) {
   const t = useT();
   const defaultTime = insertionPlanTime(previous, next);
+  const label = t(next ? "เพิ่มสถานที่ระหว่างจุด" : "เพิ่มสถานที่ถัดไป");
   return (
     <button
       type="button"
-      className="timeline-insert-place"
+      className={`timeline-insert-place ${next ? "" : "is-terminal"}`}
       onClick={() => onClick(defaultTime)}
-      aria-label={`${t("เพิ่มสถานที่ระหว่างจุด")} · ${defaultTime}`}
-      title={`${t("เพิ่มสถานที่ระหว่างจุด")} · ${defaultTime}`}
+      aria-label={`${label} · ${defaultTime}`}
+      title={`${label} · ${defaultTime}`}
     >
       <Plus size={14} />
     </button>
@@ -4300,6 +4304,12 @@ function TripHub({
                           </div>
                         </article>
                       </div>
+                      {index === dayItems.length - 1 && (
+                        <TimelineInsertPlaceButton
+                          previous={item}
+                          onClick={(defaultTime) => addPlace(day, defaultTime)}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -4592,6 +4602,12 @@ function TimelineScreen({
                     </div>
                   </article>
                 </div>
+                {index === dayItems.length - 1 && (
+                  <TimelineInsertPlaceButton
+                    previous={item}
+                    onClick={(defaultTime) => addPlace(day, defaultTime)}
+                  />
+                )}
               </div>
             );
           })}
@@ -8717,7 +8733,12 @@ function ModalForm({
                   <label>{t("วิธีเดินทางมาที่นี่")}</label>
                   <select
                     name="transportMode"
-                    defaultValue={placeSource?.transport_mode || ""}
+                    defaultValue={
+                      placeSource?.transport_mode ||
+                      (modal.defaultTime && trip?.country_code === "TH"
+                        ? "รถยนต์"
+                        : "")
+                    }
                   >
                     <option value="">{t("- / ไม่ระบุ")}</option>
                     {transportOptions.map((option) => (

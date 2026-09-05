@@ -33,8 +33,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         name=$3,location=$4,description=$5,night_descriptions=$6::jsonb,check_in_day=$7,check_out_day=$8,check_in_time=$9::time,
         check_out_time=$10::time,foreign_amount=$11,currency=$12,exchange_rate=$13,
         rate_date=$14,payment_method=$15,credit_card_id=$16,payment_owner_name=$17,
-        split_member_ids=$18::uuid[],updated_at=now()
-        WHERE id=$1 AND trip_id=$2 RETURNING id,cost_item_id`, [accommodationId,id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds]);
+        split_member_ids=$18::uuid[],booking_platform=$19,includes_breakfast=$20,updated_at=now()
+        WHERE id=$1 AND trip_id=$2 RETURNING id,cost_item_id`, [accommodationId,id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast]);
       if (!updated.rows[0]) throw new Error("not_found");
       await syncAccommodationLinkedRecords(client, {
         id: accommodationId, tripId: id, ...input,
