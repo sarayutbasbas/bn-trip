@@ -6,6 +6,7 @@ import {
   useContext,
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -860,6 +861,12 @@ Object.assign(EN_TEXT, {
     "Completed trips will automatically appear here",
   เมือง: "City",
   ประเทศ: "Country",
+  ค้นหาประเทศ: "Search countries",
+  "ไม่พบประเทศในรายการ": "No countries found",
+  "พิมพ์ชื่อประเทศเพื่อค้นหา แล้วเลือกจากรายการ":
+    "Type a country name, then choose from the list",
+  "เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง":
+    "Choose a country, then search for a city below",
   เวลาอัตโนมัติ: "Automatic timezone",
   เรื่องราวการเดินทางของคุณ: "Your travel story",
   เรื่องราวการเดินทาง: "Travel stories",
@@ -1165,6 +1172,131 @@ export function CountryFlagImage({
       unoptimized
       draggable={false}
     />
+  );
+}
+
+export function CountryPicker({
+  value,
+  onChange,
+  note,
+  name = "countryCode",
+}: {
+  value: string;
+  onChange: (countryCode: string) => void;
+  note?: ReactNode;
+  name?: string;
+}) {
+  const t = useT();
+  const lang = useContext(LanguageContext);
+  const listboxId = useId();
+  const selected = countryByCode(value) || TRIP_COUNTRIES[0];
+  const selectedLabel = lang === "EN" ? selected.nameEn : selected.nameTh;
+  const [query, setQuery] = useState(selectedLabel);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const options = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return TRIP_COUNTRIES.filter((country) => {
+      if (!normalized) return true;
+      return [country.code, country.nameTh, country.nameEn, ...(country.aliases || [])]
+        .some((term) => term.toLowerCase().includes(normalized));
+    }).slice(0, 20);
+  }, [query]);
+
+  function selectCountry(code: string) {
+    const country = countryByCode(code);
+    if (!country) return;
+    onChange(country.code);
+    setQuery(lang === "EN" ? country.nameEn : country.nameTh);
+    setActiveIndex(0);
+    setOpen(false);
+  }
+
+  return (
+    <div className="field country-select-field country-picker">
+      <label>{t("ประเทศ")}</label>
+      <input type="hidden" name={name} value={selected.code} />
+      <div className="country-picker-control">
+        <CountryFlagImage code={selected.code} label="" className="country-picker-flag" />
+        <Search size={16} aria-hidden="true" />
+        <input
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          value={query}
+          placeholder={t("ค้นหาประเทศ")}
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          onFocus={(event) => {
+            setOpen(true);
+            setActiveIndex(0);
+            if (query === selectedLabel) {
+              setQuery("");
+              window.setTimeout(() => event.currentTarget.select(), 0);
+            }
+          }}
+          onBlur={() => window.setTimeout(() => {
+            setOpen(false);
+            setQuery(selectedLabel);
+            setActiveIndex(0);
+          }, 120)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setActiveIndex(0);
+            setOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setOpen(true);
+              if (options.length) {
+                setActiveIndex((current) => Math.min(current + 1, options.length - 1));
+              }
+            } else if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setActiveIndex((current) => Math.max(current - 1, 0));
+            } else if (event.key === "Enter" && open && options[activeIndex]) {
+              event.preventDefault();
+              selectCountry(options[activeIndex].code);
+            } else if (event.key === "Escape") {
+              setOpen(false);
+              setQuery(selectedLabel);
+              event.currentTarget.blur();
+            }
+          }}
+        />
+        <ChevronDown size={15} aria-hidden="true" />
+      </div>
+      {open && (
+        <div id={listboxId} className="trip-destination-options country-picker-options" role="listbox">
+          {options.length ? options.map((country, index) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={country.code === selected.code}
+              className={index === activeIndex ? "is-active" : ""}
+              key={country.code}
+              onPointerDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => selectCountry(country.code)}
+            >
+              <CountryFlagImage code={country.code} label="" />
+              <span>
+                <strong>{lang === "EN" ? country.nameEn : country.nameTh}</strong>
+                <small>{lang === "EN" ? country.nameTh : country.nameEn} · {country.code}</small>
+              </span>
+              {country.code === selected.code ? <CheckCircle2 size={15} /> : null}
+            </button>
+          )) : <p>{t("ไม่พบประเทศในรายการ")}</p>}
+        </div>
+      )}
+      <small>{note || t("พิมพ์ชื่อประเทศเพื่อค้นหา แล้วเลือกจากรายการ")}</small>
+    </div>
   );
 }
 
@@ -8381,7 +8513,6 @@ function ModalForm({
   canDelete: boolean;
 }) {
   const t = useT();
-  const lang = useContext(LanguageContext);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -8675,32 +8806,15 @@ function ModalForm({
                 <label>{t("ชื่อทริป")}</label>
                 <input name="name" required defaultValue={modal.trip?.name || modal.preset?.destination} />
               </div>
-              <div className="field country-select-field">
-                <label>{t("ประเทศ")}</label>
-                <div className="country-select-control">
-                  <CountryFlagImage
-                    code={countryCode}
-                    label=""
-                    className="country-select-flag"
-                  />
-                  <select
-                    name="countryCode"
-                    value={countryCode}
-                    onChange={(event) => {
-                      setCountryCode(event.target.value);
-                      setTripDestinations([]);
-                      window.setTimeout(checkForChanges, 0);
-                    }}
-                  >
-                    {TRIP_COUNTRIES.map((country) => (
-                      <option key={country.code} value={country.code}>
-                        {lang === "EN" ? country.nameEn : country.nameTh}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <small>{t("เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง")} · {t("เวลาอัตโนมัติ")}: {countryByCode(countryCode)?.timezone}</small>
-              </div>
+              <CountryPicker
+                value={countryCode}
+                onChange={(nextCountryCode) => {
+                  setCountryCode(nextCountryCode);
+                  setTripDestinations([]);
+                  window.setTimeout(checkForChanges, 0);
+                }}
+                note={<>{t("เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง")} · {t("เวลาอัตโนมัติ")}: {countryByCode(countryCode)?.timezone}</>}
+              />
               <TripDestinationPicker
                 countryCode={countryCode}
                 selected={tripDestinations}

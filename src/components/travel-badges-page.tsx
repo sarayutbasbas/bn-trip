@@ -13,6 +13,7 @@ import {
   LockKeyhole,
   MapPinCheck,
   Maximize2,
+  Settings2,
   Trash2,
   Trophy,
   X,
@@ -523,6 +524,7 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
           </Link>
           <nav className="mobile-actions" aria-label="เมนูหลัก">
             <Link className="icon-btn" href="/" aria-label="หน้าแรก" title="หน้าแรก"><House size={18} /></Link>
+            <Link className="icon-btn" href="/settings" aria-label="ตั้งค่า" title="ตั้งค่า"><Settings2 size={18} /></Link>
           </nav>
         </header>
 

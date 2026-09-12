@@ -8,7 +8,7 @@ import { ArrowUp,CalendarRange,ChartNoAxesColumnIncreasing,CheckCircle2,Compass,
 import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas";
 import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
 import { TRIP_DESTINATION_OPTIONS,type TripDestinationOption } from "@/src/lib/travel-badges";
-import { ConfirmDialog,CountryFlagImage,CoverImagePicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
+import { ConfirmDialog,CountryFlagImage,CountryPicker,CoverImagePicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
 
 type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
@@ -18,6 +18,11 @@ const monthNames=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","
 function sortIdeas(items:TripIdea[]){return [...items].sort((a,b)=>a.kind!==b.kind?(a.kind==="planned"?-1:1):a.kind==="planned"?((a.target_year||9999)-(b.target_year||9999)||(a.target_month||99)-(b.target_month||99)):a.created_at.localeCompare(b.created_at))}
 async function readResponse(response:Response){const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"บันทึกไม่สำเร็จ กรุณาลองอีกครั้ง");return data}
 function stop(event:{stopPropagation:()=>void}){event.stopPropagation()}
+function formatMonthDistance(months:number){
+  if(months<12)return `${months} เดือน`;
+  const years=Math.floor(months/12);const remainingMonths=months%12;
+  return `${years} ปี${remainingMonths?` ${remainingMonths} เดือน`:""}`;
+}
 
 function IdeaAvatars({members,open}:{members:TripIdeaMember[];open:()=>void}){
   const owner=members.find(member=>member.role==="owner");
@@ -35,7 +40,7 @@ function IdeaCard({idea,edit,promote,convert,share}:{idea:TripIdea;edit:()=>void
   const today=new Date();const monthDistance=idea.target_year&&idea.target_month?(idea.target_year-today.getFullYear())*12+idea.target_month-(today.getMonth()+1):null;
   const expired=idea.kind==="planned"&&monthDistance!==null&&monthDistance<0;
   const country=countryByCode(idea.country_code);
-  const status=idea.kind==="someday"?"ยังไม่กำหนดช่วงเวลา":expired?"เลยช่วงที่เล็งไว้แล้ว":monthDistance===0?"คาดว่าจะไปภายในเดือนนี้":`กำลังจะถึงในอีก ${monthDistance} เดือน`;
+  const status=idea.kind==="someday"?"ยังไม่กำหนดช่วงเวลา":expired?"เลยช่วงที่เล็งไว้แล้ว":monthDistance===0?"คาดว่าจะไปภายในเดือนนี้":`กำลังจะถึงในอีก ${formatMonthDistance(monthDistance||0)}`;
   const activate=(event:KeyboardEvent<HTMLElement>)=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();edit()}};
   return <article className={`compact-trip-card trip-idea-card is-${idea.kind} ${idea.members?.length>1?"has-shared-members":""}`} role="button" tabIndex={0} onClick={edit} onKeyDown={activate} aria-label={`แก้ไข ${idea.name}`}>
     <div className="compact-trip-cover"><Image className="compact-trip-cover-image" src={idea.cover_image_url||"/travel-postcard-fallback.jpg"} alt={`รูปปก ${idea.name}`} fill sizes="(max-width: 639px) 36vw, 220px" unoptimized/></div>
@@ -68,7 +73,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     <div className="trip-idea-modal-head"><div><span>{promote?"MOVE TO THE RADAR":current?"EDIT TRIP IDEA":"NEW TRIP IDEA"}</span><h2>{promote?"กำหนดช่วงเวลาที่อยากไป":current?"แก้ไขรายการ":"เพิ่มสถานที่ที่อยากไป"}</h2></div><button type="button" onClick={close} disabled={busy} aria-label="ปิด"><X size={19}/></button></div>
     <CoverImagePicker existingUrl={current?.cover_image_url||"/travel-postcard-fallback.jpg"} onChange={setCoverFile}/>
     <label className="trip-idea-field"><span>ชื่อทริป</span><input required maxLength={160} value={name} onChange={event=>setName(event.target.value)} placeholder="เช่น Fukuoka Food Trip"/></label>
-    <div className="field country-select-field"><label>ประเทศ</label><div className="country-select-control"><CountryFlagImage code={countryCode} label="" className="country-select-flag"/><select name="countryCode" value={countryCode} onChange={event=>{setCountryCode(event.target.value);setLocations([])}}>{TRIP_COUNTRIES.map(country=><option key={country.code} value={country.code}>{country.nameTh}</option>)}</select></div><small>เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง</small></div>
+    <CountryPicker value={countryCode} onChange={nextCountryCode=>{setCountryCode(nextCountryCode);setLocations([])}} note="เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง"/>
     <TripDestinationPicker countryCode={countryCode} selected={locations} onChange={setLocations}/>
     <fieldset className="trip-idea-kind-picker"><legend>วางไว้ในลิสต์ไหน</legend><button type="button" className={kind==="planned"?"active":""} onClick={()=>{setKind("planned");setTargetMonth(targetMonth||1);setTargetYear(targetYear||new Date().getFullYear()+1)}}><CalendarRange size={17}/><span>ทริปที่เล็งไว้<small>มีเดือนและปีคร่าว ๆ</small></span></button><button type="button" className={kind==="someday"?"active":""} onClick={()=>{setKind("someday");setTargetMonth(null);setTargetYear(null)}}><Compass size={17}/><span>ลิสต์สักวันหนึ่ง<small>ยังไม่รู้ว่าจะไปเมื่อไร</small></span></button></fieldset>
     {kind==="planned"?<div className="trip-idea-date-row"><label className="trip-idea-field"><span>เดือน</span><select required value={targetMonth||""} onChange={event=>setTargetMonth(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกเดือน</option>{monthNames.map((month,index)=><option key={month} value={index+1}>{month}</option>)}</select></label><label className="trip-idea-field"><span>ปี ค.ศ.</span><input required type="number" min="2020" max="2200" value={targetYear||""} onChange={event=>setTargetYear(event.target.value?Number(event.target.value):null)}/></label></div>:null}
