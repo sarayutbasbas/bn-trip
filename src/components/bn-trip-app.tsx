@@ -44,6 +44,7 @@ import {
   inferTripCountry,
 } from "@/src/lib/countries";
 import {
+  createCustomTripDestination,
   TRIP_DESTINATION_OPTIONS,
   type TripDestinationOption,
   type TripDestinationSelection,
@@ -96,6 +97,7 @@ import {
   Sparkles,
   Star,
   Sun,
+  Telescope,
   TrainFront,
   Trash2,
   UserRound,
@@ -154,7 +156,9 @@ type AccountProfile = {
 };
 type TripInvitation = {
   id: string;
-  trip_id: string;
+  invitation_type: "trip" | "trip_idea";
+  trip_id: string | null;
+  trip_idea_id: string | null;
   email: string;
   created_at: string;
   trip_name: string;
@@ -162,7 +166,7 @@ type TripInvitation = {
   cover_image_url: string | null;
   outbound_departure_at: string | null;
   return_departure_at: string | null;
-  total_days: number;
+  total_days: number | null;
   owner_name: string;
   owner_email: string;
   owner_avatar_url: string | null;
@@ -312,7 +316,7 @@ export type Itinerary = {
   accommodation_booking_platform?: string | null;
 };
 type Modal =
-  | { type: "trip"; trip?: Trip }
+  | { type: "trip"; trip?: Trip; preset?: TripCreationPreset }
   | {
       type: "place";
       item?: Itinerary;
@@ -323,7 +327,7 @@ type Modal =
   | { type: "collaborators"; trip: Trip }
   | { type: "reviews"; trip: Trip }
   | null;
-type Confirmation = {
+export type Confirmation = {
   title: string;
   description: string;
   confirmLabel?: string;
@@ -342,6 +346,16 @@ type StorageMetric = {
 };
 type StorageUsage = { metrics: StorageMetric[]; updatedAt: string };
 const DEFAULT_TRIP_COVER = "/travel-postcard-fallback.jpg";
+export type TripCreationPreset = {
+  sourceIdeaId: string;
+  destination: string;
+  countryCode?: string;
+  locationIds?: string[];
+  tripDestinations?: TripDestinationOption[];
+  coverImageUrl: string;
+  outboundDate: string;
+  outboundTime: string;
+};
 const EMPTY_ITINERARIES: Itinerary[] = [];
 const coverPlaceholderCache = new Map<string, string>();
 function authenticatedCoverLoader({ src, width, quality }: ImageLoaderProps) {
@@ -474,6 +488,8 @@ const EN_TEXT: Record<string, string> = {
   "แพลนทริป หรือกลับมาเปิดดูความทรงจำเดิมได้ทุกเมื่อ":
     "Plan a new trip or revisit routes and memories anytime",
   สร้างทริปใหม่: "Create trip",
+  "ทริปที่เล็งไว้": "Trips on the radar",
+  เล็งไว้: "Radar",
   ทริปที่กำลังจะมาถึง: "Upcoming trips",
   หน้ากระดาษนี้ยังว่าง: "Nothing here yet",
   "สร้างทริปใหม่ แล้วเริ่มเติมสถานที่ที่อยากไปกัน":
@@ -846,6 +862,7 @@ Object.assign(EN_TEXT, {
   ประเทศ: "Country",
   เวลาอัตโนมัติ: "Automatic timezone",
   เรื่องราวการเดินทางของคุณ: "Your travel story",
+  เรื่องราวการเดินทาง: "Travel stories",
   "ทุกประเทศ ทุกทริป และทุกความทรงจำในภาพเดียว":
     "Every country, trip, and memory in one view",
   ครั้ง: "visits",
@@ -1111,8 +1128,11 @@ function applyCachedTripReviewSummaries(trips: Trip[]): Trip[] {
   return trips.map(applyCachedTripReviewSummary);
 }
 const itineraryCache = new Map<string, Itinerary[]>();
+const COUNTRY_FLAG_ASSET_CODES = new Set([
+  "AE", "AU", "CA", "CH", "CN", "DE", "ES", "FR", "GB", "HK", "ID", "IN", "IT", "JP", "KH", "KR", "LA", "MM", "MY", "NZ", "PH", "SG", "TH", "TW", "US", "VN",
+]);
 
-function CountryFlagImage({
+export function CountryFlagImage({
   code,
   label,
   className = "",
@@ -1121,10 +1141,22 @@ function CountryFlagImage({
   label: string;
   className?: string;
 }) {
+  const normalizedCode = code.toUpperCase();
+  if (!COUNTRY_FLAG_ASSET_CODES.has(normalizedCode)) {
+    return (
+      <span
+        className={`country-flag-image country-flag-emoji ${className}`.trim()}
+        role="img"
+        aria-label={label || countryByCode(normalizedCode)?.nameTh || normalizedCode}
+      >
+        {countryByCode(normalizedCode)?.flag || "🌍"}
+      </span>
+    );
+  }
   return (
     <Image
       className={`country-flag-image ${className}`.trim()}
-      src={`/flags/${code.toLowerCase()}.svg`}
+      src={`/flags/${normalizedCode.toLowerCase()}.svg`}
       alt={label}
       width={64}
       height={64}
@@ -2071,7 +2103,10 @@ function TripInvitations({
   function askDecline(invitation: TripInvitation) {
     confirmAction({
       title: `ปฏิเสธคำเชิญ “${invitation.trip_name}”?`,
-      description: "คำเชิญนี้จะถูกลบออก และทริปจะไม่ถูกเพิ่มในรายการของคุณ",
+      description:
+        invitation.invitation_type === "trip_idea"
+          ? "คำเชิญนี้จะถูกลบออก และทริปที่เล็งไว้จะไม่ถูกเพิ่มในรายการของคุณ"
+          : "คำเชิญนี้จะถูกลบออก และทริปจะไม่ถูกเพิ่มในรายการของคุณ",
       confirmLabel: "ปฏิเสธ",
       busyLabel: "กำลังปฏิเสธ…",
       onConfirm: () => decline(invitation),
@@ -2117,7 +2152,9 @@ function TripInvitations({
                   <AccountAvatar profile={owner} size="small" />
                   <span>
                     <b>{owner.display_name}</b>
-                    {t("เชิญคุณเข้าร่วมทริป")}
+                    {invitation.invitation_type === "trip_idea"
+                      ? "เชิญคุณร่วมวางแผนทริปที่เล็งไว้"
+                      : t("เชิญคุณเข้าร่วมทริป")}
                   </span>
                 </small>
               </div>
@@ -2312,6 +2349,7 @@ function Dashboard({
   viewAll,
   viewAnalytics,
   viewBadges,
+  viewTripIdeas,
   onInvitationChanged,
   notify,
   confirmAction,
@@ -2326,6 +2364,7 @@ function Dashboard({
   viewAll: (status: TripStatus) => void;
   viewAnalytics: () => void;
   viewBadges: () => void;
+  viewTripIdeas: () => void;
   onInvitationChanged: () => void;
   notify: (message: string) => void;
   confirmAction: (confirmation: Confirmation) => void;
@@ -2396,6 +2435,15 @@ function Dashboard({
     <div className="screen">
       <section className="welcome">
         <div className="welcome-shortcuts">
+          <button
+            type="button"
+            className="welcome-insights-btn"
+            onClick={viewTripIdeas}
+            aria-label={t("ทริปที่เล็งไว้")}
+          >
+            <Telescope size={15} />
+            <span>{t("เล็งไว้")}</span>
+          </button>
           <button
             type="button"
             className="welcome-insights-btn"
@@ -2690,19 +2738,28 @@ function TravelAnalyticsDashboard({
       ))}
     </nav>
   );
+  const refreshButton = (
+    <button
+      className="analytics-refresh-fab"
+      type="button"
+      onClick={() => void refreshAnalytics()}
+      disabled={refreshing}
+      aria-label={t(refreshing ? "กำลังอัปเดต…" : "รีเฟรช")}
+      title={t(refreshing ? "กำลังอัปเดต…" : "รีเฟรช")}
+    >
+      <RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={21} />
+    </button>
+  );
   const analyticsHero = (
     <header className="analytics-hero">
       <nav className="welcome-shortcuts hero-shortcuts" aria-label={t("ทางลัด")}>
         <Link className="welcome-insights-btn" href="/"><House size={15} /><span>Home</span></Link>
         <Link className="welcome-insights-btn" href="/badges"><MapPin size={15} /><span>{t("เข็มกลัด")}</span></Link>
-        <button className="welcome-insights-btn" type="button" onClick={() => void refreshAnalytics()} disabled={refreshing}>
-          <RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={15} />
-          <span>{t(refreshing ? "กำลังอัปเดต…" : "รีเฟรช")}</span>
-        </button>
+        <Link className="welcome-insights-btn" href="/trip-ideas"><Telescope size={15} /><span>{t("เล็งไว้")}</span></Link>
       </nav>
       <div className="analytics-hero-copy">
         <span className="section-kicker">JOURNEY INSIGHTS</span>
-        <h1>{t("เรื่องราวการเดินทางของคุณ")}</h1>
+        <h1>{t("เรื่องราวการเดินทาง")}</h1>
         <p>{t("ทุกประเทศ ทุกทริป และทุกความทรงจำในภาพเดียว")}</p>
         <div>
           <b>{data.totals.trips}</b>
@@ -2724,6 +2781,12 @@ function TravelAnalyticsDashboard({
   if (!data.totals.trips)
     return (
       <div className="screen analytics-screen">
+        {refreshMessage && (
+          <div className="toast toast-success" role="status" aria-live="polite">
+            <CheckCircle2 size={17} />
+            {t(refreshMessage)}
+          </div>
+        )}
         {analyticsHero}
         {scopeFilter}
         <article className="card analytics-empty">
@@ -2733,6 +2796,7 @@ function TravelAnalyticsDashboard({
             {t("เมื่อทริปจบแล้ว สถิติจะปรากฏที่หน้านี้โดยอัตโนมัติ")}
           </p>
         </article>
+        {refreshButton}
       </div>
     );
 
@@ -2901,6 +2965,7 @@ function TravelAnalyticsDashboard({
           ))}
         </div>
       </section>
+      {refreshButton}
     </div>
   );
 }
@@ -6473,7 +6538,7 @@ function SettingsScreen(
   );
 }
 
-function ConfirmDialog({
+export function ConfirmDialog({
   confirmation,
   close,
 }: {
@@ -6543,7 +6608,7 @@ function ConfirmDialog({
 
 type CropSource = { file: File; image: HTMLImageElement; url: string };
 
-function CoverImagePicker({
+export function CoverImagePicker({
   existingUrl,
   onChange,
 }: {
@@ -8186,7 +8251,7 @@ function TripLocationInput({
   );
 }
 
-function TripDestinationPicker({
+export function TripDestinationPicker({
   countryCode,
   selected,
   onChange,
@@ -8208,10 +8273,26 @@ function TripDestinationPicker({
     ).slice(0, 12);
   }, [countryCode, query, selected]);
   const add = (option: TripDestinationOption) => {
-    onChange([...selected, option]);
+    if (!selected.some((item) => item.id === option.id)) onChange([...selected, option]);
     setQuery("");
     setFocused(true);
   };
+  const commitQuery = () => {
+    const normalized = query.trim().replace(/\s+/g, " ");
+    if (!normalized) return;
+    const exact = options.find((option) =>
+      [option.nameTh, option.nameEn, ...option.searchTerms].some(
+        (term) => term.trim().toLowerCase() === normalized.toLowerCase(),
+      ),
+    );
+    const custom = exact || createCustomTripDestination(countryCode, normalized);
+    if (custom) add(custom);
+  };
+  const canAddCustom = Boolean(query.trim()) && !options.some((option) =>
+    [option.nameTh, option.nameEn, ...option.searchTerms].some(
+      (term) => term.trim().toLowerCase() === query.trim().toLowerCase(),
+    ),
+  );
   return (
     <div className="field trip-destination-picker">
       <label>{t("เมือง / จังหวัดที่ไป")}</label>
@@ -8237,8 +8318,18 @@ function TripDestinationPicker({
             autoComplete="off"
             autoCorrect="off"
             onFocus={() => setFocused(true)}
-            onBlur={() => window.setTimeout(() => setFocused(false), 120)}
+            onBlur={() => {
+              commitQuery();
+              window.setTimeout(() => setFocused(false), 120);
+            }}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && query.trim()) {
+                event.preventDefault();
+                commitQuery();
+              }
+            }}
+            maxLength={80}
             placeholder={t("ค้นหาเมืองหรือจังหวัด")}
             role="combobox"
             aria-expanded={focused}
@@ -8247,17 +8338,23 @@ function TripDestinationPicker({
         </div>
         {focused && (
           <div id="trip-destination-options" className="trip-destination-options" role="listbox">
-            {options.length ? options.map((option) => (
+            {options.map((option) => (
               <button type="button" role="option" aria-selected="false" key={option.id} onPointerDown={(event) => event.preventDefault()} onClick={() => add(option)}>
                 <MapPin size={14} />
                 <span><strong>{lang === "EN" ? option.nameEn : option.nameTh}</strong><small>{lang === "EN" ? option.nameTh : option.nameEn}</small></span>
                 <Plus size={14} />
               </button>
-            )) : <p>{t("ไม่พบเมืองในรายการ")}</p>}
+            ))}
+            {canAddCustom ? (
+              <button type="button" role="option" aria-selected="false" className="trip-destination-custom-option" onPointerDown={(event) => event.preventDefault()} onClick={commitQuery}>
+                <Plus size={14} />
+                <span><strong>เพิ่ม “{query.trim()}”</strong><small>บันทึกเป็นเมืองใหม่ในประเทศที่เลือก</small></span>
+              </button>
+            ) : !options.length ? <p>{t("ไม่พบเมืองในรายการ")}</p> : null}
           </div>
         )}
       </div>
-      <small>{t("เมืองที่เลือกจะใช้ปลดล็อกเข็มกลัดโดยตรง ไม่เดาจากข้อความ")}</small>
+      <small>{t("เลือกจากรายการ หรือพิมพ์ชื่อใหม่เพื่อผูกเมืองนั้นกับประเทศที่เลือก")}</small>
     </div>
   );
 }
@@ -8277,7 +8374,7 @@ function ModalForm({
   trip: Trip | null;
   day: number;
   items: Itinerary[];
-  close: () => void;
+  close: (reason?: "cancel" | "saved") => void;
   submit: (data: Record<string, unknown>) => Promise<void>;
   deleteItem: (item: Itinerary) => Promise<void>;
   deleteTrip: (trip: Trip) => Promise<void>;
@@ -8304,15 +8401,36 @@ function ModalForm({
   const initialCountry =
     modal.type === "trip"
       ? countryByCode(modal.trip?.country_code) ||
+        countryByCode(modal.preset?.countryCode) ||
+        countryByCode(TRIP_DESTINATION_OPTIONS.find((option) => {
+          const destination = (modal.preset?.destination || "").trim().toLowerCase();
+          return [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => term.trim().toLowerCase() === destination);
+        })?.countryCode) ||
         inferTripCountry(modal.trip?.destination, modal.trip?.timezone)
       : TRIP_COUNTRIES[0];
   const [countryCode, setCountryCode] = useState(initialCountry.code);
   const [tripDestinations, setTripDestinations] = useState<TripDestinationOption[]>(() => {
     if (modal.type !== "trip") return [];
+    if (!modal.trip && modal.preset) {
+      if (modal.preset.tripDestinations?.length) {
+        return modal.preset.tripDestinations;
+      }
+      if (modal.preset.locationIds?.length) {
+        return modal.preset.locationIds.flatMap((id) => {
+          const candidate = TRIP_DESTINATION_OPTIONS.find((option) => option.id === id);
+          return candidate ? [candidate] : [];
+        });
+      }
+      const destination = modal.preset.destination.trim().toLowerCase();
+      const option = TRIP_DESTINATION_OPTIONS.find((candidate) =>
+        [candidate.nameTh, candidate.nameEn, ...candidate.searchTerms].some((term) => term.trim().toLowerCase() === destination),
+      );
+      return option ? [option] : [];
+    }
     const saved = modal.trip?.trip_destinations || [];
     const resolved = saved.flatMap((destination) => {
       const option = TRIP_DESTINATION_OPTIONS.find((candidate) => candidate.id === destination.id);
-      return option ? [option] : [];
+      return option ? [option] : destination.nameTh || destination.nameEn ? [{...destination,searchTerms:[destination.nameTh,destination.nameEn].filter(Boolean)} as TripDestinationOption] : [];
     });
     if (resolved.length) return resolved;
     const legacy = `${modal.trip?.destination || ""} ${modal.trip?.country_name || ""}`.toLowerCase();
@@ -8391,7 +8509,7 @@ function ModalForm({
     modal.type === "trip"
       ? localDate(
           modal.trip?.outbound_departure_at,
-          modal.trip?.start_date || "",
+          modal.trip?.start_date || modal.preset?.outboundDate || "",
         )
       : "";
   const returnFallback =
@@ -8448,7 +8566,7 @@ function ModalForm({
     try {
       if (modal.type === "trip") {
         if (!tripDestinations.length) throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");
-        let coverImageUrl = modal.trip?.cover_image_url || DEFAULT_TRIP_COVER;
+        let coverImageUrl = modal.trip?.cover_image_url || modal.preset?.coverImageUrl || DEFAULT_TRIP_COVER;
         if (coverFile) {
           const upload = new FormData();
           upload.set("file", coverFile);
@@ -8494,7 +8612,7 @@ function ModalForm({
           startTime,
         });
       }
-      close();
+      close("saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
       setSaving(false);
@@ -8537,7 +8655,7 @@ function ModalForm({
           <button
             type="button"
             className="icon-btn"
-            onClick={close}
+            onClick={() => close()}
             aria-label={t("ยกเลิก")}
           >
             <X size={18} />
@@ -8547,7 +8665,7 @@ function ModalForm({
           {modal.type === "trip" && (
             <>
               <CoverImagePicker
-                existingUrl={modal.trip?.cover_image_url}
+                existingUrl={modal.trip?.cover_image_url || modal.preset?.coverImageUrl}
                 onChange={(file) => {
                   setCoverFile(file);
                   checkForChanges();
@@ -8555,7 +8673,7 @@ function ModalForm({
               />
               <div className="field">
                 <label>{t("ชื่อทริป")}</label>
-                <input name="name" required defaultValue={modal.trip?.name} />
+                <input name="name" required defaultValue={modal.trip?.name || modal.preset?.destination} />
               </div>
               <div className="field country-select-field">
                 <label>{t("ประเทศ")}</label>
@@ -8632,7 +8750,7 @@ function ModalForm({
                     name="outboundTime"
                     type="time"
                     required
-                    defaultValue={localTime(modal.trip?.outbound_departure_at)}
+                    defaultValue={localTime(modal.trip?.outbound_departure_at, modal.preset?.outboundTime || "")}
                     label={t("เวลาเดินทางไป")}
                   />
                 </div>
@@ -8881,6 +8999,7 @@ export function BNTripApp({
     loaded: "",
   },
   initialTripDirectory,
+  initialTripPreset,
 }: {
   authenticated?: boolean;
   demo?: boolean;
@@ -8905,6 +9024,7 @@ export function BNTripApp({
   initialTripCards?: PaymentCard[];
   initialTripFilters?: TripFilters;
   initialTripDirectory?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
+  initialTripPreset?: TripCreationPreset | null;
 }) {
   const initialDashboardTrips = initialDashboard
     ? applyCachedTripReviewSummaries([
@@ -8934,7 +9054,11 @@ export function BNTripApp({
   const [tripCards, setTripCards] = useState<PaymentCard[]>(
     initialTripCards || [],
   );
-  const [modal, setModal] = useState<Modal>(null);
+  const [modal, setModal] = useState<Modal>(() =>
+    page === "dashboard" && initialTripPreset && !demo
+      ? { type: "trip", preset: initialTripPreset }
+      : null,
+  );
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(
@@ -9226,6 +9350,9 @@ export function BNTripApp({
       });
       setTripRevision((value) => value + 1);
       if (!modal.trip) itineraryCache.set(saved.id, []);
+      if (!modal.trip && modal.preset?.sourceIdeaId) {
+        await fetch(`/api/trip-ideas/${modal.preset.sourceIdeaId}`, { method: "DELETE" }).catch(() => null);
+      }
       else if (data.hasFlights === false) {
         itineraryCache.delete(saved.id);
         invalidateClientResourcesContaining(`trip:${saved.id}:`);
@@ -9549,6 +9676,7 @@ export function BNTripApp({
       }
       viewAnalytics={() => router.push("/analytics")}
       viewBadges={() => router.push("/badges")}
+      viewTripIdeas={() => router.push("/trip-ideas")}
       onInvitationChanged={() => setTripRevision((value) => value + 1)}
       notify={flash}
       confirmAction={setConfirmation}
@@ -9719,7 +9847,11 @@ export function BNTripApp({
       trip={selected}
       day={activeDay}
       items={itineraries}
-      close={() => setModal(null)}
+      close={(reason) => {
+        const returnToIdeas = reason !== "saved" && modal.type === "trip" && !modal.trip && Boolean(modal.preset?.sourceIdeaId);
+        setModal(null);
+        if (returnToIdeas) router.push("/trip-ideas");
+      }}
       submit={saveModal}
       deleteItem={removeItinerary}
       deleteTrip={removeTrip}

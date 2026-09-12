@@ -1,11 +1,12 @@
 "use client";
 
-import { BNTripApp, type DashboardCounts, type Trip } from "@/src/components/bn-trip-app";
+import { BNTripApp, type DashboardCounts, type Trip, type TripCreationPreset } from "@/src/components/bn-trip-app";
 import type { CountryHighlight } from "@/src/lib/trip-loaders";
 
 export function AuthenticatedDashboard({
   demo,
   initialDashboard,
+  initialTripPreset,
 }: {
   demo: boolean;
   initialDashboard: {
@@ -15,6 +16,7 @@ export function AuthenticatedDashboard({
     counts: DashboardCounts;
     countryHighlights: CountryHighlight[];
   };
+  initialTripPreset?: TripCreationPreset | null;
 }) {
   return (
     <BNTripApp
@@ -22,6 +24,7 @@ export function AuthenticatedDashboard({
       demo={demo}
       page="dashboard"
       initialDashboard={initialDashboard}
+      initialTripPreset={initialTripPreset}
     />
   );
 }

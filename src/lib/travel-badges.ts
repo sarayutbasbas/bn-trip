@@ -144,6 +144,10 @@ const COUNTRY_CENTERS: Record<string, readonly [number, number]> = {
   US: [37.0902, -95.7129], CA: [56.1304, -106.3468], AU: [-25.2744, 133.7751], NZ: [-40.9006, 174.886],
 };
 
+const INTERNATIONAL_BADGE_COUNTRY_CODES = new Set([
+  "JP", "CN", "KR", "TW", "HK", "SG", "VN", "MY", "ID", "PH", "LA", "KH", "MM", "IN", "AE", "GB", "FR", "IT", "DE", "CH", "ES", "US", "CA", "AU", "NZ",
+]);
+
 function seedToBadge(seed: BadgeSeed, category: TravelBadgeCategory, countryCode: string, artworkIndex: number): TravelBadgeDefinition {
   const [slug, nameTh, nameEn, latitude, longitude, aliases = []] = seed;
   return {
@@ -157,7 +161,7 @@ function seedToBadge(seed: BadgeSeed, category: TravelBadgeCategory, countryCode
 export const TRAVEL_BADGE_CATALOG: readonly TravelBadgeDefinition[] = [
   ...THAILAND.map((seed, index) => seedToBadge(seed, "thailand", "TH", index)),
   ...JAPAN.map((seed, index) => seedToBadge(seed, "japan", "JP", index)),
-  ...TRIP_COUNTRIES.filter((country) => country.code !== "TH").map((country, artworkIndex) => {
+  ...TRIP_COUNTRIES.filter((country) => INTERNATIONAL_BADGE_COUNTRY_CODES.has(country.code)).map((country, artworkIndex) => {
     const [latitude, longitude] = COUNTRY_CENTERS[country.code] || [0, 0];
     const slug = country.nameEn.toLowerCase().replaceAll(/[^a-z0-9]+/g, "_").replaceAll(/^_|_$/g, "");
     return {
@@ -171,7 +175,7 @@ export const TRAVEL_BADGE_CATALOG: readonly TravelBadgeDefinition[] = [
 ];
 
 const INTERNATIONAL_CITIES: Record<string, readonly (readonly [string, string, string])[]> = {
-  CN: [["beijing", "ปักกิ่ง", "Beijing"], ["shanghai", "เซี่ยงไฮ้", "Shanghai"], ["chengdu", "เฉิงตู", "Chengdu"], ["guangzhou", "กวางโจว", "Guangzhou"]],
+  CN: [["beijing", "ปักกิ่ง", "Beijing"], ["shanghai", "เซี่ยงไฮ้", "Shanghai"], ["chengdu", "เฉิงตู", "Chengdu"], ["guangzhou", "กวางโจว", "Guangzhou"], ["harbin", "ฮาร์บิน", "Harbin"]],
   KR: [["seoul", "โซล", "Seoul"], ["busan", "ปูซาน", "Busan"], ["jeju", "เชจู", "Jeju"]],
   TW: [["taipei", "ไทเป", "Taipei"], ["kaohsiung", "เกาสง", "Kaohsiung"], ["taichung", "ไถจง", "Taichung"]],
   HK: [["hong_kong", "ฮ่องกง", "Hong Kong"]], SG: [["singapore", "สิงคโปร์", "Singapore"]],
@@ -217,10 +221,42 @@ export const TRIP_DESTINATION_OPTIONS: readonly TripDestinationOption[] = [
   ),
 ];
 
+const CUSTOM_DESTINATION_PREFIX = "custom:";
+
+export function createCustomTripDestination(countryCode: string, name: string): TripDestinationOption | null {
+  const normalizedCountry = countryCode.trim().toUpperCase();
+  const normalizedName = name.trim().replace(/\s+/g, " ").slice(0, 80);
+  if (!normalizedName || !TRIP_COUNTRIES.some((country) => country.code === normalizedCountry)) return null;
+  const countryBadge = TRAVEL_BADGE_CATALOG.find(
+    (badge) => badge.category === "international" && badge.countryCode === normalizedCountry,
+  );
+  return {
+    id: `${CUSTOM_DESTINATION_PREFIX}${normalizedCountry}:${encodeURIComponent(normalizedName)}`,
+    countryCode: normalizedCountry,
+    nameTh: normalizedName,
+    nameEn: normalizedName,
+    badgeId: countryBadge?.id || "",
+    searchTerms: [normalizedName.toLowerCase()],
+  };
+}
+
+function customDestinationFromId(countryCode: string, id: string) {
+  const prefix = `${CUSTOM_DESTINATION_PREFIX}${countryCode}:`;
+  if (!id.startsWith(prefix)) return null;
+  try {
+    return createCustomTripDestination(countryCode, decodeURIComponent(id.slice(prefix.length)));
+  } catch {
+    return null;
+  }
+}
+
 export function resolveTripDestinations(countryCode: string, ids: string[]): TripDestinationSelection[] {
-  const uniqueIds = new Set(ids);
-  return TRIP_DESTINATION_OPTIONS.filter((option) => option.countryCode === countryCode && uniqueIds.has(option.id))
-    .map((option) => ({ id: option.id, countryCode: option.countryCode, nameTh: option.nameTh, nameEn: option.nameEn, badgeId: option.badgeId }));
+  const uniqueIds = [...new Set(ids)];
+  return uniqueIds.flatMap((id) => {
+    const option = TRIP_DESTINATION_OPTIONS.find((candidate) => candidate.countryCode === countryCode && candidate.id === id)
+      || customDestinationFromId(countryCode, id);
+    return option ? [{ id: option.id, countryCode: option.countryCode, nameTh: option.nameTh, nameEn: option.nameEn, badgeId: option.badgeId }] : [];
+  });
 }
 
 function tripEndDate(trip: BadgeTripSource) {

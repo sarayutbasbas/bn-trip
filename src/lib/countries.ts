@@ -1,3 +1,5 @@
+import { WORLD_COUNTRIES } from "@/src/lib/world-countries";
+
 export type TripCountry = {
   code: string;
   flag: string;
@@ -7,7 +9,7 @@ export type TripCountry = {
   aliases?: string[];
 };
 
-export const TRIP_COUNTRIES: readonly TripCountry[] = [
+const PRIORITY_TRIP_COUNTRIES: readonly TripCountry[] = [
   { code: "TH", flag: "🇹🇭", nameTh: "ไทย", nameEn: "Thailand", timezone: "Asia/Bangkok", aliases: ["ไทย", "thailand"] },
   { code: "JP", flag: "🇯🇵", nameTh: "ญี่ปุ่น", nameEn: "Japan", timezone: "Asia/Tokyo", aliases: ["ญี่ปุ่น", "japan"] },
   { code: "CN", flag: "🇨🇳", nameTh: "จีน", nameEn: "China", timezone: "Asia/Shanghai", aliases: ["จีน", "china"] },
@@ -35,6 +37,24 @@ export const TRIP_COUNTRIES: readonly TripCountry[] = [
   { code: "AU", flag: "🇦🇺", nameTh: "ออสเตรเลีย", nameEn: "Australia", timezone: "Australia/Sydney", aliases: ["ออสเตรเลีย", "australia"] },
   { code: "NZ", flag: "🇳🇿", nameTh: "นิวซีแลนด์", nameEn: "New Zealand", timezone: "Pacific/Auckland", aliases: ["นิวซีแลนด์", "new zealand"] },
 ] as const;
+
+const priorityCountryCodes = new Set(PRIORITY_TRIP_COUNTRIES.map((country) => country.code));
+const countryFlag = (code: string) => String.fromCodePoint(...[...code].map((letter) => 127397 + letter.charCodeAt(0)));
+
+export const TRIP_COUNTRIES: readonly TripCountry[] = [
+  ...PRIORITY_TRIP_COUNTRIES,
+  ...WORLD_COUNTRIES
+    .filter(([code]) => !priorityCountryCodes.has(code))
+    .map(([code, nameTh, nameEn, timezone]) => ({
+      code,
+      flag: countryFlag(code),
+      nameTh,
+      nameEn,
+      timezone,
+      aliases: [nameTh, nameEn],
+    }))
+    .sort((left, right) => left.nameTh.localeCompare(right.nameTh, "th")),
+];
 
 export function countryByCode(code?: string | null) {
   return TRIP_COUNTRIES.find((country) => country.code === code?.toUpperCase());

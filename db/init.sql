@@ -26,6 +26,25 @@ CREATE TABLE IF NOT EXISTS trips (
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users(lower(email)) WHERE email IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique_idx ON users(google_sub) WHERE google_sub IS NOT NULL;
 
+CREATE TABLE IF NOT EXISTS trip_ideas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(160) NOT NULL DEFAULT '', destination VARCHAR(160) NOT NULL, country_code CHAR(2), trip_destinations JSONB NOT NULL DEFAULT '[]'::jsonb,
+  kind VARCHAR(16) NOT NULL CHECK (kind IN ('planned','someday')),
+  target_month INTEGER CHECK (target_month BETWEEN 1 AND 12), target_year INTEGER CHECK (target_year BETWEEN 2020 AND 2200),
+  note TEXT NOT NULL DEFAULT '', cover_image_url TEXT NOT NULL DEFAULT '/travel-postcard-fallback.jpg', created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((kind='planned' AND target_month IS NOT NULL AND target_year IS NOT NULL) OR (kind='someday' AND target_month IS NULL AND target_year IS NULL))
+);
+CREATE INDEX IF NOT EXISTS trip_ideas_user_schedule_idx ON trip_ideas(user_id,kind,target_year,target_month,created_at);
+
+CREATE TABLE IF NOT EXISTS trip_idea_collaborators (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_idea_id UUID NOT NULL REFERENCES trip_ideas(id) ON DELETE CASCADE,
+  email VARCHAR(320) NOT NULL, user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  invited_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(trip_idea_id,email)
+);
+CREATE INDEX IF NOT EXISTS trip_idea_collaborators_user_idx ON trip_idea_collaborators(user_id);
+CREATE INDEX IF NOT EXISTS trip_idea_collaborators_email_idx ON trip_idea_collaborators(lower(email));
+
 CREATE TABLE IF NOT EXISTS trip_collaborators (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
   email VARCHAR(320) NOT NULL, user_id UUID REFERENCES users(id) ON DELETE SET NULL,

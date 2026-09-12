@@ -454,6 +454,67 @@ const migrations = [
       "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS includes_breakfast BOOLEAN NOT NULL DEFAULT false",
     ],
   },
+  {
+    version: 34,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS trip_ideas (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        destination VARCHAR(160) NOT NULL,
+        kind VARCHAR(16) NOT NULL CHECK (kind IN ('planned','someday')),
+        target_month INTEGER CHECK (target_month BETWEEN 1 AND 12),
+        target_year INTEGER CHECK (target_year BETWEEN 2020 AND 2200),
+        note TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        CHECK ((kind='planned' AND target_month IS NOT NULL AND target_year IS NOT NULL) OR (kind='someday' AND target_month IS NULL AND target_year IS NULL))
+      )`,
+      "CREATE INDEX IF NOT EXISTS trip_ideas_user_schedule_idx ON trip_ideas(user_id,kind,target_year,target_month,created_at)",
+      `INSERT INTO trip_ideas (user_id,destination,kind,target_month,target_year)
+       SELECT owner.id,seed.destination,'planned',seed.target_month,seed.target_year
+       FROM users owner
+       CROSS JOIN (VALUES ('Fukuoka',3,2027),('Hong Kong',11,2027),('Harbin',2,2028),('Kyoto',11,2028)) AS seed(destination,target_month,target_year)
+       WHERE lower(owner.email)=lower('sarayutkongpeng@gmail.com')
+         AND NOT EXISTS (SELECT 1 FROM trip_ideas idea WHERE idea.user_id=owner.id AND lower(idea.destination)=lower(seed.destination) AND idea.target_month=seed.target_month AND idea.target_year=seed.target_year)`,
+    ],
+  },
+  {
+    version: 35,
+    statements: [
+      "ALTER TABLE trip_ideas ADD COLUMN IF NOT EXISTS cover_image_url TEXT NOT NULL DEFAULT '/travel-postcard-fallback.jpg'",
+    ],
+  },
+  {
+    version: 36,
+    statements: [
+      "ALTER TABLE trip_ideas ADD COLUMN IF NOT EXISTS name VARCHAR(160)",
+      "UPDATE trip_ideas SET name=destination WHERE name IS NULL OR trim(name)=''",
+      "ALTER TABLE trip_ideas ALTER COLUMN name SET NOT NULL",
+      "ALTER TABLE trip_ideas ADD COLUMN IF NOT EXISTS country_code CHAR(2)",
+      "ALTER TABLE trip_ideas ADD COLUMN IF NOT EXISTS trip_destinations JSONB NOT NULL DEFAULT '[]'::jsonb",
+      `UPDATE trip_ideas SET country_code='JP',trip_destinations=jsonb_build_array(jsonb_build_object('id','JP:fukuoka','countryCode','JP','nameTh','ฟุกุโอกะ','nameEn','Fukuoka','badgeId','japan:fukuoka')) WHERE lower(destination)='fukuoka' AND trip_destinations='[]'::jsonb`,
+      `UPDATE trip_ideas SET country_code='JP',trip_destinations=jsonb_build_array(jsonb_build_object('id','JP:kyoto','countryCode','JP','nameTh','เกียวโต','nameEn','Kyoto','badgeId','japan:kyoto')) WHERE lower(destination)='kyoto' AND trip_destinations='[]'::jsonb`,
+      `UPDATE trip_ideas SET country_code='HK',trip_destinations=jsonb_build_array(jsonb_build_object('id','HK:hong_kong','countryCode','HK','nameTh','ฮ่องกง','nameEn','Hong Kong','badgeId','international:hong_kong')) WHERE lower(destination)='hong kong' AND trip_destinations='[]'::jsonb`,
+      `UPDATE trip_ideas SET country_code='CN',trip_destinations=jsonb_build_array(jsonb_build_object('id','CN:harbin','countryCode','CN','nameTh','ฮาร์บิน','nameEn','Harbin','badgeId','international:china')) WHERE lower(destination)='harbin' AND trip_destinations='[]'::jsonb`,
+      `CREATE TABLE IF NOT EXISTS trip_idea_collaborators (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        trip_idea_id UUID NOT NULL REFERENCES trip_ideas(id) ON DELETE CASCADE,
+        email VARCHAR(320) NOT NULL,
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        invited_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(trip_idea_id,email)
+      )`,
+      "CREATE INDEX IF NOT EXISTS trip_idea_collaborators_user_idx ON trip_idea_collaborators(user_id)",
+      "CREATE INDEX IF NOT EXISTS trip_idea_collaborators_email_idx ON trip_idea_collaborators(lower(email))",
+    ],
+  },
+  {
+    version: 37,
+    statements: [
+      "UPDATE trip_idea_collaborators SET user_id=NULL WHERE user_id IS NOT NULL",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;
