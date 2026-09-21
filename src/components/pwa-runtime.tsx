@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { getCurrentAccount } from "@/src/lib/client-account";
 
