@@ -22,7 +22,6 @@ import {
 import {
   AlertTriangle,
   ArrowUp,
-  Bell,
   Check,
   ChevronRight,
   ListChecks,
@@ -36,6 +35,7 @@ import {
 } from "lucide-react";
 import { ChecklistCategoryIcon, ChecklistCategoryIconPicker } from "@/src/components/checklist-category-icon";
 import { normalizeChecklistCategoryIcon, type ChecklistCategoryIconKey } from "@/src/lib/checklist-category-icons";
+import { InvitationNotifications } from "@/src/components/invitation-notifications";
 
 type Category = { id: string; name: string; icon_key: string | null; sort_order: number };
 type Item = {
@@ -392,9 +392,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
             <button className="icon-btn home-refresh-btn" type="button" onClick={() => void refreshMaster()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช">
               <RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={24} />
             </button>
-            <button className="icon-btn home-notification-btn" type="button" onClick={() => router.push("/")} aria-label="การแจ้งเตือน" title="การแจ้งเตือน">
-              <Bell size={24} />
-            </button>
+            <InvitationNotifications onChanged={()=>router.refresh()}/>
             <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์">
               <span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url ? { backgroundImage: `url("${profile.avatar_url}")` } : undefined}>{!profile?.avatar_url && (profile?.display_name || profile?.email || "P").charAt(0).toUpperCase()}</span></span>
             </button>

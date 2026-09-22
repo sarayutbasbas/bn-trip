@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { PageIntro } from "@/src/components/page-intro";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import { BottomSheet } from "@/src/components/bottom-sheet";
+import { InvitationNotifications } from "@/src/components/invitation-notifications";
 import type {
   CountryHighlight,
   FavoriteAccommodation,
@@ -2651,9 +2652,7 @@ function Dashboard({
   viewAnalytics,
   viewBadges,
   viewTripIdeas,
-  onInvitationChanged,
   notify,
-  confirmAction,
 }: {
   trips: Trip[];
   favoriteAccommodations: FavoriteAccommodation[];
@@ -2667,9 +2666,7 @@ function Dashboard({
   viewAnalytics: () => void;
   viewBadges: () => void;
   viewTripIdeas: () => void;
-  onInvitationChanged: () => void;
   notify: (message: string) => void;
-  confirmAction: (confirmation: Confirmation) => void;
 }) {
   const t = useT();
   const router = useRouter();
@@ -2831,12 +2828,6 @@ function Dashboard({
           </button>
         </div>
       </section>
-      <TripInvitations
-        revision={revision}
-        onChanged={onInvitationChanged}
-        notify={notify}
-        confirmAction={confirmAction}
-      />
       <NearbyFlights
         openFlightTrip={openFlightTrip}
         notify={notify}
@@ -9952,12 +9943,7 @@ export function BNTripApp({
       viewAnalytics={() => router.push("/analytics")}
       viewBadges={() => router.push("/badges")}
       viewTripIdeas={() => router.push("/trip-ideas")}
-      onInvitationChanged={() => {
-        setTripRevision((value) => value + 1);
-        void refreshDashboard({ announce: false });
-      }}
       notify={flash}
-      confirmAction={setConfirmation}
     />
   ) : page === "analytics" && initialAnalytics ? (
     <TravelAnalyticsDashboard datasets={initialAnalytics} />
@@ -10196,13 +10182,12 @@ export function BNTripApp({
                       }} disabled={refreshingMainPage} aria-label={label(refreshingMainPage ? "กำลังอัปเดต…" : "รีเฟรช")} title={label(refreshingMainPage ? "กำลังอัปเดต…" : "รีเฟรช")}>
                         <RefreshCw className={refreshingMainPage ? "analytics-refresh-spinning" : ""} size={24} />
                       </button>
-                      <button className="icon-btn home-notification-btn" type="button" onClick={() => {
-                        const invitations = document.querySelector(".trip-invitations");
-                        if (invitations) invitations.scrollIntoView({ behavior: "smooth", block: "start" });
-                        else flash("ไม่มีการแจ้งเตือนใหม่");
-                      }} aria-label={label("การแจ้งเตือน")} title={label("การแจ้งเตือน")}>
-                        <Bell size={24} />
-                      </button>
+                      <InvitationNotifications onChanged={async()=>{
+                        tripListCache=null;
+                        dashboardSnapshotCache=null;
+                        setTripRevision(value=>value+1);
+                        await refreshDashboard({announce:false});
+                      }}/>
                       <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์">
                         <AccountAvatar profile={headerProfile} size="small" />
                       </button>

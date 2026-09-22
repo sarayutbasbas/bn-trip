@@ -14172,6 +14172,48 @@ html.dark .dashboard-quick-actions > button:nth-child(3) {
   position: relative;
   margin-right: 8px;
 }
+.invitation-notification { position:relative;z-index:45; }
+.invitation-notification .home-notification-btn { margin-right:8px; }
+.invitation-popover {
+  position:absolute;
+  z-index:90;
+  top:calc(100% + 10px);
+  right:4px;
+  width:min(350px,calc(100vw - 28px));
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:20px;
+  color:var(--ink);
+  background:var(--surface-solid);
+  box-shadow:0 18px 46px rgba(20,24,32,.22);
+}
+.invitation-popover::before { content:"";position:absolute;top:-6px;right:17px;width:12px;height:12px;border-top:1px solid var(--line);border-left:1px solid var(--line);background:var(--surface-solid);transform:rotate(45deg); }
+.invitation-popover > header { position:relative;z-index:1;min-height:58px;padding:11px 12px 9px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;background:var(--surface-solid); }
+.invitation-popover > header span { display:grid;gap:1px; }
+.invitation-popover > header b { font-size:14px; }
+.invitation-popover > header small { color:var(--muted);font-size:9px; }
+.invitation-popover > header button { width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--muted);background:var(--surface-2); }
+.invitation-popover-list { max-height:min(390px,58dvh);padding:8px;display:grid;gap:7px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch; }
+.invitation-popover-card { min-width:0;padding:8px;border:1px solid var(--line);border-radius:15px;display:grid;grid-template-columns:62px minmax(0,1fr);gap:9px;background:var(--surface-2); }
+.invitation-popover-card > img { width:62px;height:62px;border-radius:11px;object-fit:cover; }
+.invitation-popover-copy { min-width:0;align-self:center;display:grid;gap:2px; }
+.invitation-popover-copy .invitation-kind { width:max-content;max-width:100%;display:flex;align-items:center;gap:3px;color:var(--orange);font-size:8px;font-weight:700; }
+.invitation-popover-copy .invitation-kind.is-trip_idea { color:#8a5bd3; }
+.invitation-popover-copy strong,.invitation-popover-copy small,.invitation-popover-copy p { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.invitation-popover-copy strong { font-size:12px; }
+.invitation-popover-copy small { display:flex;align-items:center;gap:3px;color:var(--muted);font-size:8px; }
+.invitation-popover-copy p { margin:1px 0 0;color:var(--muted);font-size:8px; }
+.invitation-popover-actions { grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 38px;gap:6px; }
+.invitation-popover-actions button { min-height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:10px;font-weight:700; }
+.invitation-popover-accept { color:#fff;background:var(--brand-gradient); }
+.invitation-popover-decline { color:var(--muted);background:var(--surface-3); }
+.invitation-popover-error { margin:0;padding:8px 12px;border-top:1px solid var(--line);color:#c4472c;font-size:9px; }
+@media (max-width:600px) {
+  .invitation-notification { position:static; }
+  .invitation-popover { position:fixed;top:calc(env(safe-area-inset-top) + 66px);right:14px;left:14px;width:auto; }
+  .invitation-popover::before { right:68px; }
+  .invitation-popover-list { max-height:min(380px,56dvh); }
+}
 .home-profile-btn {
   width: 40px;
   height: 40px;

@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   ArrowRight,
   ArrowUp,
-  Bell,
   CalendarDays,
   CheckCircle2,
   Flame,
@@ -32,6 +31,7 @@ import type {
   TravelBadgeCollection,
 } from "@/src/lib/travel-badges";
 import { getCurrentAccount } from "@/src/lib/client-account";
+import { InvitationNotifications } from "@/src/components/invitation-notifications";
 
 type HeaderProfile = { id: string; email: string; display_name: string; avatar_url: string | null };
 type BadgeFilter = "all" | TravelBadgeCategory;
@@ -465,7 +465,6 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
   const [showSelectedDetails, setShowSelectedDetails] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [profile, setProfile] = useState<HeaderProfile | null>(null);
-  const [invitationCount, setInvitationCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const visibleBadges = useMemo(() => badges
     .filter((badge) => category === "all" || badge.category === category)
@@ -487,13 +486,9 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      getCurrentAccount(),
-      fetch("/api/invitations").then((response) => response.ok ? response.json() : []),
-    ]).then(([account, invitations]) => {
+    getCurrentAccount().then((account) => {
       if (!active) return;
       setProfile(account);
-      setInvitationCount(Array.isArray(invitations) ? invitations.length : 0);
     }).catch(() => {});
     return () => { active = false; };
   }, []);
@@ -580,7 +575,7 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
           </Link>
           <nav className="mobile-actions" aria-label="เมนูหลัก">
             <button className="icon-btn home-refresh-btn" type="button" onClick={refreshPage} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={24} /></button>
-            <button className="icon-btn home-notification-btn" type="button" onClick={() => { if (invitationCount) router.push("/"); }} aria-label="การแจ้งเตือน" title="การแจ้งเตือน"><Bell size={24} />{invitationCount > 0 ? <i className="notification-dot" /> : null}</button>
+            <InvitationNotifications onChanged={()=>router.refresh()}/>
             <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์"><span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url ? { backgroundImage: `url("${profile.avatar_url}")` } : undefined}>{!profile?.avatar_url && avatarLabel.charAt(0).toUpperCase()}</span></span></button>
           </nav>
         </header>
