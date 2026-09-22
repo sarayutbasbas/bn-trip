@@ -10849,6 +10849,23 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
 .trip-idea-submit-actions .primary-btn { min-width: 0; flex: 1 1 auto; }
 .trip-idea-submit-actions > .delete-record-btn { width: 48px; height: 48px; border-radius: 50%; }
 .trip-idea-sheet-body { display:grid;gap:14px; }
+.trip-idea-sheet-body .cover-upload {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+}
+.trip-idea-sheet-body .cover-upload .upload-preview {
+  width: 100%;
+  min-height: 132px;
+  aspect-ratio: 16/7;
+  align-self: auto;
+  flex-basis: auto;
+}
+.trip-idea-sheet-body .cover-upload > span:last-of-type {
+  width: 100%;
+  max-width: none;
+  padding: 12px 14px;
+}
 .collaborator-row.idea-collaborator-row:not(.is-readonly) { grid-template-columns: 40px minmax(0,1fr) 42px; }
 .collaborator-row.idea-collaborator-row .delete-record-btn { justify-self: end; }
 .trip-idea-card.compact-trip-card { min-height: 142px; padding: 0; grid-template-columns: minmax(120px,36%) minmax(0,1fr); align-items: stretch; gap: 0; overflow: hidden; }

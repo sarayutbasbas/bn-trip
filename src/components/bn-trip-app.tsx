@@ -2223,6 +2223,7 @@ function TripCard({
     trip.destination,
     trip.country_code,
     trip.country_name,
+    trip.trip_destinations,
   );
   const dateRangeLabel = tripDateRangeLabel(trip);
   const hasDuration = Number(trip.total_days || 0) > 0;
@@ -3332,6 +3333,7 @@ function CompactTripCard({
               trip.destination,
               trip.country_code,
               trip.country_name,
+              trip.trip_destinations,
             )}
           </span>
         </p>
@@ -3728,6 +3730,7 @@ function TripHeader({
             trip.destination,
             trip.country_code,
             trip.country_name,
+            trip.trip_destinations,
           )}
         </span>
         <p className="page-sub">{tripHeaderRangeLabel(trip)}</p>

@@ -19,7 +19,8 @@ type IdeaCollaborator={id:string;email:string;user_id:string|null;joined:boolean
 type HeaderProfile={id:string;email:string;display_name:string;avatar_url:string|null};
 const monthNames=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 
-function sortIdeas(items:TripIdea[]){return [...items].sort((a,b)=>a.kind!==b.kind?(a.kind==="planned"?-1:1):a.kind==="planned"?((a.target_year||9999)-(b.target_year||9999)||(a.target_month||99)-(b.target_month||99)):b.created_at.localeCompare(a.created_at))}
+function timestamp(value:string){const parsed=Date.parse(value);return Number.isNaN(parsed)?0:parsed}
+function sortIdeas(items:TripIdea[]){return [...items].sort((a,b)=>a.kind!==b.kind?(a.kind==="planned"?-1:1):a.kind==="planned"?((a.target_year||9999)-(b.target_year||9999)||(a.target_month||99)-(b.target_month||99)):timestamp(b.created_at)-timestamp(a.created_at))}
 async function readResponse(response:Response){const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"บันทึกไม่สำเร็จ กรุณาลองอีกครั้ง");return data}
 function stop(event:{stopPropagation:()=>void}){event.stopPropagation()}
 function ideaCountdown(idea:TripIdea){
@@ -50,14 +51,14 @@ function IdeaAvatars({members,open}:{members:TripIdeaMember[];open:()=>void}){
 
 function IdeaCard({idea,edit,convert,share}:{idea:TripIdea;edit:()=>void;convert?:()=>void;share:()=>void}){
   const country=countryByCode(idea.country_code);
-  const detail=idea.note.trim();
+  const detail=(idea.note||"").trim();
   const countdown=ideaCountdown(idea);
   const targetDate=ideaTargetDate(idea);
   const activate=(event:KeyboardEvent<HTMLElement>)=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();edit()}};
   return <article className={`compact-trip-card trip-idea-card is-${idea.kind} ${idea.members?.length>1?"has-shared-members":""}`} role="button" tabIndex={0} onClick={edit} onKeyDown={activate} aria-label={`แก้ไข ${idea.name}`}>
     <div className="compact-trip-cover"><Image className="compact-trip-cover-image" src={idea.cover_image_url||"/travel-postcard-fallback.jpg"} alt={`รูปปก ${idea.name}`} fill sizes="(max-width: 639px) 42vw, 260px" unoptimized/>{countdown?<span className="trip-idea-countdown"><PlaneTakeoff size={11}/>{countdown}</span>:null}</div>
     <div className="compact-trip-body trip-idea-copy"><h3>{idea.name}</h3>
-      <p>{country?<span className="trip-country-flag"><CountryFlagImage code={country.code} label=""/></span>:<MapPinned size={13}/>}<span>{formatTripDestination(idea.destination,idea.country_code,country?.nameEn)}</span></p>
+      <p>{country?<span className="trip-country-flag"><CountryFlagImage code={country.code} label=""/></span>:<MapPinned size={13}/>}<span>{formatTripDestination(idea.destination,idea.country_code,country?.nameTh,idea.trip_destinations)}</span></p>
       {targetDate?<small className="trip-idea-target-date"><CalendarDays size={11}/><span>{targetDate}</span></small>:null}
       {detail?<small className="trip-idea-note">{detail}</small>:null}
       <div className="trip-idea-card-footer"><IdeaAvatars members={idea.members||[]} open={share}/>{idea.kind==="planned"&&convert?<button className="trip-idea-convert" type="button" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={15}/> สร้างทริป</button>:null}</div>
@@ -70,7 +71,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   const initialCountry=countryByCode(current?.country_code)||TRIP_COUNTRIES[0];
   const [name,setName]=useState(current?.name||"");
   const [countryCode,setCountryCode]=useState(initialCountry.code);
-  const [locations,setLocations]=useState<TripDestinationOption[]>(()=>current?.trip_destinations.map(saved=>{
+  const [locations,setLocations]=useState<TripDestinationOption[]>(()=>current?.trip_destinations?.map(saved=>{
     const option=TRIP_DESTINATION_OPTIONS.find(candidate=>candidate.id===saved.id);
     return option||{...saved,searchTerms:[saved.nameTh,saved.nameEn].filter(Boolean)} as TripDestinationOption;
   })||[]);
@@ -78,7 +79,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   const [targetMonth,setTargetMonth]=useState<number|null>(promote?null:current?.target_month||new Date().getMonth()+1);
   const [targetYear,setTargetYear]=useState<number|null>(promote?null:current?.target_year||new Date().getFullYear()+1);
   const [note,setNote]=useState(current?.note||"");const [coverFile,setCoverFile]=useState<File|null>(null);const [error,setError]=useState("");
-  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");let coverImageUrl=current?.cover_image_url||"/travel-postcard-fallback.jpg";if(coverFile){const upload=new FormData();upload.set("file",coverFile);coverImageUrl=(await readResponse(await fetch("/api/uploads",{method:"POST",body:upload}))).url}await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl})}catch(caught){setError((caught as Error).message)}}
+  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");let coverImageUrl=current?.cover_image_url||"/travel-postcard-fallback.jpg";if(coverFile){const upload=new FormData();upload.set("file",coverFile);const uploaded=await readResponse(await fetch("/api/uploads",{method:"POST",body:upload}));if(typeof uploaded.url!=="string"||!uploaded.url)throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");coverImageUrl=uploaded.url}await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl})}catch(caught){setError((caught as Error).message)}}
   return <BottomSheet
     title={promote?"กำหนดช่วงเวลาที่อยากไป":current?"แก้ไขรายการ":"เพิ่มสถานที่ที่อยากไป"}
     subtitle={promote?"เลือกเดือนและปีเพื่อย้ายมาเป็นทริปที่เล็งไว้":current?"แก้ไขข้อมูลของทริปที่เล็งไว้หรือลิสต์สักวันหนึ่ง":"บันทึกสถานที่ที่อยากเดินทางไปในอนาคต"}
@@ -92,7 +93,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     deleteDisabled={busy}
     deleteLabel="ลบรายการ"
   >
-    <CoverImagePicker existingUrl={current?.cover_image_url||"/travel-postcard-fallback.jpg"} onChange={setCoverFile}/>
+    <CoverImagePicker existingUrl={current?.cover_image_url||null} onChange={setCoverFile}/>
     <label className="trip-idea-field"><span>ชื่อทริป</span><input required maxLength={160} value={name} onChange={event=>setName(event.target.value)} placeholder="เช่น Fukuoka Food Trip"/></label>
     <CountryPicker value={countryCode} onChange={nextCountryCode=>{setCountryCode(nextCountryCode);setLocations([])}} note="เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง"/>
     <TripDestinationPicker countryCode={countryCode} selected={locations} onChange={setLocations}/>

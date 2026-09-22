@@ -78,9 +78,15 @@ export function formatTripDestination(
   destination?: string | null,
   countryCode?: string | null,
   countryName?: string | null,
+  destinations?: ReadonlyArray<{ nameTh?: string | null }> | null,
 ) {
-  const city = tripCity(destination);
-  const country = countryByCode(countryCode)?.nameEn || countryName?.trim() || "";
+  const thaiLocations = (destinations || [])
+    .map((item) => item.nameTh?.trim() || "")
+    .filter(Boolean);
+  const city = thaiLocations.length
+    ? [...new Set(thaiLocations)].join(" · ")
+    : tripCity(destination);
+  const country = countryByCode(countryCode)?.nameTh || countryName?.trim() || "";
   if (!city || !country || city.toLowerCase() === country.toLowerCase()) {
     return city || country;
   }

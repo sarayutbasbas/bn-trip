@@ -11,6 +11,21 @@ export type TripIdea = {
   note:string;cover_image_url:string;access_role:"owner"|"collaborator";members:TripIdeaMember[];created_at:string;updated_at:string;
 };
 
+type DatabaseTripIdea = Omit<TripIdea,"created_at"|"updated_at">&{
+  created_at:string|Date;
+  updated_at:string|Date;
+};
+
+function serializeTripIdea(idea:DatabaseTripIdea):TripIdea {
+  return {
+    ...idea,
+    trip_destinations:Array.isArray(idea.trip_destinations)?idea.trip_destinations:[],
+    members:Array.isArray(idea.members)?idea.members:[],
+    created_at:idea.created_at instanceof Date?idea.created_at.toISOString():String(idea.created_at),
+    updated_at:idea.updated_at instanceof Date?idea.updated_at.toISOString():String(idea.updated_at),
+  };
+}
+
 const demoOwner:TripIdeaMember={id:"demo-owner",email:"demo@packandgo.app",display_name:"Bas",avatar_url:null,role:"owner"};
 const place=(id:string,countryCode:string,nameTh:string,nameEn:string,badgeId:string):TripDestinationSelection=>({id,countryCode,nameTh,nameEn,badgeId});
 const demoIdea=(value:Omit<TripIdea,"owner_id"|"access_role"|"members"|"country_code"|"trip_destinations">&{country_code?:string;trip_destinations?:TripDestinationSelection[]}):TripIdea=>({...value,owner_id:demoOwner.id,access_role:"owner",members:[demoOwner],country_code:value.country_code||null,trip_destinations:value.trip_destinations||[]});
@@ -40,13 +55,15 @@ const ideaAccess=`(idea.user_id=$1 OR EXISTS(SELECT 1 FROM trip_idea_collaborato
 export async function loadTripIdeas(session:SessionUser):Promise<TripIdea[]> {
   if(session.isDemo)return demoIdeas;
   await ensureLatestDatabaseSchema();
-  return (await query<TripIdea>(`${ideaSelect} WHERE ${ideaAccess} ORDER BY CASE WHEN idea.kind='planned' THEN 0 ELSE 1 END,idea.target_year NULLS LAST,idea.target_month NULLS LAST,idea.created_at,idea.id`,[session.userId])).rows;
+  const result=await query<DatabaseTripIdea>(`${ideaSelect} WHERE ${ideaAccess} ORDER BY CASE WHEN idea.kind='planned' THEN 0 ELSE 1 END,idea.target_year NULLS LAST,idea.target_month NULLS LAST,idea.created_at,idea.id`,[session.userId]);
+  return result.rows.map(serializeTripIdea);
 }
 
 export async function loadTripIdea(session:SessionUser,id:string):Promise<TripIdea|null> {
   if(session.isDemo)return demoIdeas.find(idea=>idea.id===id)||null;
   await ensureLatestDatabaseSchema();
-  return (await query<TripIdea>(`${ideaSelect} WHERE idea.id=$2 AND ${ideaAccess}`,[session.userId,id])).rows[0]||null;
+  const idea=(await query<DatabaseTripIdea>(`${ideaSelect} WHERE idea.id=$2 AND ${ideaAccess}`,[session.userId,id])).rows[0];
+  return idea?serializeTripIdea(idea):null;
 }
 
 export async function getTripIdeaRole(session:SessionUser,id:string) {
