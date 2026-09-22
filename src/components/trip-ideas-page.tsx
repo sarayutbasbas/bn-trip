@@ -86,6 +86,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     onClose={close}
     onSubmit={submit}
     busy={busy}
+    className="trip-idea-sheet"
     bodyClassName="bottom-sheet-body trip-idea-sheet-body"
     submitLabel={busy?"กำลังบันทึก…":promote?"เลื่อนขึ้นและบันทึกช่วงเวลา":"บันทึก"}
     submitDisabled={busy||!name.trim()||(kind==="planned"&&(!targetMonth||!targetYear))}
