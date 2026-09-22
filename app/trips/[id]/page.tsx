@@ -14,8 +14,8 @@ export default async function TripPage({params,searchParams}:{params:Promise<{id
   const query=await searchParams;
   const rawReturnTo=query.returnTo;
   const returnTo=typeof rawReturnTo==="string"&&/^\/trips(?:\?.*)?$/.test(rawReturnTo)?rawReturnTo:undefined;
-  const workspaceTab=query.workspace==="documents"||query.workspace==="history"||query.workspace==="checklist"?query.workspace:undefined;
-  const tripView=query.view==="flights"||query.view==="stays"?query.view:undefined;
+  const workspaceTab=query.workspace==="documents"||query.workspace==="checklist"?query.workspace:undefined;
+  const tripView=query.view==="flights"||query.view==="insurance"||query.view==="stays"?query.view:undefined;
   const accommodationId=typeof query.accommodation==="string"&&/^[0-9a-f-]{36}$/i.test(query.accommodation)?query.accommodation:undefined;
   const [initialTrip,initialItineraries,initialTripCards]=await Promise.all([
     loadTrip(session,id),loadItineraries(session,id),loadTripCards(session,id),

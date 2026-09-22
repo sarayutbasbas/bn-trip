@@ -8,15 +8,19 @@ import {
   ChevronDown,
   Clock,
   Coffee,
+  Heart,
+  ImagePlus,
   MapPin,
-  Pencil,
   Plus,
   ReceiptText,
   Trash2,
-  X,
 } from "lucide-react";
+import { DocumentFilePicker } from "@/src/components/document-file-picker";
+import { BottomSheet } from "@/src/components/bottom-sheet";
+import { compressImageFile } from "@/src/lib/client-image-compression";
 import {
   accommodationResourceKey,
+  invalidateClientResource,
   loadClientResource,
   peekClientResource,
 } from "@/src/lib/client-resource-cache";
@@ -47,6 +51,7 @@ type Accommodation = {
   location: string;
   booking_platform: BookingPlatform | "";
   includes_breakfast: boolean;
+  image_url: string | null;
   description: string;
   night_descriptions: Record<string, string>;
   check_in_day: number;
@@ -63,6 +68,8 @@ type Accommodation = {
   split_member_ids: string[];
   cost_item_id: string;
   nights: number;
+  is_favorite: boolean;
+  favorited_at: string | null;
 };
 
 const currencyOptions = [
@@ -103,13 +110,6 @@ function getAccommodationItems(tripId: string, force = false) {
     force,
   );
 }
-function money(value: number | string, currency = "THB") {
-  return new Intl.NumberFormat("th-TH", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
-}
 function addDays(value: string, days: number) {
   const [year, month, date] = value.slice(0, 10).split("-").map(Number);
   if (!year || !month || !date) return "";
@@ -121,7 +121,6 @@ function tripDateLabel(startDate: string, storedDay: number) {
   const value = addDays(startDate, storedDay - 1);
   if (!value) return "";
   return new Intl.DateTimeFormat("th-TH", {
-    weekday: "short",
     day: "numeric",
     month: "short",
     year: "2-digit",
@@ -373,6 +372,9 @@ export function TripAccommodations({
   const [items, setItems] = useState<Accommodation[]>(() => cachedItems || []);
   const [loading, setLoading] = useState(!cachedItems);
   const [error, setError] = useState("");
+  const [favoriteBusyIds, setFavoriteBusyIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [editing, setEditing] = useState<Accommodation | "new" | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Accommodation | null>(null);
@@ -391,6 +393,11 @@ export function TripAccommodations({
     "agoda",
   );
   const [paymentSource, setPaymentSource] = useState("cash");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const [imageRemovalPending, setImageRemovalPending] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const allMemberIds = useMemo(
     () => members.map((member) => member.id),
     [members],
@@ -410,6 +417,67 @@ export function TripAccommodations({
       );
     } finally {
       setLoading(false);
+    }
+  }
+  async function toggleFavorite(item: Accommodation) {
+    if (favoriteBusyIds.has(item.id)) return;
+    const favorite = !item.is_favorite;
+    setFavoriteBusyIds((current) => new Set(current).add(item.id));
+    setItems((current) =>
+      current.map((candidate) =>
+        candidate.id === item.id
+          ? {
+              ...candidate,
+              is_favorite: favorite,
+              favorited_at: favorite ? new Date().toISOString() : null,
+            }
+          : candidate,
+      ),
+    );
+    try {
+      const saved = await json<{
+        is_favorite: boolean;
+        favorited_at: string | null;
+      }>(`/api/trips/${tripId}/accommodations/${item.id}/favorite`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ favorite }),
+      });
+      setItems((current) =>
+        current.map((candidate) =>
+          candidate.id === item.id
+            ? {
+                ...candidate,
+                is_favorite: saved.is_favorite,
+                favorited_at: saved.favorited_at,
+              }
+            : candidate,
+        ),
+      );
+      invalidateClientResource(accommodationResourceKey(tripId));
+      sessionStorage.setItem("bn-trip-favorites-changed", "1");
+      notify(
+        saved.is_favorite
+          ? "เพิ่มในโรงแรมที่ชื่นชอบแล้ว"
+          : "นำออกจากโรงแรมที่ชื่นชอบแล้ว",
+      );
+    } catch (reason) {
+      setItems((current) =>
+        current.map((candidate) =>
+          candidate.id === item.id ? item : candidate,
+        ),
+      );
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "บันทึกโรงแรมที่ชื่นชอบไม่สำเร็จ",
+      );
+    } finally {
+      setFavoriteBusyIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
     }
   }
   useEffect(() => {
@@ -487,6 +555,30 @@ export function TripAccommodations({
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [splitPickerOpen]);
+  useEffect(
+    () => () => {
+      if (imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    },
+    [imagePreview],
+  );
+  function selectAccommodationImage(file: File | null) {
+    setImageFile(file);
+    setImageRemoved(false);
+    setImagePreview(
+      file
+        ? URL.createObjectURL(file)
+        : editing && editing !== "new"
+          ? editing.image_url || ""
+          : "",
+    );
+  }
+  function removeAccommodationImage() {
+    setImageFile(null);
+    setImagePreview("");
+    setImageRemoved(true);
+    setImageRemovalPending(false);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }
   function openNew() {
     setCheckInDay(1);
     setCheckOutDay(2);
@@ -498,6 +590,11 @@ export function TripAccommodations({
     setRateEstimated(false);
     setBookingPlatform("agoda");
     setPaymentSource("cash");
+    setImageFile(null);
+    setImagePreview("");
+    setImageRemoved(false);
+    setImageRemovalPending(false);
+    if (imageInputRef.current) imageInputRef.current.value = "";
     setSplitMemberIds(allMemberIds);
     setSplitPickerOpen(false);
     setEditing("new");
@@ -529,6 +626,11 @@ export function TripAccommodations({
     setRateEstimated(false);
     setBookingPlatform(item.booking_platform || "");
     setPaymentSource(item.credit_card_id || "cash");
+    setImageFile(null);
+    setImagePreview(item.image_url || "");
+    setImageRemoved(false);
+    setImageRemovalPending(false);
+    if (imageInputRef.current) imageInputRef.current.value = "";
     const validIds = (item.split_member_ids || []).filter((id) =>
       allMemberIds.includes(id),
     );
@@ -595,11 +697,32 @@ export function TripAccommodations({
       setError("กรุณาเลือกผู้ร่วมทริปอย่างน้อย 1 คน");
       return;
     }
-    const body = {
+    setSaving(true);
+    setError("");
+    try {
+      let imageUrl = imageRemoved ? null : edit?.image_url || null;
+      if (imageFile) {
+        const optimized = await compressImageFile(imageFile, {
+          maxWidth: 1600,
+          maxHeight: 1200,
+          quality: 0.84,
+          minQuality: 0.7,
+          targetBytes: 1.2 * 1024 * 1024,
+          suffix: "accommodation",
+        });
+        const upload = new FormData();
+        upload.set("file", optimized);
+        const response = await fetch("/api/uploads", { method: "POST", body: upload });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "อัปโหลดรูปที่พักไม่สำเร็จ");
+        imageUrl = result.url;
+      }
+      const body = {
       name: String(form.get("name") || ""),
       location: String(form.get("location") || ""),
       bookingPlatform,
       includesBreakfast: form.get("includesBreakfast") === "true",
+      imageUrl,
       description: nightDescriptions[String(checkInDay)]?.trim() || "",
       nightDescriptions: Object.fromEntries(
         Array.from(
@@ -625,10 +748,7 @@ export function TripAccommodations({
       paymentOwnerName:
         selectedCard?.owner_name || selectedCard?.owner_email || null,
       splitMemberIds,
-    };
-    setSaving(true);
-    setError("");
-    try {
+      };
       const isNew = editing === "new";
       await json(
         isNew
@@ -688,13 +808,13 @@ export function TripAccommodations({
       className={`accommodation-panel ${overlayOnly ? "accommodation-overlay-only" : ""}`}
     >
       {!overlayOnly && (
-        <div className="toolbar expense-toolbar">
+        <div className="accommodation-page-heading">
           <div>
-            <h2>ที่พักของทริป</h2>
-            <p className="page-sub">
-              จองครั้งเดียว แสดงทุกคืนใน Timeline และรวมในค่าใช้จ่ายอัตโนมัติ
-            </p>
+            <span className="accommodation-heading-icon"><BedDouble size={18} /></span>
+            <h2>ที่พักในทริปนี้</h2>
+            <p>จัดการข้อมูลที่พักของคุณได้ที่นี่ ครบ จบ ในที่เดียว</p>
           </div>
+          <small>ทั้งหมด {items.length} รายการ</small>
         </div>
       )}
       {error && <div className="form-error">{error}</div>}
@@ -711,45 +831,44 @@ export function TripAccommodations({
                 item.booking_platform,
               );
               return (
-                <button
-                  type="button"
+                <article
                   className="accommodation-card"
                   key={item.id}
-                  onClick={() => openEdit(item)}
                 >
-                  <span className="accommodation-card-copy">
-                    <strong>{item.name}</strong>
+                  <button type="button" className="accommodation-card-hit" onClick={() => openEdit(item)} aria-label={`แก้ไข ${item.name}`} />
+                  <div className="accommodation-card-image">
+                    <Image src={item.image_url || "/travel-postcard-fallback.jpg"} alt={`รูป ${item.name}`} fill sizes="(max-width: 380px) 126px, 144px" unoptimized />
+                    <button
+                      type="button"
+                      className={`accommodation-favorite-button${item.is_favorite ? " active" : ""}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void toggleFavorite(item);
+                      }}
+                      disabled={favoriteBusyIds.has(item.id)}
+                      aria-pressed={item.is_favorite}
+                      aria-label={`${item.is_favorite ? "นำออกจาก" : "เพิ่มใน"}โรงแรมที่ชื่นชอบ ${item.name}`}
+                    >
+                      <Heart size={16} fill={item.is_favorite ? "currentColor" : "none"} />
+                    </button>
+                  </div>
+                  <div className="accommodation-card-copy">
+                    <header><strong>{item.name}</strong></header>
                     <small>
-                      <MapPin size={12} />
+                      <MapPin size={14} />
                       {item.location || "ยังไม่ได้ระบุโลเคชัน"}
                     </small>
-                    <small>
-                      <CalendarDays size={12} />
-                      {tripDateLabel(startDate, item.check_in_day)} –{" "}
-                      {tripDateLabel(startDate, item.check_out_day)}
-                    </small>
-                    <small>
-                      Day {displayDay(item.check_in_day)}–
-                      {displayDay(item.check_out_day)} · {item.nights} คืน
-                      {bookingPlatform
-                        ? ` · จองผ่าน ${bookingPlatform.label}`
-                        : ""}
-                    </small>
-                  </span>
-                  <span className="accommodation-card-price">
-                    {!isBaht && (
-                      <small>{money(item.foreign_amount, item.currency)}</small>
-                    )}
-                    <strong>
-                      {isBaht ? "" : "≈ "}
-                      {money(isBaht ? item.foreign_amount : bahtAmount)}
-                    </strong>
-                    <small>{item.payment_method}</small>
-                    <i>
-                      <Pencil size={14} />
-                    </i>
-                  </span>
-                </button>
+                    <div className="accommodation-stay-dates">
+                      <span><CalendarDays size={14} /><small>เช็กอิน</small><b>{tripDateLabel(startDate, item.check_in_day)}</b></span>
+                      <span><CalendarDays size={14} /><small>เช็กเอาต์</small><b>{tripDateLabel(startDate, item.check_out_day)}</b></span>
+                      <span><Clock size={14} /><b>{item.nights} คืน</b></span>
+                    </div>
+                    <footer>
+                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={64} height={24} /></span>}
+                      <strong className="accommodation-total-price"><small>{isBaht ? "THB" : `${item.currency} · ≈ THB`}</small>{Number(isBaht ? item.foreign_amount : bahtAmount).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</strong>
+                    </footer>
+                  </div>
+                </article>
               );
             })}
           </div>
@@ -764,6 +883,13 @@ export function TripAccommodations({
             </p>
           </div>
         ))}
+      {!overlayOnly && !loading && items.length > 0 && (
+        <button type="button" className="accommodation-more-card" onClick={openNew}>
+          <span><BedDouble size={19} /><Plus size={11} /></span>
+          <div><strong>ยังไม่มีที่พักเพิ่มอีก?</strong><small>เพิ่มที่พักให้ครบทุกคืน แล้วให้แผนของคุณครบถ้วน</small></div>
+          <Plus size={18} />
+        </button>
+      )}
       {!overlayOnly && (
         <button
           className="directory-fab accommodation-fab"
@@ -775,33 +901,22 @@ export function TripAccommodations({
         </button>
       )}
       {editing && (
-        <div
-          className="modal-backdrop flight-modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !saving)
-              setEditing(null);
-          }}
+        <BottomSheet
+          title={edit ? "แก้ไขที่พัก" : "เพิ่มที่พัก"}
+          subtitle="เลือกช่วงวันที่เข้าพัก ระบบจะแสดงคืนที่ 1/N ใน Timeline"
+          onClose={() => setEditing(null)}
+          onSubmit={save}
+          busy={saving}
+          backdropClassName="flight-modal-backdrop"
+          className="cost-sheet flight-sheet accommodation-sheet"
+          bodyClassName="flight-sheet-scroll"
+          submitLabel={saving ? "กำลังบันทึก…" : "บันทึกที่พัก"}
+          submitDisabled={saving || rateLoading}
+          onDelete={edit && canDelete ? () => setDeleteTarget(edit) : undefined}
+          deleteDisabled={saving}
+          deleteLabel="ลบที่พัก"
         >
-          <form
-            className="modal cost-sheet flight-sheet accommodation-sheet"
-            onSubmit={save}
-          >
-            <div className="modal-head">
-              <div>
-                <h2>{edit ? "แก้ไขที่พัก" : "เพิ่มที่พัก"}</h2>
-                <p>เลือกช่วงวันที่เข้าพัก ระบบจะแสดงคืนที่ 1/N ใน Timeline</p>
-              </div>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => setEditing(null)}
-                aria-label="ปิด"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="flight-sheet-scroll">
-              <div className="form-grid">
+          <div className="form-grid">
                 <div className="field">
                   <label>ชื่อที่พัก</label>
                   <input
@@ -812,6 +927,24 @@ export function TripAccommodations({
                     placeholder="เช่น APA Hotel Hakata"
                   />
                 </div>
+                <section className="accommodation-image-field">
+                  <div><strong>รูปที่พัก</strong><small>ไม่บังคับ · หากไม่เพิ่มจะแสดงรูปเริ่มต้น</small></div>
+                  {imagePreview && (
+                    <div className="accommodation-image-preview">
+                      <Image src={imagePreview} alt="ตัวอย่างรูปที่พัก" fill sizes="(max-width: 600px) 90vw, 520px" unoptimized />
+                      <button type="button" onClick={() => setImageRemovalPending(true)} aria-label="ลบรูปที่พัก"><Trash2 size={16} /></button>
+                    </div>
+                  )}
+                  <DocumentFilePicker
+                    fileName={imageFile?.name || ""}
+                    inputRef={imageInputRef}
+                    onFileChange={selectAccommodationImage}
+                    accept="image/jpeg,image/png,image/webp"
+                    idleLabel={imagePreview ? "เลือกรูปใหม่เพื่อแทนที่" : "เลือกรูปที่พัก"}
+                    idleNote="รองรับ JPG, PNG และ WebP · สูงสุด 20 MB"
+                    selectedNote="พร้อมอัปโหลดเมื่อกดบันทึก"
+                  />
+                </section>
                 <div className="form-row accommodation-booking-row">
                   <LocationSearch
                     options={locations}
@@ -1099,26 +1232,8 @@ export function TripAccommodations({
                     ))}
                   </fieldset>
                 </section>
-              </div>
-            </div>
-            <div className="modal-submit-actions flight-sheet-actions">
-              <button className="primary-btn" disabled={saving || rateLoading}>
-                {saving ? "กำลังบันทึก…" : "บันทึกที่พัก"}
-              </button>
-              {edit && canDelete && (
-                <button
-                  type="button"
-                  className="delete-record-btn"
-                  onClick={() => setDeleteTarget(edit)}
-                  disabled={saving}
-                  aria-label="ลบที่พัก"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
-            </div>
-          </form>
-        </div>
+          </div>
+        </BottomSheet>
       )}
       {deleteTarget && (
         <div
@@ -1153,6 +1268,16 @@ export function TripAccommodations({
                 {saving ? "กำลังลบ…" : "ลบที่พัก"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {imageRemovalPending && (
+        <div className="confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setImageRemovalPending(false)}>
+          <div className="confirm-dialog" role="alertdialog" aria-modal="true">
+            <span className="confirm-icon"><ImagePlus size={21} /></span>
+            <h2>ลบรูปที่พัก?</h2>
+            <p>รูปจะถูกนำออกเมื่อกดบันทึก โดยการ์ดจะแสดงรูปเริ่มต้นแทน</p>
+            <div className="confirm-actions"><button type="button" className="confirm-cancel" onClick={() => setImageRemovalPending(false)}>ยกเลิก</button><button type="button" className="confirm-delete" onClick={removeAccommodationImage}>ลบรูป</button></div>
           </div>
         </div>
       )}

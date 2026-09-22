@@ -11,7 +11,7 @@ import { resolveTripDestinations } from "@/src/lib/travel-badges";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const countryCodeSchema=z.string().length(2).transform(value=>value.toUpperCase()).refine(value=>Boolean(countryByCode(value)),{message:"Invalid country"});
-const tripSchema = z.object({ name:z.string().min(2), locationIds:z.array(z.string().min(3).max(800)).min(1).max(20), countryCode:countryCodeSchema, outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), googlePhotosUrl:googlePhotosUrlSchema.optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
+const tripSchema = z.object({ name:z.string().min(2), locationIds:z.array(z.string().min(3).max(800)).min(1).max(20), countryCode:countryCodeSchema, outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), summaryImageUrl:z.string().max(500).nullable().optional(), googlePhotosUrl:googlePhotosUrlSchema.optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
 
 export async function GET(request:Request) {
   const session = await getSession(); if (!session) return NextResponse.json({error:"Unauthorized"},{status:401});
@@ -38,15 +38,27 @@ export async function GET(request:Request) {
     if(tripType==="international")where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
     if(year>=2000&&year<=2200){values.push(year);where.push(`EXTRACT(YEAR FROM start_date)=$${values.length}`)}
     if(search){values.push(`%${search}%`);where.push(`(name ILIKE $${values.length} OR destination ILIKE $${values.length} OR country_name ILIKE $${values.length})`)}
+    const statusCountValues:Array<string|number>=[session.userId];
+    const statusCountWhere=[access];
+    if(tripType==="domestic")statusCountWhere.push("t.country_code='TH'");
+    if(tripType==="international")statusCountWhere.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
+    if(year>=2000&&year<=2200){statusCountValues.push(year);statusCountWhere.push(`EXTRACT(YEAR FROM start_date)=$${statusCountValues.length}`)}
+    if(search){statusCountValues.push(`%${search}%`);statusCountWhere.push(`(name ILIKE $${statusCountValues.length} OR destination ILIKE $${statusCountValues.length} OR country_name ILIKE $${statusCountValues.length})`)}
     const order=sort==="oldest"?"t.start_date ASC,t.id ASC":sort==="name"?"t.name ASC,t.id ASC":sort==="nearest"?"ABS(EXTRACT(EPOCH FROM (COALESCE(t.outbound_departure_at,t.start_date::timestamp)-(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))))) ASC,t.id ASC":"CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 0 WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 1 ELSE 2 END ASC,CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.outbound_departure_at,t.start_date::timestamp) END ASC,CASE WHEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) END DESC,t.id DESC";
     const clause=where.join(" AND ");
-    const [items,total,years]=await Promise.all([
+    const [items,total,years,statusCounts]=await Promise.all([
       query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,limit,offset]),
       query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`,values),
       query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`,[session.userId]),
+      query(`SELECT count(*)::int AS total,
+        count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,
+        count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,
+        count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past
+        FROM trips t WHERE ${statusCountWhere.join(" AND ")}`,statusCountValues),
     ]);
     const count=Number(total.rows[0]?.count||0);
-    return NextResponse.json({items:items.rows,total:count,years:years.rows.map(row=>row.year),hasMore:offset+items.rows.length<count});
+    const counts=statusCounts.rows[0]||{};
+    return NextResponse.json({items:items.rows,total:count,years:years.rows.map(row=>row.year),hasMore:offset+items.rows.length<count,statusCounts:{all:Number(counts.total||0),ongoing:Number(counts.ongoing||0),upcoming:Number(counts.upcoming||0),past:Number(counts.past||0)}});
   }
   const result = await query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} ORDER BY t.start_date DESC`,[session.userId]); return NextResponse.json(result.rows);
 }
@@ -62,7 +74,7 @@ export async function POST(request:Request) {
     if(tripDestinations.length!==new Set(input.locationIds).size)return NextResponse.json({error:"กรุณาเลือกเมืองจากรายการ"},{status:400});
     const destination=formatTripDestination(tripDestinations.map(item=>item.nameEn).join(" · "),country.code,country.nameEn);
     const totalDays=Math.floor((new Date(`${input.returnDate}T00:00:00`).getTime()-new Date(`${input.outboundDate}T00:00:00`).getTime())/86400000)+1;
-    const result = await query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,trip_destinations,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,google_photos_url,timezone,has_flights) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *",[session.userId,input.name,destination,country.code,country.nameEn,JSON.stringify(tripDestinations),input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.googlePhotosUrl||null,country.timezone,input.hasFlights]);
+    const result = await query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,trip_destinations,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,summary_image_url,google_photos_url,timezone,has_flights) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *",[session.userId,input.name,destination,country.code,country.nameEn,JSON.stringify(tripDestinations),input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.summaryImageUrl||null,input.googlePhotosUrl||null,country.timezone,input.hasFlights]);
     const trip = {
       ...result.rows[0],
       access_role:"owner",

@@ -13,6 +13,7 @@ export const accommodationSchema = z.object({
     .or(z.literal(""))
     .default(""),
   includesBreakfast: z.boolean().default(false),
+  imageUrl: z.string().trim().max(2000).nullable().default(null),
   description: z.string().trim().max(2000).default(""),
   nightDescriptions: nightDescriptionsSchema,
   checkInDay: z.number().int().min(1),

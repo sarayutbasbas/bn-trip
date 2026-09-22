@@ -17,6 +17,6 @@ export default async function TripsPage({searchParams}:{searchParams:Promise<Rec
   const initialTripFilters={status:value("status"),type:value("type"),year:value("year"),q:value("q"),sort:"",focus,loaded:String(loaded)};
   const listParams=new URLSearchParams(initialTripFilters);
   listParams.set("limit",String(loaded));
-  const initialTripDirectory=await loadTripDirectory(session,listParams) as {items:Trip[];total:number;years:number[];hasMore:boolean};
+  const initialTripDirectory=await loadTripDirectory(session,listParams) as {items:Trip[];total:number;years:number[];hasMore:boolean;statusCounts:{all:number;ongoing:number;upcoming:number;past:number}};
   return <BNTripApp authenticated demo={Boolean(session.isDemo)} page="trips" initialTripFilters={initialTripFilters} initialTripDirectory={initialTripDirectory}/>;
 }

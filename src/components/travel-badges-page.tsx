@@ -2,18 +2,24 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   AlertTriangle,
+  ArrowRight,
   ArrowUp,
+  Bell,
   CalendarDays,
-  ChartNoAxesColumnIncreasing,
   CheckCircle2,
-  House,
+  Flame,
+  Globe2,
+  Grid2X2,
   LockKeyhole,
+  Map as MapIcon,
   MapPinCheck,
   Maximize2,
-  Settings2,
+  Plane,
+  RefreshCw,
   Trash2,
   Trophy,
   X,
@@ -25,6 +31,10 @@ import type {
   TravelBadgeCategory,
   TravelBadgeCollection,
 } from "@/src/lib/travel-badges";
+import { getCurrentAccount } from "@/src/lib/client-account";
+
+type HeaderProfile = { id: string; email: string; display_name: string; avatar_url: string | null };
+type BadgeFilter = "all" | TravelBadgeCategory;
 
 const CATEGORY_META: Record<TravelBadgeCategory, { label: string; eyebrow: string }> = {
   thailand: { label: "ไทย", eyebrow: "77 PROVINCES" },
@@ -446,24 +456,54 @@ function BadgeGridCard({
 }
 
 export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollection }) {
-  const [category, setCategory] = useState<TravelBadgeCategory>("thailand");
+  const router = useRouter();
+  const [category, setCategory] = useState<BadgeFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [badges, setBadges] = useState(collection.badges);
   const [previewReadyId, setPreviewReadyId] = useState<string | null>(null);
   const [previewBadge, setPreviewBadge] = useState<TravelBadge | null>(null);
+  const [showSelectedDetails, setShowSelectedDetails] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [profile, setProfile] = useState<HeaderProfile | null>(null);
+  const [invitationCount, setInvitationCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const visibleBadges = useMemo(() => badges
-    .filter((badge) => badge.category === category)
-    .sort((a, b) => a.artworkIndex - b.artworkIndex), [badges, category]);
+    .filter((badge) => category === "all" || badge.category === category)
+    .sort((a, b) => {
+      if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1;
+      const visitDifference = b.visits.length - a.visits.length;
+      return visitDifference || a.artworkIndex - b.artworkIndex;
+    }), [badges, category]);
   const totals = useMemo(() => Object.fromEntries((Object.keys(CATEGORY_META) as TravelBadgeCategory[]).map((key) => {
     const items = badges.filter((badge) => badge.category === key);
     return [key, { unlocked: items.filter((badge) => badge.unlocked).length, total: items.length }];
   })) as TravelBadgeCollection["totals"], [badges]);
-  const selected = badges.find((badge) => badge.id === selectedId && badge.category === category)
+  const selected = badges.find((badge) => badge.id === selectedId && (category === "all" || badge.category === category))
     || visibleBadges.find((badge) => badge.unlocked)
     || visibleBadges[0];
   const allUnlocked = Object.values(totals).reduce((sum, item) => sum + item.unlocked, 0);
   const allBadges = badges.length;
+  const avatarLabel = (profile?.display_name || profile?.email || "?").trim();
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      getCurrentAccount(),
+      fetch("/api/invitations").then((response) => response.ok ? response.json() : []),
+    ]).then(([account, invitations]) => {
+      if (!active) return;
+      setProfile(account);
+      setInvitationCount(Array.isArray(invitations) ? invitations.length : 0);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  function refreshPage() {
+    if (refreshing) return;
+    setRefreshing(true);
+    router.refresh();
+    window.setTimeout(() => setRefreshing(false), 500);
+  }
 
   useEffect(() => {
     if (!previewReadyId) return;
@@ -508,14 +548,30 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
     }
   }
 
-  function changeCategory(next: TravelBadgeCategory) {
+  function changeCategory(next: BadgeFilter) {
     setCategory(next);
     setSelectedId(null);
     setPreviewReadyId(null);
+    setShowSelectedDetails(false);
   }
 
+  const overallPercent = Math.round((allUnlocked / Math.max(1, allBadges)) * 100);
+  const mapCategory: Exclude<TravelBadgeCategory, "international"> =
+    category === "thailand" || category === "japan"
+      ? category
+      : selected?.category === "japan"
+        ? "japan"
+        : "thailand";
+  const mapBadges = badges.filter((badge) => badge.category === mapCategory);
+  const filters: Array<{ key: BadgeFilter; label: string; Icon: typeof Trophy }> = [
+    { key: "all", label: "ทั้งหมด", Icon: Grid2X2 },
+    { key: "thailand", label: "ไทย", Icon: MapIcon },
+    { key: "japan", label: "ญี่ปุ่น", Icon: Trophy },
+    { key: "international", label: "นานาชาติ", Icon: Globe2 },
+  ];
+
   return (
-    <div className="app-shell flow-shell badges-page-shell">
+    <div className="app-shell flow-shell main-nav-page-shell badges-page-shell">
       <main>
         <header className="mobile-head flow-header">
           <Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก">
@@ -523,56 +579,90 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
             <div>Pack &amp; Go+<small>travel smarter together</small></div>
           </Link>
           <nav className="mobile-actions" aria-label="เมนูหลัก">
-            <Link className="icon-btn" href="/" aria-label="หน้าแรก" title="หน้าแรก"><House size={18} /></Link>
-            <Link className="icon-btn" href="/settings" aria-label="ตั้งค่า" title="ตั้งค่า"><Settings2 size={18} /></Link>
+            <button className="icon-btn home-refresh-btn" type="button" onClick={refreshPage} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={24} /></button>
+            <button className="icon-btn home-notification-btn" type="button" onClick={() => { if (invitationCount) router.push("/"); }} aria-label="การแจ้งเตือน" title="การแจ้งเตือน"><Bell size={24} />{invitationCount > 0 ? <i className="notification-dot" /> : null}</button>
+            <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์"><span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url ? { backgroundImage: `url("${profile.avatar_url}")` } : undefined}>{!profile?.avatar_url && avatarLabel.charAt(0).toUpperCase()}</span></span></button>
           </nav>
         </header>
 
-        <div className="badges-screen">
-          <section className="badges-hero">
-            <nav className="welcome-shortcuts hero-shortcuts" aria-label="ทางลัด">
-              <Link className="welcome-insights-btn" href="/"><House size={15} /><span>Home</span></Link>
-              <Link className="welcome-insights-btn" href="/analytics"><ChartNoAxesColumnIncreasing size={15} /><span>สถิติ</span></Link>
-            </nav>
+        <div className="badges-screen badges-screen-redesign">
+          <section className="badges-intro">
+            <span className="badges-intro-icon"><Trophy size={20} /></span>
             <div>
-              <span className="badges-eyebrow"><Trophy size={14} /> TRAVEL BADGE COLLECTION</span>
-              <h1>สะสมเข็มกลัดการเดินทาง</h1>
-              <p>ทุกทริปที่เริ่มเดินทางแล้วจะปลดล็อกเข็มกลัดและปักหมุดความทรงจำบนแผนที่ให้อัตโนมัติ</p>
-            </div>
-            <div className="badges-overall-progress" aria-label={`ปลดล็อก ${allUnlocked} จาก ${allBadges}`}>
-              <strong>{Math.round((allUnlocked / Math.max(1, allBadges)) * 100)}%</strong>
-              <span>{allUnlocked}/{allBadges} ปลดล็อกแล้ว</span>
+              <h1>เข็มกลัดการเดินทาง</h1>
+              <p>เก็บทุกการเดินทาง ให้กลายเป็นความทรงจำ</p>
             </div>
           </section>
 
+          <section className="badge-total-progress" aria-label={`สะสมแล้ว ${allUnlocked} จาก ${allBadges}`}>
+            <div
+              className="badge-total-ring"
+              style={{ "--badge-total-progress": `${overallPercent * 3.6}deg` } as CSSProperties}
+            >
+              <strong>{overallPercent}%</strong>
+            </div>
+            <div className="badge-total-copy">
+              <span>สะสมแล้ว</span>
+              <strong><b>{allUnlocked}</b> / {allBadges}</strong>
+              <small>ออกเดินทางต่อไป เพื่อปลดล็อกทุกที่เลย!</small>
+            </div>
+            <Image className="badge-total-art" src="/badge-progress-mountains-v2.png" alt="" width={180} height={100} />
+          </section>
+
           <section className="badge-progress-grid" aria-label="ความคืบหน้าการสะสม">
-            {(Object.keys(CATEGORY_META) as TravelBadgeCategory[]).map((key) => {
+            {(Object.keys(CATEGORY_META) as TravelBadgeCategory[]).map((key, index) => {
               const total = totals[key];
-              const percent = Math.round((total.unlocked / Math.max(1, total.total)) * 100);
+              const Icon = index === 0 ? MapPinCheck : index === 1 ? Trophy : Plane;
               return (
                 <button type="button" key={key} className={category === key ? "is-active" : ""} onClick={() => changeCategory(key)} aria-pressed={category === key}>
-                  <span>{CATEGORY_META[key].label}<small>{CATEGORY_META[key].eyebrow}</small></span>
-                  <strong>{total.unlocked}/{total.total}</strong>
-                  <i><b style={{ width: `${percent}%` }} /></i>
+                  <span className={`badge-stat-icon is-${key}`}><Icon size={18} /></span>
+                  <span>{CATEGORY_META[key].label}<small>{total.unlocked} / {total.total}</small></span>
                 </button>
               );
             })}
           </section>
 
-          {category !== "international" && <section className="badge-map-section">
-            <div className="badges-section-head">
-              <div><span>INTERACTIVE MAP</span><h2>แผนที่พื้นที่ที่เคยไป</h2></div>
+          <section className="badge-map-section badge-map-compact">
+            <div className="badge-map-copy">
+              <span><MapPinCheck size={13} /> แผนที่เข็มกลัด</span>
+              <h2>เลือกประเทศ<br />ดูเข็มกลัดได้เลย</h2>
+              <p>แตะพื้นที่เพื่อดูรายละเอียด</p>
             </div>
-            <AdministrativeMap key={category} category={category} badges={visibleBadges} selectedId={selected?.id} selectBadge={setSelectedId} />
-            {selected && <div data-badge-featured><BadgeDetails key={`${selected.id}:${selected.manualVisitDate || "trip"}`} badge={selected} saveManualVisit={mutateManualVisit} removeManualVisit={(badgeId) => mutateManualVisit(badgeId)} previewBadge={setPreviewBadge} /></div>}
-          </section>}
+            <AdministrativeMap key={mapCategory} category={mapCategory} badges={mapBadges} selectedId={selected?.id} selectBadge={setSelectedId} />
+          </section>
+
+          {selected ? <section className="badge-destination-highlight">
+            <div className="badge-highlight-copy">
+              <span>Destination Highlight</span>
+              <h2>{selected.nameTh}</h2>
+              <p>{selected.nameEn} · {selected.unlocked ? `ปลดล็อกจาก ${selected.visits.length || 1} ทริป` : "ยังไม่ปลดล็อก"}</p>
+              <button type="button" onClick={() => selected.unlocked ? setPreviewBadge(selected) : setPreviewReadyId(selected.id)}>
+                ดูเข็มกลัดทั้งหมด <ArrowRight size={15} />
+              </button>
+            </div>
+            <button type="button" className="badge-highlight-art" onClick={() => selected.unlocked ? setPreviewBadge(selected) : setPreviewReadyId(selected.id)} aria-label={`ดูเข็มกลัด ${selected.nameTh}`}>
+              <BadgeArtwork badge={selected} size={150} width={150} />
+            </button>
+          </section> : null}
+
+          {selected ? <details className="badge-feature-details" onToggle={(event) => setShowSelectedDetails(event.currentTarget.open)}>
+            <summary>ข้อมูลการปลดล็อก <ArrowRight size={15} /></summary>
+            {showSelectedDetails ? <div data-badge-featured><BadgeDetails key={`${selected.id}:${selected.manualVisitDate || "trip"}`} badge={selected} saveManualVisit={mutateManualVisit} removeManualVisit={(badgeId) => mutateManualVisit(badgeId)} previewBadge={setPreviewBadge} /></div> : null}
+          </details> : null}
+
+          <nav className="badge-filter-tabs" aria-label="กรองประเภทเข็มกลัด">
+            {filters.map(({ key, label, Icon }) => (
+              <button type="button" key={key} className={category === key ? "is-active" : ""} onClick={() => changeCategory(key)} aria-pressed={category === key}>
+                <Icon size={15} /><span>{label}</span><small>({key === "all" ? allBadges : totals[key].total})</small>
+              </button>
+            ))}
+          </nav>
 
           <section className="badge-cabinet-section">
-            <div className="badges-section-head">
-              <div><span>BADGE CABINET</span><h2>ตู้เข็มกลัด · {CATEGORY_META[category].label}</h2></div>
-              <strong>{totals[category].unlocked}/{totals[category].total}</strong>
+            <div className="badges-section-head badge-collection-heading">
+              <div><span><Flame size={14} /> COLLECTION</span><h2>{category === "all" ? "คอลเลกชันของคุณ" : `เข็มกลัด · ${CATEGORY_META[category].label}`}</h2></div>
+              <strong>{category === "all" ? allUnlocked : totals[category].unlocked}/{category === "all" ? allBadges : totals[category].total}</strong>
             </div>
-            {category === "international" && selected && <div data-badge-featured><BadgeDetails key={`${selected.id}:${selected.manualVisitDate || "trip"}`} badge={selected} saveManualVisit={mutateManualVisit} removeManualVisit={(badgeId) => mutateManualVisit(badgeId)} previewBadge={setPreviewBadge} /></div>}
             <div className="badge-collection-grid">
               {visibleBadges.map((badge) => (
                 <BadgeGridCard

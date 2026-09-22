@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { getCachedCurrentAccount, getCurrentAccount } from "@/src/lib/client-account";
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
   invalidateClientResourcesContaining,
@@ -21,19 +22,22 @@ import {
 import {
   AlertTriangle,
   ArrowUp,
+  Bell,
   Check,
   ChevronRight,
-  House,
   ListChecks,
+  MoreHorizontal,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
-  Settings2,
   Trash2,
   X,
 } from "lucide-react";
+import { ChecklistCategoryIcon, ChecklistCategoryIconPicker } from "@/src/components/checklist-category-icon";
+import { normalizeChecklistCategoryIcon, type ChecklistCategoryIconKey } from "@/src/lib/checklist-category-icons";
 
-type Category = { id: string; name: string; sort_order: number };
+type Category = { id: string; name: string; icon_key: string | null; sort_order: number };
 type Item = {
   id: string;
   category_id: string;
@@ -48,6 +52,7 @@ type DeleteTarget = {
 
 const NEW_CATEGORY = "__new_category__";
 type MasterPayload = { categories: Category[]; items: Item[] };
+type MasterAccount = { email: string; display_name: string; avatar_url: string | null };
 
 export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   const router = useRouter();
@@ -65,17 +70,22 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   const [editingCategory, setEditingCategory] = useState<{
     id: string;
     value: string;
+    iconKey: ChecklistCategoryIconKey;
   } | null>(null);
   const [itemSheetOpen, setItemSheetOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [itemTitle, setItemTitle] = useState("");
   const [itemCategoryId, setItemCategoryId] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState<ChecklistCategoryIconKey>("help");
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [showBackTop, setShowBackTop] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [profile, setProfile] = useState<MasterAccount | null>(() => getCachedCurrentAccount());
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     formRef: itemFormRef,
@@ -110,6 +120,14 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     const categoryIds = new Set(nextCategories.map(({ id }) => id));
     setOpen((current) => current.filter((id) => categoryIds.has(id)));
   }
+
+  useEffect(() => {
+    let active = true;
+    void getCurrentAccount().then((account) => {
+      if (active) setProfile(account);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -156,6 +174,16 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (!openActionMenu) return;
+    const close = (event: PointerEvent) => {
+      if (!(event.target as HTMLElement).closest(".checklist-action-menu-wrap"))
+        setOpenActionMenu(null);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [openActionMenu]);
+
   function notify(value: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(value);
@@ -165,11 +193,26 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     }, 2200);
   }
 
+  async function refreshMaster() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setError("");
+    try {
+      await load(true);
+      notify("อัปเดต Master Checklist แล้ว");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "โหลดข้อมูลไม่สำเร็จ");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   function closeItemSheet() {
     setItemSheetOpen(false);
     setEditingItemId(null);
     setItemTitle("");
     setNewCategoryName("");
+    setNewCategoryIcon("help");
     setError("");
   }
 
@@ -178,6 +221,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     setItemTitle("");
     setItemCategoryId(categories[0]?.id || NEW_CATEGORY);
     setNewCategoryName("");
+    setNewCategoryIcon("help");
     setError("");
     setItemSheetOpen(true);
   }
@@ -187,6 +231,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     setItemTitle(item.title);
     setItemCategoryId(item.category_id);
     setNewCategoryName("");
+    setNewCategoryIcon("help");
     setError("");
     setItemSheetOpen(true);
   }
@@ -215,6 +260,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
           body: JSON.stringify({
             kind: "category",
             name: newCategoryName.trim(),
+            iconKey: newCategoryIcon,
           }),
         })) as Category;
         categoryId = category.id;
@@ -254,7 +300,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     try {
       await api(`/api/checklist-master/categories/${editingCategory.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ name: editingCategory.value.trim() }),
+        body: JSON.stringify({ name: editingCategory.value.trim(), iconKey: editingCategory.iconKey }),
       });
       invalidateClientResourcesContaining(":workspace:checklist");
       setEditingCategory(null);
@@ -329,7 +375,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   }, [categories, itemsByCategory, keyword]);
 
   return (
-    <div className="app-shell flow-shell master-page-shell">
+    <div className="app-shell flow-shell dashboard-page-shell master-page-shell">
       {toast && (
         <div className="toast toast-success" role="status" aria-live="polite">
           <Check size={16} />
@@ -338,36 +384,19 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
       )}
       <main>
         <header className="mobile-head flow-header">
-          <Link
-            className="brand master-brand"
-            href="/"
-            aria-label="Pack & Go+ · หน้าแรก"
-          >
-            <Image
-              src="/pack-and-go-icon-512.png"
-              alt="Pack & Go+"
-              width={48}
-              height={48}
-              priority
-            />
-            <div>
-              Pack &amp; Go+<small>travel smarter together</small>
-            </div>
+          <Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก">
+            <Image src="/pack-and-go-icon-512.png" alt="Pack & Go+" width={48} height={48} priority />
+            <div>Pack &amp; Go+<small>travel smarter together</small></div>
           </Link>
-          <nav className="mobile-actions">
-            <button
-              className="icon-btn"
-              onClick={() => router.push("/")}
-              aria-label="หน้าแรก"
-            >
-              <House size={18} />
+          <nav className="mobile-actions" aria-label="เมนูหลัก">
+            <button className="icon-btn home-refresh-btn" type="button" onClick={() => void refreshMaster()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช">
+              <RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={24} />
             </button>
-            <button
-              className="icon-btn active"
-              onClick={() => router.push("/settings")}
-              aria-label="ตั้งค่า"
-            >
-              <Settings2 size={18} />
+            <button className="icon-btn home-notification-btn" type="button" onClick={() => router.push("/")} aria-label="การแจ้งเตือน" title="การแจ้งเตือน">
+              <Bell size={24} />
+            </button>
+            <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์">
+              <span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url ? { backgroundImage: `url("${profile.avatar_url}")` } : undefined}>{!profile?.avatar_url && (profile?.display_name || profile?.email || "P").charAt(0).toUpperCase()}</span></span>
             </button>
           </nav>
         </header>
@@ -390,13 +419,13 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
             />
           </label>
           <div className="checklist-groups master-checklist-groups">
-            {masterView.categories.map((category) => {
+            {masterView.categories.map((category, categoryIndex) => {
                 const categoryItems = masterView.items.get(category.id) || [];
                 const expanded = keyword ? true : open.includes(category.id);
                 const isEditingCategory = editingCategory?.id === category.id;
                 return (
                   <section
-                    className={expanded ? "" : "collapsed"}
+                    className={`checklist-tone-${categoryIndex % 4}${expanded ? "" : " collapsed"}`}
                     key={category.id}
                   >
                     <div className="checklist-category-head">
@@ -432,6 +461,9 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                           }
                           aria-expanded={expanded}
                         >
+                          <i className="checklist-category-icon" aria-hidden="true">
+                            <ChecklistCategoryIcon iconKey={category.icon_key} categoryName={category.name} size={20} />
+                          </i>
                           <span>
                             <ChevronRight size={14} />
                             <strong>{category.name}</strong>
@@ -444,77 +476,15 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                           </small>
                         </button>
                       )}
-                      <button
-                        type="button"
-                        className="checklist-edit master-category-action"
-                        onClick={() =>
-                          isEditingCategory
-                            ? void saveCategory()
-                            : setEditingCategory({
-                                id: category.id,
-                                value: category.name,
-                              })
-                        }
-                        disabled={busy === category.id}
-                        aria-label={
-                          isEditingCategory ? "บันทึกชื่อหมวด" : "แก้ไขหมวด"
-                        }
-                      >
-                        {isEditingCategory ? (
-                          <Check size={15} />
-                        ) : (
-                          <Pencil size={15} />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="checklist-category-delete"
-                        onClick={() =>
-                          isEditingCategory
-                            ? setEditingCategory(null)
-                            : setDeleteTarget({
-                                kind: "category",
-                                id: category.id,
-                                name: category.name,
-                              })
-                        }
-                        disabled={busy === category.id}
-                        aria-label={isEditingCategory ? "ยกเลิก" : "ลบหมวด"}
-                      >
-                        {isEditingCategory ? (
-                          <X size={15} />
-                        ) : (
-                          <Trash2 size={15} />
-                        )}
-                      </button>
+                      {isEditingCategory ? <><button type="button" className="checklist-edit master-category-action" onClick={() => void saveCategory()} disabled={busy === category.id} aria-label="บันทึกหมวด"><Check size={15} /></button><button type="button" className="checklist-category-delete" onClick={() => setEditingCategory(null)} aria-label="ยกเลิก"><X size={15} /></button></> : <div className="checklist-action-menu-wrap"><button type="button" className="checklist-more" onClick={() => setOpenActionMenu(openActionMenu === `category:${category.id}` ? null : `category:${category.id}`)} aria-label={`เมนู ${category.name}`} aria-expanded={openActionMenu === `category:${category.id}`}><MoreHorizontal size={18} /></button>{openActionMenu === `category:${category.id}` && <div className="checklist-action-popover"><button type="button" onClick={() => { setEditingCategory({ id:category.id,value:category.name,iconKey:normalizeChecklistCategoryIcon(category.icon_key,category.name) });setOpenActionMenu(null); }}><Pencil size={15} />แก้ไข</button><button type="button" className="danger" onClick={() => { setDeleteTarget({kind:"category",id:category.id,name:category.name});setOpenActionMenu(null); }}><Trash2 size={15} />ลบ</button></div>}</div>}
                     </div>
+                    {isEditingCategory && <div className="master-category-icon-editor"><span>เลือกไอคอนหมวดหมู่</span><ChecklistCategoryIconPicker value={editingCategory.iconKey} onChange={(iconKey) => setEditingCategory({...editingCategory,iconKey})} /></div>}
                     {expanded && (
                       <div className="checklist-list master-checklist-items">
                         {categoryItems.map((item) => (
                           <article key={item.id}>
                             <strong>{item.title}</strong>
-                            <button
-                              type="button"
-                              className="checklist-edit"
-                              onClick={() => openEditItem(item)}
-                              aria-label={`แก้ไข ${item.title}`}
-                            >
-                              <Pencil size={15} />
-                            </button>
-                            <button
-                              type="button"
-                              className="workspace-delete"
-                              onClick={() =>
-                                setDeleteTarget({
-                                  kind: "item",
-                                  id: item.id,
-                                  name: item.title,
-                                })
-                              }
-                              aria-label={`ลบ ${item.title}`}
-                            >
-                              <Trash2 size={15} />
-                            </button>
+                            <div className="checklist-action-menu-wrap"><button type="button" className="checklist-more" onClick={() => setOpenActionMenu(openActionMenu === `item:${item.id}` ? null : `item:${item.id}`)} aria-label={`เมนู ${item.title}`} aria-expanded={openActionMenu === `item:${item.id}`}><MoreHorizontal size={18} /></button>{openActionMenu === `item:${item.id}` && <div className="checklist-action-popover"><button type="button" onClick={() => { openEditItem(item);setOpenActionMenu(null); }}><Pencil size={15} />แก้ไข</button><button type="button" className="danger" onClick={() => { setDeleteTarget({kind:"item",id:item.id,name:item.title});setOpenActionMenu(null); }}><Trash2 size={15} />ลบ</button></div>}</div>
                           </article>
                         ))}
                       </div>
@@ -613,8 +583,10 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                     value={itemCategoryId}
                     onChange={(event) => {
                       setItemCategoryId(event.target.value);
-                      if (event.target.value !== NEW_CATEGORY)
+                      if (event.target.value !== NEW_CATEGORY) {
                         setNewCategoryName("");
+                        setNewCategoryIcon("help");
+                      }
                     }}
                     required
                   >
@@ -627,7 +599,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                   </select>
                 </div>
                 {itemCategoryId === NEW_CATEGORY && (
-                  <div className="field">
+                  <div className="field master-new-category-fields">
                     <label htmlFor="master-new-category">ชื่อหมวดหมู่ใหม่</label>
                     <input
                       id="master-new-category"
@@ -638,6 +610,8 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                       maxLength={120}
                       required
                     />
+                    <span className="checklist-icon-picker-label">เลือกไอคอน</span>
+                    <ChecklistCategoryIconPicker value={newCategoryIcon} onChange={setNewCategoryIcon} />
                   </div>
                 )}
               </div>

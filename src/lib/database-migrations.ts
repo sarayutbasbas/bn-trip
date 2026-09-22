@@ -515,6 +515,62 @@ const migrations = [
       "UPDATE trip_idea_collaborators SET user_id=NULL WHERE user_id IS NOT NULL",
     ],
   },
+  {
+    version: 38,
+    statements: [
+      "ALTER TABLE trip_documents ADD COLUMN IF NOT EXISTS itinerary_id UUID REFERENCES itineraries(id) ON DELETE SET NULL",
+      "CREATE INDEX IF NOT EXISTS trip_documents_itinerary_idx ON trip_documents(itinerary_id)",
+      "ALTER TABLE trips ADD COLUMN IF NOT EXISTS summary_image_url TEXT",
+      "CREATE INDEX IF NOT EXISTS trips_summary_image_idx ON trips(start_date DESC) WHERE summary_image_url IS NOT NULL",
+    ],
+  },
+  {
+    version: 42,
+    statements: [
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS image_url TEXT",
+      "CREATE INDEX IF NOT EXISTS trip_accommodations_image_idx ON trip_accommodations(trip_id) WHERE image_url IS NOT NULL",
+    ],
+  },
+  {
+    version: 43,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS user_favorite_accommodations (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        accommodation_id UUID NOT NULL REFERENCES trip_accommodations(id) ON DELETE CASCADE,
+        favorited_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (user_id,accommodation_id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS user_favorite_accommodations_recent_idx ON user_favorite_accommodations(user_id,favorited_at DESC)",
+    ],
+  },
+  {
+    version: 44,
+    statements: [
+      "ALTER TABLE checklist_master_categories ADD COLUMN IF NOT EXISTS icon_key VARCHAR(40)",
+      `UPDATE checklist_master_categories SET icon_key=CASE
+        WHEN lower(name) ~ 'เที่ยว|เดินทาง|flight|airport|ก่อนออก' THEN 'plane'
+        WHEN lower(name) ~ 'เสื้อ|clothes|กระเป๋าเสื้อ' THEN 'shirt'
+        WHEN lower(name) ~ 'ไอที|คอม|notebook|laptop|ชาร์|สายชาร์|อิเล็ก' THEN 'laptop'
+        WHEN lower(name) ~ 'ยา|สุขภาพ|พยาบาล|medical' THEN 'medical'
+        WHEN lower(name) ~ 'makeup|เครื่องสำอาง|คสอ' THEN 'sparkles'
+        WHEN lower(name) ~ 'skin|ผิว|กันแดด' THEN 'heart'
+        WHEN lower(name) ~ 'toiletries|ห้องน้ำ|อาบน้ำ|แปรงสีฟัน|แชมพู' THEN 'shower'
+        WHEN lower(name) ~ 'hair|ผม|หวี|ไดร์' THEN 'scissors'
+        WHEN lower(name) ~ 'accessories|เครื่องประดับ|นาฬิกา|แหวน|สร้อย' THEN 'watch'
+        WHEN lower(name) ~ 'passport|เอกสาร|บัตรประชาชน' THEN 'passport'
+        WHEN lower(name) ~ 'กล้อง|camera|เลนส์' THEN 'camera'
+        WHEN lower(name) ~ 'ฉุกเฉิน|ภัยพิบัติ|ไฟฉาย' THEN 'flashlight'
+        WHEN lower(name) ~ 'เงิน|บัตรเครดิต|wallet' THEN 'wallet'
+        WHEN lower(name) ~ 'อาหาร|ขนม|food' THEN 'food'
+        WHEN lower(name) ~ 'โรงแรม|ที่พัก|hotel' THEN 'bed'
+        WHEN lower(name) ~ 'ช้อป|shopping|ของฝาก' THEN 'shopping'
+        WHEN lower(name) ~ 'เด็ก|baby' THEN 'baby'
+        WHEN lower(name) ~ 'สัตว์|หมา|แมว|pet' THEN 'pet'
+        ELSE 'help' END
+        WHERE icon_key IS NULL OR icon_key=''`,
+      "CREATE INDEX IF NOT EXISTS checklist_master_categories_icon_idx ON checklist_master_categories(user_id,icon_key)",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

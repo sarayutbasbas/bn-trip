@@ -4,8 +4,14 @@ import { query } from "@/src/lib/db";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode, formatTripDestination } from "@/src/lib/countries";
 import { resolveTripDestinations } from "@/src/lib/travel-badges";
-import { loadTripIdea } from "@/src/lib/trip-ideas";
+import { loadTripIdea, loadTripIdeas } from "@/src/lib/trip-ideas";
 import { tripIdeaSchema } from "@/src/lib/trip-idea-validation";
+
+export async function GET(){
+  const session=await getSession();
+  if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  return NextResponse.json(await loadTripIdeas(session));
+}
 
 export async function POST(request:Request){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});

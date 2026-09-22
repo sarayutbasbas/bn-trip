@@ -1,4 +1,5 @@
 import { transaction } from "@/src/lib/db";
+import { inferChecklistCategoryIcon } from "@/src/lib/checklist-category-icons";
 
 export const DEFAULT_MASTER_CHECKLIST:Array<{name:string;items:string[]}>= [
   {name:"☘️ Makeup 🔥",items:["รองพื้น","แป้ง","แปรง","ที่เขียนคิ้ว, มาสคาร่าคิ้ว, คิ้วแบบฝุ่น+แปรง","อายไลเนอร์","อายแชโดว์","มาสคาร่า, ที่ดัดขนตา","บรัชออน+แปรง","ลิป","น้ำแร่","Cleansing+กระดาษเช็ด","กระจกบานใหญ่","แป้งฝุ่น","น้ำหอม","ลิปมัน","ที่โกนหนวด ใบมีด","ที่โกนจุ๊กกรู้แร้"]},
@@ -22,7 +23,7 @@ export async function ensureDefaultMasterChecklist(userId:string,email:string){
     if(existing.rowCount)return;
     const defaults=email.trim().toLowerCase()==="sarayutkongpeng@gmail.com"?DEFAULT_MASTER_CHECKLIST:[{name:"อื่น ๆ",items:[]}];
     for(const [categoryIndex,category] of defaults.entries()){
-      const inserted=await client.query<{id:string}>("INSERT INTO checklist_master_categories (user_id,name,sort_order) VALUES ($1,$2,$3) RETURNING id",[userId,category.name,categoryIndex]);
+      const inserted=await client.query<{id:string}>("INSERT INTO checklist_master_categories (user_id,name,icon_key,sort_order) VALUES ($1,$2,$3,$4) RETURNING id",[userId,category.name,inferChecklistCategoryIcon(category.name),categoryIndex]);
       if(category.items.length)await client.query(`INSERT INTO checklist_master_items (user_id,category_id,title,sort_order)
         SELECT $1,$2,item.title,item.ordinality-1 FROM unnest($3::text[]) WITH ORDINALITY AS item(title,ordinality)`,[userId,inserted.rows[0].id,category.items]);
     }

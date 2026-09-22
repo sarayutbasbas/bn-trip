@@ -4,6 +4,7 @@ import { getSession } from "@/src/lib/auth";
 import { query, transaction } from "@/src/lib/db";
 import { getTripRole } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
+import { inferChecklistCategoryIcon } from "@/src/lib/checklist-category-icons";
 
 const schema = z.union([
   z.object({ masterItemIds: z.array(z.string().uuid()).min(1).max(200) }),
@@ -104,10 +105,10 @@ export async function POST(
         );
         if (!category.rowCount)
           category = await client.query<{ id: string; name: string }>(
-            `INSERT INTO checklist_master_categories (user_id,name,sort_order)
-             VALUES ($1,$2,COALESCE((SELECT max(sort_order)+1 FROM checklist_master_categories WHERE user_id=$1),0))
+            `INSERT INTO checklist_master_categories (user_id,name,icon_key,sort_order)
+             VALUES ($1,$2,$3,COALESCE((SELECT max(sort_order)+1 FROM checklist_master_categories WHERE user_id=$1),0))
              RETURNING id,name`,
-            [session.userId, input.categoryName],
+            [session.userId, input.categoryName, inferChecklistCategoryIcon(input.categoryName)],
           );
       }
       if (!category.rowCount) throw new Error("category_not_found");

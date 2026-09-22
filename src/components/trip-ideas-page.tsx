@@ -4,26 +4,38 @@ import { useEffect,useMemo,useState,type FormEvent,type KeyboardEvent } from "re
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUp,CalendarRange,ChartNoAxesColumnIncreasing,CheckCircle2,Compass,House,MapPin,MapPinned,PlaneTakeoff,Plus,Settings2,Sparkles,Trash2,UserPlus,X } from "lucide-react";
+import { Bell,CalendarDays,CalendarRange,CheckCircle2,Compass,Heart,MapPinned,PlaneTakeoff,Plus,RefreshCw,Search,Trash2,UserPlus,X } from "lucide-react";
 import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas";
+import { getCachedCurrentAccount,getCurrentAccount } from "@/src/lib/client-account";
 import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
 import { TRIP_DESTINATION_OPTIONS,type TripDestinationOption } from "@/src/lib/travel-badges";
 import { ConfirmDialog,CountryFlagImage,CountryPicker,CoverImagePicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
+import { PageIntro } from "@/src/components/page-intro";
+import { BottomSheet } from "@/src/components/bottom-sheet";
 
 type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
 type IdeaCollaborator={id:string;email:string;user_id:string|null;joined:boolean;display_name:string|null;avatar_url:string|null};
+type HeaderProfile={id:string;email:string;display_name:string;avatar_url:string|null};
 const monthNames=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 
-function sortIdeas(items:TripIdea[]){return [...items].sort((a,b)=>a.kind!==b.kind?(a.kind==="planned"?-1:1):a.kind==="planned"?((a.target_year||9999)-(b.target_year||9999)||(a.target_month||99)-(b.target_month||99)):a.created_at.localeCompare(b.created_at))}
+function sortIdeas(items:TripIdea[]){return [...items].sort((a,b)=>a.kind!==b.kind?(a.kind==="planned"?-1:1):a.kind==="planned"?((a.target_year||9999)-(b.target_year||9999)||(a.target_month||99)-(b.target_month||99)):b.created_at.localeCompare(a.created_at))}
 async function readResponse(response:Response){const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"บันทึกไม่สำเร็จ กรุณาลองอีกครั้ง");return data}
 function stop(event:{stopPropagation:()=>void}){event.stopPropagation()}
-function formatMonthDistance(months:number){
-  if(months<12)return `${months} เดือน`;
+function ideaCountdown(idea:TripIdea){
+  if(!idea.target_year||!idea.target_month)return null;
+  const now=new Date();
+  const months=(idea.target_year-now.getFullYear())*12+(idea.target_month-(now.getMonth()+1));
+  if(months<0)return "เลยกำหนดแล้ว";
+  if(months===0)return "เดือนนี้";
   const years=Math.floor(months/12);const remainingMonths=months%12;
-  return `${years} ปี${remainingMonths?` ${remainingMonths} เดือน`:""}`;
+  if(!years)return `อีก ${remainingMonths} เดือน`;
+  return remainingMonths?`อีก ${years} ปี ${remainingMonths} เดือน`:`อีก ${years} ปี`;
 }
-
+function ideaTargetDate(idea:TripIdea){
+  if(!idea.target_year||!idea.target_month)return null;
+  return new Date(idea.target_year,idea.target_month-1,1).toLocaleDateString("th-TH",{month:"short",year:"2-digit"});
+}
 function IdeaAvatars({members,open}:{members:TripIdeaMember[];open:()=>void}){
   const owner=members.find(member=>member.role==="owner");
   const others=members.filter(member=>member.role!=="owner");
@@ -36,21 +48,19 @@ function IdeaAvatars({members,open}:{members:TripIdeaMember[];open:()=>void}){
   </button>;
 }
 
-function IdeaCard({idea,edit,promote,convert,share}:{idea:TripIdea;edit:()=>void;promote?:()=>void;convert?:()=>void;share:()=>void}){
-  const today=new Date();const monthDistance=idea.target_year&&idea.target_month?(idea.target_year-today.getFullYear())*12+idea.target_month-(today.getMonth()+1):null;
-  const expired=idea.kind==="planned"&&monthDistance!==null&&monthDistance<0;
+function IdeaCard({idea,edit,convert,share}:{idea:TripIdea;edit:()=>void;convert?:()=>void;share:()=>void}){
   const country=countryByCode(idea.country_code);
-  const status=idea.kind==="someday"?"ยังไม่กำหนดช่วงเวลา":expired?"เลยช่วงที่เล็งไว้แล้ว":monthDistance===0?"คาดว่าจะไปภายในเดือนนี้":`กำลังจะถึงในอีก ${formatMonthDistance(monthDistance||0)}`;
+  const detail=idea.note.trim();
+  const countdown=ideaCountdown(idea);
+  const targetDate=ideaTargetDate(idea);
   const activate=(event:KeyboardEvent<HTMLElement>)=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();edit()}};
   return <article className={`compact-trip-card trip-idea-card is-${idea.kind} ${idea.members?.length>1?"has-shared-members":""}`} role="button" tabIndex={0} onClick={edit} onKeyDown={activate} aria-label={`แก้ไข ${idea.name}`}>
-    <div className="compact-trip-cover"><Image className="compact-trip-cover-image" src={idea.cover_image_url||"/travel-postcard-fallback.jpg"} alt={`รูปปก ${idea.name}`} fill sizes="(max-width: 639px) 36vw, 220px" unoptimized/></div>
-    <div className="compact-trip-body trip-idea-copy"><b className={`compact-trip-status ${expired?"trip-idea-expired":""}`}><span>{status}</span></b><h3>{idea.name}</h3>
+    <div className="compact-trip-cover"><Image className="compact-trip-cover-image" src={idea.cover_image_url||"/travel-postcard-fallback.jpg"} alt={`รูปปก ${idea.name}`} fill sizes="(max-width: 639px) 42vw, 260px" unoptimized/>{countdown?<span className="trip-idea-countdown"><PlaneTakeoff size={11}/>{countdown}</span>:null}</div>
+    <div className="compact-trip-body trip-idea-copy"><h3>{idea.name}</h3>
       <p>{country?<span className="trip-country-flag"><CountryFlagImage code={country.code} label=""/></span>:<MapPinned size={13}/>}<span>{formatTripDestination(idea.destination,idea.country_code,country?.nameEn)}</span></p>
-      <small>{idea.kind==="planned"?`คาดว่าจะไปช่วง ${monthNames[(idea.target_month||1)-1]} ${idea.target_year}`:"ยังไม่ได้กำหนดเดือนและปี"}</small>
-      {idea.note?<small>{idea.note}</small>:null}
-      {promote?<button className="trip-idea-promote" type="button" onClick={event=>{stop(event);promote()}}><ArrowUp size={15}/> กำหนดช่วงเวลา</button>:null}
-      {convert?<button className="trip-idea-convert" type="button" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={15}/> สร้างเป็นทริปจริง</button>:null}
-      <IdeaAvatars members={idea.members||[]} open={share}/>
+      {targetDate?<small className="trip-idea-target-date"><CalendarDays size={11}/><span>{targetDate}</span></small>:null}
+      {detail?<small className="trip-idea-note">{detail}</small>:null}
+      <div className="trip-idea-card-footer"><IdeaAvatars members={idea.members||[]} open={share}/>{idea.kind==="planned"&&convert?<button className="trip-idea-convert" type="button" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={15}/> สร้างทริป</button>:null}</div>
     </div>
   </article>;
 }
@@ -69,8 +79,19 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   const [targetYear,setTargetYear]=useState<number|null>(promote?null:current?.target_year||new Date().getFullYear()+1);
   const [note,setNote]=useState(current?.note||"");const [coverFile,setCoverFile]=useState<File|null>(null);const [error,setError]=useState("");
   async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");let coverImageUrl=current?.cover_image_url||"/travel-postcard-fallback.jpg";if(coverFile){const upload=new FormData();upload.set("file",coverFile);coverImageUrl=(await readResponse(await fetch("/api/uploads",{method:"POST",body:upload}))).url}await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl})}catch(caught){setError((caught as Error).message)}}
-  return <div className="trip-idea-modal-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)close()}}><form className="trip-idea-modal" onSubmit={submit}>
-    <div className="trip-idea-modal-head"><div><span>{promote?"MOVE TO THE RADAR":current?"EDIT TRIP IDEA":"NEW TRIP IDEA"}</span><h2>{promote?"กำหนดช่วงเวลาที่อยากไป":current?"แก้ไขรายการ":"เพิ่มสถานที่ที่อยากไป"}</h2></div><button type="button" onClick={close} disabled={busy} aria-label="ปิด"><X size={19}/></button></div>
+  return <BottomSheet
+    title={promote?"กำหนดช่วงเวลาที่อยากไป":current?"แก้ไขรายการ":"เพิ่มสถานที่ที่อยากไป"}
+    subtitle={promote?"เลือกเดือนและปีเพื่อย้ายมาเป็นทริปที่เล็งไว้":current?"แก้ไขข้อมูลของทริปที่เล็งไว้หรือลิสต์สักวันหนึ่ง":"บันทึกสถานที่ที่อยากเดินทางไปในอนาคต"}
+    onClose={close}
+    onSubmit={submit}
+    busy={busy}
+    bodyClassName="bottom-sheet-body trip-idea-sheet-body"
+    submitLabel={busy?"กำลังบันทึก…":promote?"เลื่อนขึ้นและบันทึกช่วงเวลา":"บันทึก"}
+    submitDisabled={busy||!name.trim()||(kind==="planned"&&(!targetMonth||!targetYear))}
+    onDelete={current?.access_role==="owner"?requestDelete:undefined}
+    deleteDisabled={busy}
+    deleteLabel="ลบรายการ"
+  >
     <CoverImagePicker existingUrl={current?.cover_image_url||"/travel-postcard-fallback.jpg"} onChange={setCoverFile}/>
     <label className="trip-idea-field"><span>ชื่อทริป</span><input required maxLength={160} value={name} onChange={event=>setName(event.target.value)} placeholder="เช่น Fukuoka Food Trip"/></label>
     <CountryPicker value={countryCode} onChange={nextCountryCode=>{setCountryCode(nextCountryCode);setLocations([])}} note="เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง"/>
@@ -79,8 +100,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     {kind==="planned"?<div className="trip-idea-date-row"><label className="trip-idea-field"><span>เดือน</span><select required value={targetMonth||""} onChange={event=>setTargetMonth(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกเดือน</option>{monthNames.map((month,index)=><option key={month} value={index+1}>{month}</option>)}</select></label><label className="trip-idea-field"><span>ปี ค.ศ.</span><input required type="number" min="2020" max="2200" value={targetYear||""} onChange={event=>setTargetYear(event.target.value?Number(event.target.value):null)}/></label></div>:null}
     <label className="trip-idea-field"><span>โน้ต <small>(ไม่บังคับ)</small></span><textarea maxLength={500} value={note} onChange={event=>setNote(event.target.value)} placeholder="สิ่งที่อยากทำ เหตุผลที่อยากไป หรือไอเดียคร่าว ๆ"/></label>
     {error?<p className="trip-idea-error">{error}</p>:null}
-    <div className="modal-submit-actions trip-idea-submit-actions"><button className="primary-btn" disabled={busy||!name.trim()||(kind==="planned"&&(!targetMonth||!targetYear))}>{busy?"กำลังบันทึก…":promote?"เลื่อนขึ้นและบันทึกช่วงเวลา":"บันทึก"}</button>{current?.access_role==="owner"?<button className="delete-record-btn" type="button" onClick={requestDelete} disabled={busy} aria-label="ลบรายการ" title="ลบรายการ"><Trash2 size={18}/></button>:null}</div>
-  </form></div>;
+  </BottomSheet>;
 }
 
 function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:TripIdea;close:()=>void;onChanged:()=>void;confirm:(value:Confirmation)=>void;notify:(message:string)=>void}){
@@ -96,17 +116,36 @@ function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:Trip
 }
 
 export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:boolean}){
-  const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor>();const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");
-  const grouped=useMemo(()=>({planned:ideas.filter(idea=>idea.kind==="planned"),someday:ideas.filter(idea=>idea.kind==="someday")}),[ideas]);
+  const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor>();const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [profile,setProfile]=useState<HeaderProfile|null>(()=>getCachedCurrentAccount());const [refreshing,setRefreshing]=useState(false);const [invitationCount,setInvitationCount]=useState(0);
+  const filteredIdeas=useMemo(()=>{const keyword=query.trim().toLocaleLowerCase();if(!keyword)return ideas;return ideas.filter(idea=>`${idea.name} ${idea.destination} ${idea.note} ${countryByCode(idea.country_code)?.nameTh||""} ${countryByCode(idea.country_code)?.nameEn||""}`.toLocaleLowerCase().includes(keyword))},[ideas,query]);
+  const plannedIdeas=filteredIdeas.filter(idea=>idea.kind==="planned");
+  const somedayIdeas=filteredIdeas.filter(idea=>idea.kind==="someday");
+  useEffect(()=>{let active=true;Promise.all([getCurrentAccount(),fetch("/api/invitations").then(response=>response.ok?response.json():[])]).then(([account,invitations])=>{if(!active)return;setProfile(account);setInvitationCount(Array.isArray(invitations)?invitations.length:0)}).catch(()=>{});return()=>{active=false}},[]);
+  useEffect(()=>{const root=document.documentElement;const sheetOpen=Boolean(editing||sharing);root.classList.toggle("sheet-open",sheetOpen);root.classList.toggle("confirm-open",Boolean(confirmation));return()=>root.classList.remove("sheet-open","confirm-open")},[editing,sharing,confirmation]);
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(""),2400)}
   function openForm(idea:TripIdea|null,promote=false){if(demo){notify("เข้าสู่ระบบเพื่อเพิ่มหรือแก้ไขรายการ");return}setEditing({idea,promote})}
   async function save(draft:IdeaDraft){setBusy(true);try{const current=editing?.idea||null;const saved=await readResponse(await fetch(current?`/api/trip-ideas/${current.id}`:"/api/trip-ideas",{method:current?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)})) as TripIdea;setIdeas(items=>sortIdeas(current?items.map(item=>item.id===saved.id?saved:item):[...items,saved]));setEditing(undefined);notify(current?"บันทึกการแก้ไขแล้ว":"เพิ่มลงลิสต์แล้ว")}finally{setBusy(false)}}
   async function remove(idea:TripIdea){await readResponse(await fetch(`/api/trip-ideas/${idea.id}`,{method:"DELETE"}));setIdeas(items=>items.filter(item=>item.id!==idea.id));setEditing(undefined);notify("ลบออกจากลิสต์แล้ว")}
   function askRemove(idea:TripIdea){setConfirmation({title:`ลบ “${idea.name}” ออกจากลิสต์?`,description:"รายการ รูปปก และการแชร์กับผู้ร่วมวางแผนจะถูกลบถาวร",confirmLabel:"ลบรายการ",onConfirm:()=>remove(idea)})}
   async function refreshIdea(id:string){try{const fresh=await readResponse(await fetch(`/api/trip-ideas/${id}`,{cache:"no-store"})) as TripIdea;setIdeas(items=>items.map(item=>item.id===id?fresh:item));setSharing(current=>current?.id===id?fresh:current)}catch{}}
+  async function refreshAll(){if(refreshing)return;setRefreshing(true);try{const [fresh,invitations]=await Promise.all([readResponse(await fetch("/api/trip-ideas",{cache:"no-store"})) as Promise<TripIdea[]>,fetch("/api/invitations",{cache:"no-store"}).then(response=>response.ok?response.json():[])]);setIdeas(sortIdeas(fresh));setInvitationCount(Array.isArray(invitations)?invitations.length:0);notify("อัปเดตทริปที่เล็งไว้แล้ว")}catch(error){notify(error instanceof Error?error.message:"อัปเดตไม่สำเร็จ")}finally{setRefreshing(false)}}
   function convertToTrip(idea:TripIdea){if(demo){notify("เข้าสู่ระบบเพื่อสร้างทริปจริง");return}router.push(`/?tripIdea=${encodeURIComponent(idea.id)}`)}
-  const cards=(items:TripIdea[],someday=false)=>items.length?items.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} promote={someday?()=>openForm(idea,true):undefined} convert={!someday?()=>convertToTrip(idea):undefined} share={()=>setSharing(idea)}/>):<div className="trip-ideas-empty">{someday?<Compass size={25}/>:<CalendarRange size={25}/>}<strong>{someday?"ลิสต์นี้ยังว่าง":"ยังไม่มีทริปที่กำหนดช่วงเวลา"}</strong><span>{someday?"เก็บเมือง ประเทศ หรือสถานที่ที่อยากไปไว้ก่อนได้":"เพิ่มเมืองที่เล็งไว้ พร้อมเดือนและปีคร่าว ๆ ได้เลย"}</span></div>;
-  return <div className="app-shell flow-shell trip-ideas-page-shell">{toast?<div className="toast toast-success" role="status"><CheckCircle2 size={17}/>{toast}</div>:null}<main><header className="mobile-head flow-header"><Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก"><Image src="/pack-and-go-icon-512.png" alt="Pack & Go+" width={48} height={48} priority/><div>Pack &amp; Go+<small>travel smarter together</small></div></Link><nav className="mobile-actions" aria-label="เมนูหลัก"><Link className="icon-btn" href="/" aria-label="หน้าแรก" title="หน้าแรก"><House size={18}/></Link><Link className="icon-btn" href="/settings" aria-label="ตั้งค่า" title="ตั้งค่า"><Settings2 size={18}/></Link></nav></header><div className="trip-ideas-screen"><section className="trip-ideas-hero"><nav className="welcome-shortcuts hero-shortcuts" aria-label="ทางลัด"><Link className="welcome-insights-btn" href="/"><House size={15}/><span>Home</span></Link><Link className="welcome-insights-btn" href="/badges"><MapPin size={15}/><span>เข็มกลัด</span></Link><Link className="welcome-insights-btn" href="/analytics"><ChartNoAxesColumnIncreasing size={15}/><span>สถิติ</span></Link></nav><div><span><Sparkles size={14}/> FUTURE JOURNEYS</span><h1>ทริปที่เล็งไว้</h1><p>เก็บแพลนที่อยากไปในอนาคตไว้ที่เดียว ทั้งทริปที่มีช่วงเวลาคร่าว ๆ และสถานที่ในฝันที่ยังไม่รีบกำหนดวัน</p></div><button type="button" onClick={()=>openForm(null)}><Plus size={18}/> เพิ่มสถานที่</button></section><section className="trip-ideas-section"><div className="trip-ideas-section-head"><div><span>NEXT ON THE RADAR</span><h2>ทริปที่มีช่วงเวลาในใจ</h2><p>เรียงตามเดือนและปี เพื่อให้มองเห็นแพลนระยะยาวได้ง่าย</p></div><b>{grouped.planned.length}</b></div><div className="trip-ideas-grid">{cards(grouped.planned)}</div></section><section className="trip-ideas-section someday-section"><div className="trip-ideas-section-head"><div><span>SOMEDAY LIST</span><h2>สถานที่ที่อยากไปสักวัน</h2><p>ไอเดียที่ยังไม่ต้องผูกกับปฏิทิน จะได้ไม่ลืมว่าครั้งหนึ่งเราเคยอยากไป</p></div><b>{grouped.someday.length}</b></div><div className="trip-ideas-grid">{cards(grouped.someday,true)}</div></section></div></main><button className="trip-ideas-fab" type="button" onClick={()=>openForm(null)} aria-label="เพิ่มสถานที่"><Plus size={22}/></button>
+  const avatarLabel=(profile?.display_name||profile?.email||"?").trim();
+  return <div className="app-shell flow-shell trip-ideas-page-shell">
+    {toast?<div className="toast toast-success" role="status"><CheckCircle2 size={17}/>{toast}</div>:null}
+    <main>
+      <header className="mobile-head flow-header"><Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก"><Image src="/pack-and-go-icon-512.png" alt="Pack & Go+" width={48} height={48} priority/><div>Pack &amp; Go+<small>travel smarter together</small></div></Link><nav className="mobile-actions" aria-label="เมนูหลัก"><button className="icon-btn home-refresh-btn" type="button" onClick={()=>void refreshAll()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing?"analytics-refresh-spinning":""} size={24}/></button><button className="icon-btn home-notification-btn" type="button" onClick={()=>invitationCount?router.push("/"):notify("ไม่มีการแจ้งเตือนใหม่")} aria-label="การแจ้งเตือน" title="การแจ้งเตือน"><Bell size={24}/>{invitationCount>0?<i className="notification-dot"/>:null}</button><button className="home-profile-btn" type="button" onClick={()=>router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์"><span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url?{backgroundImage:`url("${profile.avatar_url}")`}:undefined}>{!profile?.avatar_url&&avatarLabel.charAt(0).toUpperCase()}</span></span></button></nav></header>
+      <div className="trip-ideas-screen">
+        <PageIntro title="ทริปที่เล็งไว้" titleIcon={<Heart size={25} fill="currentColor"/>} subtitle={<>เก็บแพลนที่อยากไปไว้ที่นี่ แล้วออกเดินทางด้วยกันในสักวัน</>}/>
+        <div className="trip-ideas-search-row"><label className="trip-search trip-ideas-search"><Search size={20}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="ค้นหา" aria-label="ค้นหาทริปที่เล็งไว้"/>{query?<button type="button" onClick={()=>setQuery("")} aria-label="ล้างคำค้นหา"><X size={15}/></button>:null}</label><button className="trip-ideas-add-button" type="button" onClick={()=>openForm(null)}><Plus size={20}/><span>เพิ่ม</span></button></div>
+        <section className="trip-ideas-list" aria-label="รายการทริปที่เล็งไว้">
+          {filteredIdeas.length?<div className="trip-idea-groups">
+            {plannedIdeas.length?<section className="trip-ideas-group" aria-label="ทริปที่เล็งไว้"><div className="trip-ideas-grid">{plannedIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} convert={()=>convertToTrip(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
+            {somedayIdeas.length?<section className="trip-ideas-group" aria-labelledby="someday-ideas-title"><div className="trip-ideas-divider"><span/><h2 id="someday-ideas-title">ลิสต์สักวันหนึ่ง</h2><span/></div><div className="trip-ideas-grid">{somedayIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
+          </div>:<div className="trip-ideas-empty"><Search size={25}/><strong>{query?"ไม่พบทริปที่ค้นหา":"ยังไม่มีทริปที่เล็งไว้"}</strong><span>{query?"ลองค้นหาด้วยชื่อเมืองหรือประเทศอื่น":"เพิ่มสถานที่ที่อยากไปเก็บไว้ก่อนได้"}</span></div>}
+        </section>
+      </div>
+    </main>
     {editing?<IdeaForm key={`${editing.idea?.id||"new"}:${editing.promote}`} editor={editing} close={()=>setEditing(undefined)} save={save} requestDelete={()=>editing.idea&&askRemove(editing.idea)} busy={busy}/>:null}
     {sharing?<IdeaCollaboratorsSheet key={sharing.id} idea={sharing} close={()=>setSharing(null)} onChanged={()=>void refreshIdea(sharing.id)} confirm={setConfirmation} notify={notify}/>:null}
     {confirmation?<ConfirmDialog confirmation={confirmation} close={()=>setConfirmation(null)}/>:null}

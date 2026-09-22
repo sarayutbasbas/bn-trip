@@ -9,8 +9,12 @@ import { syncAccommodationLinkedRecords } from "@/src/lib/accommodation-linked-r
 import { accommodationSchema } from "@/src/lib/accommodation-validation";
 
 const selectAccommodations = `SELECT accommodation.*,
-  (accommodation.check_out_day-accommodation.check_in_day)::int AS nights
-  FROM trip_accommodations accommodation`;
+  (accommodation.check_out_day-accommodation.check_in_day)::int AS nights,
+  (favorite.favorited_at IS NOT NULL) AS is_favorite,
+  favorite.favorited_at
+  FROM trip_accommodations accommodation
+  LEFT JOIN user_favorite_accommodations favorite
+    ON favorite.accommodation_id=accommodation.id AND favorite.user_id=$2`;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -19,7 +23,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   if (session.isDemo) return NextResponse.json([]);
   await ensureLatestDatabaseSchema();
   if (!await getTripRole(id, session.userId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const result = await query(`${selectAccommodations} WHERE accommodation.trip_id=$1 ORDER BY accommodation.check_in_day,accommodation.check_in_time,accommodation.created_at`, [id]);
+  const result = await query(`${selectAccommodations} WHERE accommodation.trip_id=$1 ORDER BY accommodation.check_in_day,accommodation.check_in_time,accommodation.created_at`, [id, session.userId]);
   return NextResponse.json(result.rows);
 }
 
@@ -44,9 +48,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }>(`INSERT INTO trip_accommodations
         (trip_id,name,location,description,night_descriptions,check_in_day,check_out_day,check_in_time,check_out_time,
          foreign_amount,currency,exchange_rate,rate_date,payment_method,credit_card_id,
-         payment_owner_name,split_member_ids,booking_platform,includes_breakfast,created_by)
-        VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8::time,$9::time,$10,$11,$12,$13,$14,$15,$16,$17::uuid[],$18,$19,$20)
-        RETURNING *`, [id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,session.userId]);
+         payment_owner_name,split_member_ids,booking_platform,includes_breakfast,image_url,created_by)
+        VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8::time,$9::time,$10,$11,$12,$13,$14,$15,$16,$17::uuid[],$18,$19,$20,$21)
+        RETURNING *`, [id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,input.imageUrl,session.userId]);
       const accommodation = result.rows[0];
       await syncAccommodationLinkedRecords(client, {
         id: accommodation.id, tripId: id, ...input,
@@ -54,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
       return accommodation;
     });
-    const result = await query(`${selectAccommodations} WHERE accommodation.id=$1`, [saved.id]);
+    const result = await query(`${selectAccommodations} WHERE accommodation.id=$1`, [saved.id, session.userId]);
     await logTripActivity({ tripId: id, actorUserId: session.userId, entityType: "accommodation", entityId: saved.id, action: "create", summary: `เพิ่มที่พัก “${input.name}”`, after: result.rows[0] });
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {

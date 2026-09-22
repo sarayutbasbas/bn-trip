@@ -8,6 +8,7 @@ import "@fontsource/ibm-plex-sans/latin-500.css";
 import "@fontsource/ibm-plex-sans/latin-600.css";
 import "@fontsource/ibm-plex-sans/latin-700.css";
 import "./globals.css";
+import { AppGlassScene } from "@/src/components/app-glass-scene";
 import { PwaRuntime } from "@/src/components/pwa-runtime";
 
 export const metadata: Metadata = {
@@ -49,7 +50,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="th" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
-      <body>{children}<PwaRuntime/></body>
+      <body>
+        <AppGlassScene>{children}</AppGlassScene>
+        <PwaRuntime />
+      </body>
     </html>
   );
 }

@@ -47,7 +47,7 @@ export async function GET(
   const checklistPromise =
     tab === "checklist"
       ? query(
-      `SELECT item.*,COALESCE(master_category.name,item.category_name) AS category_name,assignee.display_name AS assigned_name,assignee.avatar_url AS assigned_avatar_url,creator.display_name AS created_by_name,creator.avatar_url AS created_by_avatar_url
+      `SELECT item.*,COALESCE(master_category.name,item.category_name) AS category_name,master_category.icon_key AS category_icon_key,assignee.display_name AS assigned_name,assignee.avatar_url AS assigned_avatar_url,creator.display_name AS created_by_name,creator.avatar_url AS created_by_avatar_url
       FROM trip_checklist_items item LEFT JOIN checklist_master_items master_item ON master_item.id=item.master_item_id LEFT JOIN checklist_master_categories master_category ON master_category.id=master_item.category_id LEFT JOIN users assignee ON assignee.id=item.assigned_user_id LEFT JOIN users creator ON creator.id=item.created_by
       WHERE item.trip_id=$1 ORDER BY item.sort_order,item.created_at`,
       [id],
@@ -74,7 +74,7 @@ export async function GET(
   const masterCategoriesPromise =
     tab === "checklist"
       ? query(
-      "SELECT id,name,sort_order FROM checklist_master_categories WHERE user_id=$1 ORDER BY sort_order,created_at",
+      "SELECT id,name,icon_key,sort_order FROM checklist_master_categories WHERE user_id=$1 ORDER BY sort_order,created_at",
       [session.userId],
     ) : Promise.resolve({ rows: [] });
   const masterItemsPromise =

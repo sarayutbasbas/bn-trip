@@ -7,6 +7,8 @@ const requests = new Map<string, Promise<unknown>>();
 const generations = new Map<string, number>();
 
 export const flightResourceKey = (tripId: string) => `trip:${tripId}:flights`;
+export const insuranceResourceKey = (tripId: string) =>
+  `trip:${tripId}:insurance`;
 export const accommodationResourceKey = (tripId: string) =>
   `trip:${tripId}:accommodations`;
 export const workspaceResourceKey = (tripId: string, tab: string) =>

@@ -1,0 +1,2 @@
+ALTER TABLE trip_accommodations
+ADD COLUMN IF NOT EXISTS bedtime TIME NOT NULL DEFAULT '23:30';

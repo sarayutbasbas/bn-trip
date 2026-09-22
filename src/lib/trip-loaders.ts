@@ -30,8 +30,21 @@ export type DashboardPayload = {
   ongoing: unknown[];
   upcoming: unknown[];
   past: unknown[];
-  counts: { total: number; ongoing: number; upcoming: number; past: number };
+  favoriteAccommodations: FavoriteAccommodation[];
+  counts: { total: number; ongoing: number; upcoming: number; past: number; countries?: number; destinations?: number; travel_days?: number; badges_unlocked?: number; badges_total?: number };
   countryHighlights: CountryHighlight[];
+};
+
+export type FavoriteAccommodation = {
+  id: string;
+  trip_id: string;
+  trip_name: string;
+  destination: string;
+  name: string;
+  location: string;
+  image_url: string | null;
+  booking_platform: string;
+  favorited_at: string;
 };
 
 export type CountryHighlight = {
@@ -47,6 +60,7 @@ export type TripDirectoryPayload = {
   total: number;
   years: number[];
   hasMore: boolean;
+  statusCounts: { all: number; ongoing: number; upcoming: number; past: number };
 };
 
 export type TravelAnalyticsPayload = {
@@ -445,8 +459,28 @@ export async function loadTravelBadges(
 }
 
 export async function loadDashboard(session: SessionUser): Promise<DashboardPayload> {
-  if (session.isDemo)
-    return getDemoTrips(new URLSearchParams("mode=dashboard")) as DashboardPayload;
+  if (session.isDemo) {
+    const dashboard = getDemoTrips(
+      new URLSearchParams("mode=dashboard"),
+    ) as unknown as DashboardPayload;
+    const badgeCollection = await loadTravelBadges(session);
+    const badgeProgress = Object.values(badgeCollection.totals).reduce(
+      (total, category) => ({
+        unlocked: total.unlocked + category.unlocked,
+        total: total.total + category.total,
+      }),
+      { unlocked: 0, total: 0 },
+    );
+    return {
+      ...dashboard,
+      favoriteAccommodations: [],
+      counts: {
+        ...dashboard.counts,
+        badges_unlocked: badgeProgress.unlocked,
+        badges_total: badgeProgress.total,
+      },
+    };
+  }
   await ensureLatestDatabaseSchema();
   const access = tripAccessSql("t");
   const role = tripRoleSql("t");
@@ -454,11 +488,28 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
   const reviews = tripReviewSummarySql("t");
   const actualExpense = tripActualExpenseSql("t");
   const incomplete = tripIncompleteSetupSql("t");
-  const [ongoing, upcoming, past, counts, countries] = await Promise.all([
+  const destinationAccess = tripAccessSql("destination_trip");
+  const [ongoing, upcoming, past, favoriteAccommodations, counts, countries, destinations] = await Promise.all([
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 3`, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 3`, [session.userId]),
-    query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past FROM trips t WHERE ${access}`, [session.userId]),
+    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC`, [session.userId]),
+    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 8`, [session.userId]),
+    query<FavoriteAccommodation>(`SELECT
+        accommodation.id,
+        accommodation.trip_id,
+        t.name AS trip_name,
+        t.destination,
+        accommodation.name,
+        accommodation.location,
+        accommodation.image_url,
+        accommodation.booking_platform,
+        favorite.favorited_at::text
+      FROM user_favorite_accommodations favorite
+      JOIN trip_accommodations accommodation ON accommodation.id=favorite.accommodation_id
+      JOIN trips t ON t.id=accommodation.trip_id
+      WHERE favorite.user_id=$1 AND ${access}
+      ORDER BY favorite.favorited_at DESC,accommodation.id DESC
+      LIMIT 10`, [session.userId]),
+    query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past,count(DISTINCT COALESCE(NULLIF(btrim(t.country_code),''),NULLIF(btrim(t.country_name),''))) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS countries,COALESCE(sum(t.total_days) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))),0)::int AS travel_days FROM trips t WHERE ${access}`, [session.userId]),
     query<{country_code:string;country:string;trips:number;average_rating:number;review_count:number}>(`SELECT
         btrim(COALESCE(t.country_code,'')) AS country_code,
         COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ') AS country,
@@ -481,12 +532,41 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
       GROUP BY btrim(COALESCE(t.country_code,'')),
         COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ')
       ORDER BY average_rating DESC,trips DESC,country ASC`, [session.userId]),
+    query<{total:number}>(`SELECT count(DISTINCT destination.value->>'id')::int AS total
+      FROM trips destination_trip
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_array_length(destination_trip.trip_destinations) > 0
+            THEN destination_trip.trip_destinations
+          ELSE jsonb_build_array(jsonb_build_object(
+            'id', lower(btrim(split_part(destination_trip.destination, ',', 1)))
+          ))
+        END
+      ) AS destination(value)
+      WHERE ${destinationAccess}
+        AND COALESCE(destination_trip.return_departure_at,
+          (destination_trip.start_date + destination_trip.total_days - 1)::timestamp)
+          < (now() AT TIME ZONE COALESCE(destination_trip.timezone,'Asia/Bangkok'))`, [session.userId]),
   ]);
+  const badgeCollection = await loadTravelBadges(session);
+  const badgeProgress = Object.values(badgeCollection.totals).reduce(
+    (total, category) => ({
+      unlocked: total.unlocked + category.unlocked,
+      total: total.total + category.total,
+    }),
+    { unlocked: 0, total: 0 },
+  );
   return clientSafe({
     ongoing: ongoing.rows,
     upcoming: upcoming.rows,
     past: past.rows,
-    counts: counts.rows[0] as DashboardPayload["counts"],
+    favoriteAccommodations: favoriteAccommodations.rows,
+    counts: {
+      ...(counts.rows[0] as DashboardPayload["counts"]),
+      destinations: Number(destinations.rows[0]?.total || 0),
+      badges_unlocked: badgeProgress.unlocked,
+      badges_total: badgeProgress.total,
+    },
     countryHighlights: countries.rows.map((country) => ({
       countryCode: country.country_code,
       country: country.country,
@@ -542,6 +622,19 @@ export async function loadTripDirectory(
     values.push(`%${search}%`);
     where.push(`(name ILIKE $${values.length} OR destination ILIKE $${values.length} OR country_name ILIKE $${values.length})`);
   }
+  const statusCountValues: Array<string | number> = [session.userId];
+  const statusCountWhere = [access];
+  if (tripType === "domestic") statusCountWhere.push("t.country_code='TH'");
+  if (tripType === "international")
+    statusCountWhere.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
+  if (year >= 2000 && year <= 2200) {
+    statusCountValues.push(year);
+    statusCountWhere.push(`EXTRACT(YEAR FROM start_date)=$${statusCountValues.length}`);
+  }
+  if (search) {
+    statusCountValues.push(`%${search}%`);
+    statusCountWhere.push(`(name ILIKE $${statusCountValues.length} OR destination ILIKE $${statusCountValues.length} OR country_name ILIKE $${statusCountValues.length})`);
+  }
   const order =
     sort === "oldest"
       ? "t.start_date ASC,t.id ASC"
@@ -551,18 +644,38 @@ export async function loadTripDirectory(
           ? "ABS(EXTRACT(EPOCH FROM (COALESCE(t.outbound_departure_at,t.start_date::timestamp)-(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))))) ASC,t.id ASC"
           : "CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 0 WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 1 ELSE 2 END ASC,CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.outbound_departure_at,t.start_date::timestamp) END ASC,CASE WHEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) END DESC,t.id DESC";
   const clause = where.join(" AND ");
-  const [items, total, years] = await Promise.all([
+  const [items, total, years, statusCounts] = await Promise.all([
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, 0]),
     query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`, values),
     query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`, [session.userId]),
+    query(`SELECT count(*)::int AS total,
+      count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,
+      count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,
+      count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past
+      FROM trips t WHERE ${statusCountWhere.join(" AND ")}`,statusCountValues),
   ]);
   const count = Number(total.rows[0]?.count || 0);
+  const counts = statusCounts.rows[0] || {};
   return clientSafe({
     items: items.rows,
     total: count,
     years: years.rows.map((row) => Number(row.year)),
     hasMore: items.rows.length < count,
+    statusCounts: {
+      all: Number(counts.total || 0),
+      ongoing: Number(counts.ongoing || 0),
+      upcoming: Number(counts.upcoming || 0),
+      past: Number(counts.past || 0),
+    },
   });
+}
+
+export async function loadTripMemoryBook(session: SessionUser) {
+  const result = await loadTripDirectory(
+    session,
+    new URLSearchParams("status=past&sort=latest&limit=200"),
+  );
+  return result.items;
 }
 
 export async function loadTrip(session: SessionUser, id: string) {

@@ -5,10 +5,32 @@ import { getSession } from "@/src/lib/auth";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { query, transaction } from "@/src/lib/db";
 import { getTripRole, tripMemberIdsAreMembers } from "@/src/lib/trip-access";
-import { deleteUpload } from "@/src/lib/storage";
+import { deleteUpload, getStorageBackend } from "@/src/lib/storage";
+import { isDemoTrip } from "@/src/lib/demo-data";
 
 const insuranceSchema=z.object({userId:z.string().uuid(),noInsurance:z.boolean().default(false),policies:z.array(z.object({id:z.string().uuid().optional(),insuredName:z.string().trim().min(2,"กรุณากรอกชื่อผู้เอาประกัน").max(180),providerName:z.string().trim().min(2,"กรุณากรอกบริษัทประกัน").max(160),policyNumber:z.string().trim().min(2,"กรุณากรอกเลขที่กรมธรรม์").max(120),documentId:z.string().uuid().nullable().default(null)})).max(10)}).superRefine((value,context)=>{if(!value.noInsurance&&!value.policies.length)context.addIssue({code:"custom",message:"กรุณาเพิ่มประกันอย่างน้อย 1 ฉบับ",path:["policies"]})});
 const policySelect=`SELECT policy.id,policy.user_id,policy.insured_name,policy.provider_name,policy.policy_number,document.id AS document_id,document.title AS document_title,document.original_filename,document.mime_type FROM trip_travel_insurance_policies policy LEFT JOIN trip_travel_insurance_documents insurance_document ON insurance_document.policy_id=policy.id LEFT JOIN trip_documents document ON document.id=insurance_document.document_id WHERE policy.trip_id=$1 AND policy.user_id=$2 ORDER BY policy.sort_order,policy.created_at,policy.id`;
+
+export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
+  const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
+  const {id}=await params;
+  if(session.isDemo)return isDemoTrip(id)?NextResponse.json({insurance:null,documentUploadMode:"server"}):NextResponse.json({error:"Not found"},{status:404});
+  await ensureLatestDatabaseSchema();if(!await getTripRole(id,session.userId))return NextResponse.json({error:"Not found"},{status:404});
+  const result=await query(`SELECT insurance.*,
+    COALESCE((SELECT jsonb_agg(jsonb_build_object(
+      'id',policy.id,'user_id',policy.user_id,'insured_name',policy.insured_name,
+      'provider_name',policy.provider_name,'policy_number',policy.policy_number,
+      'document_id',document.id,'document_title',document.title,
+      'original_filename',document.original_filename,'mime_type',document.mime_type
+    ) ORDER BY policy.sort_order,policy.created_at,policy.id)
+    FROM trip_travel_insurance_policies policy
+    LEFT JOIN trip_travel_insurance_documents insurance_document ON insurance_document.policy_id=policy.id
+    LEFT JOIN trip_documents document ON document.id=insurance_document.document_id
+    WHERE policy.trip_id=insurance.trip_id),'[]'::jsonb) AS policies,
+    COALESCE((SELECT jsonb_agg(passenger.user_id) FROM trip_travel_insurance_passengers passenger WHERE passenger.trip_id=insurance.trip_id AND passenger.declined_insurance=true),'[]'::jsonb) AS declined_user_ids
+    FROM trip_travel_insurance insurance WHERE insurance.trip_id=$1`,[id]);
+  return NextResponse.json({insurance:result.rows[0]||null,documentUploadMode:getStorageBackend()==="blob"?"client":"server"});
+}
 
 export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});

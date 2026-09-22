@@ -3,6 +3,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useIosNavigationMotion } from "@/src/components/ios-navigation-motion";
 import { useEffect, useRef, useState } from "react";
 
 function PdfPage({ pdf, pageNumber }: { pdf: PDFDocumentProxy; pageNumber: number }) {
@@ -103,10 +104,11 @@ export function DocumentViewerPage({
   mimeType: string;
 }) {
   const router = useRouter();
+  const navigationMotion = useIosNavigationMotion();
   const fileUrl = `/api/trips/${tripId}/documents/${documentId}/file`;
 
   function backToDocuments() {
-    router.replace(`/trips/${tripId}?workspace=documents`);
+    router.back();
   }
 
   return (
@@ -115,7 +117,7 @@ export function DocumentViewerPage({
         <button
           type="button"
           className="icon-btn document-viewer-back"
-          onClick={backToDocuments}
+          onClick={() => navigationMotion.back(backToDocuments)}
           aria-label="กลับไปหน้าเอกสาร"
         >
           <ChevronLeft size={19} />

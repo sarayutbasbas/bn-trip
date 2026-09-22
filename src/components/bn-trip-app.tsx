@@ -3,14 +3,15 @@
 import {
   createContext,
   Fragment,
+  useCallback,
   useContext,
-  useDeferredValue,
   useEffect,
   useId,
   useMemo,
   useRef,
   useState,
   startTransition,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -18,8 +19,12 @@ import Image, { type ImageLoaderProps } from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { PageIntro } from "@/src/components/page-intro";
+import { DocumentFilePicker } from "@/src/components/document-file-picker";
+import { BottomSheet } from "@/src/components/bottom-sheet";
 import type {
   CountryHighlight,
+  FavoriteAccommodation,
   TravelAnalyticsCollection,
   TravelAnalyticsPayload,
   TravelAnalyticsScope,
@@ -31,10 +36,12 @@ import {
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
   clearCurrentAccount,
+  getCachedCurrentAccount,
   getCurrentAccount,
   updateCurrentAccount,
 } from "@/src/lib/client-account";
-import { optimizedCanvasFile } from "@/src/lib/client-image-compression";
+import { optimizedCanvasFile, prepareDocumentFile } from "@/src/lib/client-image-compression";
+import { uploadPrivateDocument } from "@/src/lib/client-blob-upload";
 import {
   invalidateClientResourcesContaining,
 } from "@/src/lib/client-resource-cache";
@@ -58,6 +65,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   BedDouble,
+  Bell,
   BusFront,
   CalendarDays,
   CarFront,
@@ -72,18 +80,23 @@ import {
   Cloud,
   Crown,
   Database,
+  Download,
   FolderOpen,
+  FileText,
   Footprints,
   Gem,
   Globe2,
   ImagePlus,
   Images,
   GripVertical,
+  Heart,
   House,
-  Languages,
   LocateFixed,
   LogOut,
+  Luggage,
+  Map as MapIcon,
   MapPin,
+  Menu,
   Minus,
   Moon,
   Navigation,
@@ -94,15 +107,20 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  ShieldCheck,
   Ship,
+  ShoppingBag,
   Sparkles,
   Star,
   Sun,
   Telescope,
+  Ticket,
   TrainFront,
   Trash2,
   UserRound,
   UserPlus,
+  Utensils,
+  WalletCards,
   X,
 } from "lucide-react";
 
@@ -124,13 +142,14 @@ const TripAccommodations = dynamic(
 
 type Screen =
   | "dashboard"
+  | "album"
   | "analytics"
   | "trips"
   | "trip"
   | "timeline"
   | "expenses"
   | "settings";
-type WorkspaceTab = "checklist" | "documents" | "history";
+type WorkspaceTab = "checklist" | "documents";
 type Lang = "TH" | "EN";
 type TripStatus = "all" | "ongoing" | "upcoming" | "past";
 type TripType = "all" | "domestic" | "international";
@@ -148,6 +167,11 @@ export type DashboardCounts = {
   ongoing: number;
   upcoming: number;
   past: number;
+  countries?: number;
+  destinations?: number;
+  travel_days?: number;
+  badges_unlocked?: number;
+  badges_total?: number;
 };
 type AccountProfile = {
   id: string;
@@ -200,6 +224,7 @@ export type Trip = {
   outbound_departure_at: string | null;
   return_departure_at: string | null;
   cover_image_url: string | null;
+  summary_image_url?: string | null;
   google_photos_url: string | null;
   timezone?: string;
   has_flights?: boolean;
@@ -399,6 +424,7 @@ function TripCoverImage({
   };
   return (
     <Image
+      key={src}
       loader={privateUpload ? authenticatedCoverLoader : undefined}
       src={src}
       alt={alt}
@@ -447,6 +473,12 @@ const CURRENCY_OPTIONS = [
 ] as const;
 let activeLang: Lang = "TH";
 const EN_TEXT: Record<string, string> = {
+  แผนเที่ยวทุกทริป: "Trip plans",
+  อัปเดตหน้ารวมทริปแล้ว: "Trips updated",
+  คัดลอกลิงก์แล้ว: "Link copied",
+  แชร์: "Share",
+  เมนูทริป: "Trip menu",
+  เลือกข้อมูลทริป: "Choose trip section",
   เก็บทุกเส้นทาง: "Keep every journey",
   ไว้ในที่เดียว: "in one place",
   "แพลนที่เที่ยว จดโมเมนต์ และคุมงบ":
@@ -528,9 +560,17 @@ const EN_TEXT: Record<string, string> = {
   "เพิ่มสถานที่ เวลา และวิธีเดินทางสำหรับวันนี้":
     "Add places, times, and transportation for today",
   งบทั้งทริป: "Trip budget",
+  งบประมาณรวม: "Total budget",
   ใช้ไป: "Spent",
+  ใช้ไปแล้ว: "Spent",
   เกินงบ: "Over budget",
   คงเหลือ: "Remaining",
+  ยังอยู่ในงบประมาณ: "Within budget",
+  งบแยกประเภท: "Budget breakdown",
+  ภาพรวมค่าใช้จ่าย: "Expense overview",
+  ดูรายละเอียด: "View details",
+  ย่อ: "Collapse",
+  ขยาย: "Expand",
   "อื่น ๆ": "Other",
   สัดส่วนค่าใช้จ่ายตามประเภท: "Expense share by category",
   ค่าใช้จ่ายทริป: "Total expense",
@@ -717,6 +757,7 @@ const EN_TEXT: Record<string, string> = {
   เมนูหลัก: "Main menu",
   หน้าแรก: "Home",
   แผนวันที่: "Day",
+  เลือกวัน: "Choose day",
   "· กลับ": "· Return",
   รายการค่าใช้จ่าย: "expenses",
   "สถานที่ · เรียงตามเวลาอัตโนมัติ": "places · sorted automatically",
@@ -834,7 +875,6 @@ Object.assign(EN_TEXT, {
   สถิติ: "Insights",
   สถิติการเดินทาง: "Travel insights",
   ประเทศที่ประทับใจ: "Favorite countries",
-  เรียงตามคะแนนรีวิว: "Sorted by review score",
   ดูทริปทั้งหมดใน: "View all trips in",
   กรองสถิติการเดินทาง: "Filter travel insights",
   ภายในประเทศ: "Domestic",
@@ -1032,6 +1072,12 @@ Object.assign(EN_TEXT, {
   ค้นหาสถานที่หรือรายการ: "Search places or items",
   ล้างการค้นหา: "Clear search",
   ไม่พบสถานที่หรือรายการในทริปนี้: "No matching places or items in this trip",
+  ความทรงจำของเรา: "Our memories",
+  วันแห่งการเดินทาง: "Travel days",
+  "ออกไปเก็บความทรงจำดีๆ ด้วยกันอีกนะ": "Let's make more good memories together",
+  เปิดเข็มกลัดท่องเที่ยว: "Open travel badges",
+  สะสมแล้ว: "Collected",
+  "ออกเดินทางต่อไป เก็บให้ครบทุกที่เลย!": "Keep traveling and collect them all!",
 });
 function translateUiText(value: string) {
   const trimmed = value.trim();
@@ -1113,6 +1159,24 @@ function useT() {
   return (value: string) => (lang === "EN" ? translateUiText(value) : value);
 }
 let tripListCache: Trip[] | null = null;
+type DashboardSnapshot = {
+  trips: Trip[];
+  favoriteAccommodations: FavoriteAccommodation[];
+  counts: DashboardCounts;
+  countryHighlights: CountryHighlight[];
+};
+let dashboardSnapshotCache: DashboardSnapshot | null = null;
+let tripInvitationsCache: TripInvitation[] | null = null;
+let nearbyFlightsCache: {
+  flights: NearbyFlight[];
+  syncConfigured: boolean;
+} | null = null;
+function cacheNearbyFlights(
+  flights: NearbyFlight[],
+  syncConfigured: boolean,
+) {
+  nearbyFlightsCache = { flights, syncConfigured };
+}
 const NAVIGATION_TOAST_KEY = "bn-trip-navigation-toast";
 const tripReviewSummaryCache = new Map<
   string,
@@ -1133,6 +1197,33 @@ function applyCachedTripReviewSummary(trip: Trip): Trip {
 function applyCachedTripReviewSummaries(trips: Trip[]): Trip[] {
   if (!tripReviewSummaryCache.size) return trips;
   return trips.map(applyCachedTripReviewSummary);
+}
+
+async function fetchFreshDashboardSnapshot(): Promise<DashboardSnapshot> {
+  const response = await fetch("/api/trips?mode=dashboard", {
+    cache: "no-store",
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Refresh failed");
+  const trips: Trip[] = [
+    ...(data.ongoing || []),
+    ...(data.upcoming || []),
+    ...(data.past || []),
+  ];
+  const snapshot: DashboardSnapshot = {
+    trips,
+    favoriteAccommodations: data.favoriteAccommodations || [],
+    counts: data.counts || {
+      total: trips.length,
+      ongoing: 0,
+      upcoming: 0,
+      past: 0,
+    },
+    countryHighlights: data.countryHighlights || [],
+  };
+  tripListCache = trips;
+  dashboardSnapshotCache = snapshot;
+  return snapshot;
 }
 const itineraryCache = new Map<string, Itinerary[]>();
 const COUNTRY_FLAG_ASSET_CODES = new Set([
@@ -1450,7 +1541,7 @@ function TripRatingBadge({
   onClick,
 }: {
   trip: Trip;
-  variant?: "cover" | "compact" | "header";
+  variant?: "cover" | "compact" | "header" | "inline";
   showEmpty?: boolean;
   onClick?: () => void;
 }) {
@@ -1464,7 +1555,7 @@ function TripRatingBadge({
     <>
       <Star size={13} fill="currentColor" />
       <b>{score}</b>
-      <small>({count})</small>
+      {variant !== "inline" && <small>({count})</small>}
     </>
   );
   if (onClick) {
@@ -1698,6 +1789,22 @@ function tripRangeLabel(trip: Trip) {
     return `${dateLabel} (${time.slice(0, 5)})`;
   };
   return `${label(trip.outbound_departure_at)} - ${label(trip.return_departure_at)}`;
+}
+function tripDateRangeLabel(trip: Trip) {
+  const label = (value: string | null) => {
+    if (!value) return "";
+    const date = value.slice(0, 10);
+    return new Date(`${date}T00:00:00`).toLocaleDateString(
+      activeLang === "EN" ? "en-GB" : "th-TH",
+      { day: "numeric", month: "short", year: "2-digit" },
+    );
+  };
+  return [
+    label(trip.outbound_departure_at),
+    label(trip.return_departure_at),
+  ]
+    .filter(Boolean)
+    .join(" - ");
 }
 function tripHeaderRangeLabel(trip: Trip) {
   const label = (value: string | null) => {
@@ -2112,11 +2219,19 @@ function TripCard({
   const budget = Number(trip.budget_thb || 0);
   const actualSpent = Number(trip.actual_spent_thb || 0);
   const ongoing = temporal.ongoing;
+  const destinationLabel = formatTripDestination(
+    trip.destination,
+    trip.country_code,
+    trip.country_name,
+  );
+  const dateRangeLabel = tripDateRangeLabel(trip);
+  const hasDuration = Number(trip.total_days || 0) > 0;
+  const hasBudget = budget > 0 || actualSpent > 0;
   const countdownLabel = !trip.outbound_departure_at
     ? t("ยังไม่กำหนดวัน")
     : ongoing
       ? t("กำลังเดินทาง")
-      : t(`กำลังจะมาถึงในอีก ${temporal.daysUntil} วัน`);
+      : t(`อีก ${temporal.daysUntil} วัน`);
   return (
     <article
       className={`trip-card ${past ? "past" : ""} ${trip.members?.length ? "has-shared-members" : ""}`}
@@ -2141,37 +2256,53 @@ function TripCard({
             aria-label={t("ข้อมูลทริปยังไม่ครบ")}
           />
         )}
-        {past ? (
-          <b className="past-badge">{t("ที่ผ่านมาแล้ว")}</b>
-        ) : (
+        {!past && (
           <b
             className={`countdown-badge ${ongoing ? "ongoing-badge" : "upcoming-badge"}`}
           >
+            <CalendarDays size={12} />
             <span>{countdownLabel}</span>
           </b>
         )}
+        {past && <TripRatingBadge trip={trip} variant="cover" />}
         <SharedTripAvatars members={trip.members} limit={3} />
-        {past && <TripRatingBadge trip={trip} />}
       </div>
       <div className="trip-body">
         <h3>{trip.name}</h3>
-        <p>
-          <TripCountryFlag trip={trip} />
-          {formatTripDestination(
-            trip.destination,
-            trip.country_code,
-            trip.country_name,
-          )}
-        </p>
-        <span className="trip-duration">
-          {tripRangeLabel(trip)} · ({t(`${trip.total_days} วัน`)})
-        </span>
-        <div className="trip-meta">
-          <span>{t("งบ")} ฿{budget.toLocaleString("th-TH", { maximumFractionDigits: 2 })}</span>
-          <span className={actualSpent > budget && budget > 0 ? "is-over-budget" : "is-actual-spent"}>
-            {t("ใช้จริง")} ฿{actualSpent.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
-          </span>
-        </div>
+        {destinationLabel && (
+          <p>
+            <TripCountryFlag trip={trip} />
+            {destinationLabel}
+          </p>
+        )}
+        {(dateRangeLabel || hasDuration) && (
+          <div className="trip-card-facts">
+            {dateRangeLabel && (
+              <span>
+                <CalendarDays size={11} />
+                {dateRangeLabel}
+              </span>
+            )}
+            {hasDuration && (
+              <span>
+                <Moon size={11} fill="currentColor" />
+                {t(`${trip.total_days} วัน`)}
+              </span>
+            )}
+          </div>
+        )}
+        {hasBudget && (
+          <div className="trip-meta">
+            {budget > 0 && (
+              <span>{t("งบ")} ฿{budget.toLocaleString("th-TH", { maximumFractionDigits: 2 })}</span>
+            )}
+            {actualSpent > 0 && (
+              <span className={actualSpent > budget && budget > 0 ? "is-over-budget" : "is-actual-spent"}>
+                {t("ใช้จริง")} ฿{actualSpent.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );
@@ -2189,15 +2320,22 @@ function TripInvitations({
   confirmAction: (confirmation: Confirmation) => void;
 }) {
   const t = useT();
-  const [items, setItems] = useState<TripInvitation[]>([]);
+  const [items, setItems] = useState<TripInvitation[]>(
+    () => tripInvitationsCache || [],
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   useEffect(() => {
+    if (revision === 0 && tripInvitationsCache !== null) return;
     let active = true;
     fetch("/api/invitations")
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error);
-        if (active) setItems(Array.isArray(data) ? data : []);
+        if (active) {
+          const rows = Array.isArray(data) ? data : [];
+          tripInvitationsCache = rows;
+          setItems(rows);
+        }
       })
       .catch(() => {
         if (active) setItems([]);
@@ -2214,9 +2352,11 @@ function TripInvitations({
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setItems((current) =>
-        current.filter((item) => item.id !== invitation.id),
-      );
+      setItems((current) => {
+        const next = current.filter((item) => item.id !== invitation.id);
+        tripInvitationsCache = next;
+        return next;
+      });
       notify("ตอบรับคำเชิญแล้ว");
       onChanged();
     } finally {
@@ -2229,7 +2369,11 @@ function TripInvitations({
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error);
-    setItems((current) => current.filter((item) => item.id !== invitation.id));
+    setItems((current) => {
+      const next = current.filter((item) => item.id !== invitation.id);
+      tripInvitationsCache = next;
+      return next;
+    });
     notify("ปฏิเสธคำเชิญแล้ว");
   }
   function askDecline(invitation: TripInvitation) {
@@ -2322,37 +2466,57 @@ function TripInvitations({
 function NearbyFlights({
   openFlightTrip,
   notify,
+  revision,
 }: {
   openFlightTrip: (tripId: string) => void;
   notify: (message: string) => void;
+  revision: number;
 }) {
   const t = useT();
-  const [flights, setFlights] = useState<NearbyFlight[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncConfigured, setSyncConfigured] = useState(false);
+  const [flights, setFlights] = useState<NearbyFlight[]>(
+    () => nearbyFlightsCache?.flights || [],
+  );
+  const [loading, setLoading] = useState(nearbyFlightsCache === null);
+  const [syncConfigured, setSyncConfigured] = useState(
+    () => nearbyFlightsCache?.syncConfigured || false,
+  );
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const now = useMinuteClock().getTime();
   useEffect(() => {
     let active = true;
     const apply = (body: { flights?: NearbyFlight[]; syncConfigured?: boolean }) => {
       if (!active) return;
-      if (Array.isArray(body.flights)) setFlights(body.flights);
-      if (typeof body.syncConfigured === "boolean") setSyncConfigured(body.syncConfigured);
+      const nextFlights = Array.isArray(body.flights)
+        ? body.flights
+        : nearbyFlightsCache?.flights || [];
+      const nextSyncConfigured =
+        typeof body.syncConfigured === "boolean"
+          ? body.syncConfigured
+          : nearbyFlightsCache?.syncConfigured || false;
+      nearbyFlightsCache = {
+        flights: nextFlights,
+        syncConfigured: nextSyncConfigured,
+      };
+      setFlights(nextFlights);
+      setSyncConfigured(nextSyncConfigured);
     };
-    void fetch("/api/flights/nearby", { cache: "no-store" })
-      .then((response) => response.json())
-      .then(apply)
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const shouldRefreshNow = revision > 0 || nearbyFlightsCache === null;
+    if (shouldRefreshNow) {
+      void fetch("/api/flights/nearby", { cache: "no-store" })
+        .then((response) => response.json())
+        .then(apply)
+        .catch(() => {})
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }
     const refreshStale = () => {
       void fetch("/api/flights/nearby", { method: "POST", cache: "no-store" })
         .then((response) => response.json())
         .then(apply)
         .catch(() => {});
     };
-    refreshStale();
+    if (shouldRefreshNow) refreshStale();
     const timer = window.setInterval(refreshStale, 2 * 60 * 60 * 1000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") refreshStale();
@@ -2363,7 +2527,7 @@ function NearbyFlights({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, []);
+  }, [revision]);
   async function syncFlight(flight: NearbyFlight) {
     if (!syncConfigured || syncingId) return;
     setSyncingId(flight.id);
@@ -2373,7 +2537,10 @@ function NearbyFlights({
       if (!response.ok) throw new Error(body.error || "อัปเดตเที่ยวบินไม่สำเร็จ");
       const refreshed = await fetch("/api/flights/nearby", { cache: "no-store" });
       const latest = await refreshed.json();
-      if (refreshed.ok && Array.isArray(latest.flights)) setFlights(latest.flights);
+      if (refreshed.ok && Array.isArray(latest.flights)) {
+        cacheNearbyFlights(latest.flights, syncConfigured);
+        setFlights(latest.flights);
+      }
       notify("อัปเดตข้อมูลเที่ยวบินแล้ว");
     } catch (reason) {
       notify(reason instanceof Error ? reason.message : "อัปเดตเที่ยวบินไม่สำเร็จ");
@@ -2472,6 +2639,7 @@ function NearbyFlights({
 
 function Dashboard({
   trips,
+  favoriteAccommodations,
   counts,
   countryHighlights,
   revision,
@@ -2487,6 +2655,7 @@ function Dashboard({
   confirmAction,
 }: {
   trips: Trip[];
+  favoriteAccommodations: FavoriteAccommodation[];
   counts: DashboardCounts;
   countryHighlights: CountryHighlight[];
   revision: number;
@@ -2502,8 +2671,9 @@ function Dashboard({
   confirmAction: (confirmation: Confirmation) => void;
 }) {
   const t = useT();
+  const router = useRouter();
   const [now] = useState(() => Date.now());
-  const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [profile, setProfile] = useState<AccountProfile | null>(() => getCachedCurrentAccount());
   useEffect(() => {
     let active = true;
     getCurrentAccount()
@@ -2514,7 +2684,7 @@ function Dashboard({
     return () => {
       active = false;
     };
-  }, []);
+  }, [revision]);
   const { ongoing, upcoming, past } = useMemo(() => {
     const grouped = { ongoing: [] as Trip[], upcoming: [] as Trip[], past: [] as Trip[] };
     for (const trip of trips) {
@@ -2525,9 +2695,13 @@ function Dashboard({
     }
     return grouped;
   }, [now, trips]);
-  const cards = (items: Trip[], isPast = false, prioritizeFirst = false) => (
-    <div className="trip-grid">
-      {items.map((trip, index) => (
+  const cards = (
+    items: Trip[],
+    isPast = false,
+    prioritizeFirst = false,
+    variant: "default" | "upcoming" = "default",
+  ) => {
+    const renderCard = (trip: Trip, index: number) => (
         <TripCard
           key={trip.id}
           trip={trip}
@@ -2536,8 +2710,31 @@ function Dashboard({
           selectTrip={selectTrip}
           priority={prioritizeFirst && index === 0}
         />
-      ))}
-    </div>
+    );
+    if (variant === "upcoming") {
+      return (
+        <div className="trip-grid home-upcoming-grid">
+          <div className="home-upcoming-column">
+            {items.filter((_, index) => index % 2 === 0).map(renderCard)}
+          </div>
+          <div className="home-upcoming-column">
+            {items.filter((_, index) => index % 2 === 1).map(renderCard)}
+          </div>
+        </div>
+      );
+    }
+    return <div className="trip-grid">{items.map(renderCard)}</div>;
+  };
+  const featuredTrip = ongoing[0] || upcoming[0] || null;
+  const upcomingForGrid = featuredTrip
+    ? upcoming.filter((trip) => trip.id !== featuredTrip.id)
+    : upcoming;
+  const visitedCountries = counts.countries ?? countryHighlights.length;
+  const visitedDestinations = counts.destinations ?? 0;
+  const unlockedBadges = counts.badges_unlocked ?? 0;
+  const totalBadges = counts.badges_total ?? 0;
+  const badgeProgress = Math.round(
+    (unlockedBadges / Math.max(1, totalBadges)) * 100,
   );
   const heading = (
     kicker: string,
@@ -2550,12 +2747,16 @@ function Dashboard({
       <div>
         <span className="section-kicker">{kicker}</span>
         <div className="section-title-row">
-          <h2>{t(title)}</h2>
+          <h2>
+            {status === "upcoming" && <CalendarDays size={18} />}
+            {status === "past" && <Images size={18} />}
+            {t(title)}
+          </h2>
           <span className="section-trip-count">{t(`${count} ทริป`)}</span>
         </div>
         {description && <p>{t(description)}</p>}
       </div>
-      {count > 0 && status !== "ongoing" && (
+      {count > 0 && status === "past" && (
         <button className="section-view-all" onClick={() => viewAll(status)}>
           {t("ดูทั้งหมด")}
           <ArrowRight size={14} />
@@ -2564,8 +2765,41 @@ function Dashboard({
     </div>
   );
   return (
-    <div className="screen">
-      <section className="welcome">
+    <div className="screen dashboard-home">
+      <PageIntro
+        title={`${t("สวัสดี")} ${profile?.display_name?.split(/\s+/)[0] || ""}`}
+        titleIcon={<span aria-hidden="true">👋</span>}
+        subtitle={t("ออกไปเก็บความทรงจำดีๆ ด้วยกันอีกนะ")}
+        subtitleIcon={<Heart size={20} fill="currentColor" />}
+      />
+
+      {featuredTrip && (
+        <section className="dashboard-featured-trip" aria-label={t("ทริปถัดไปของเรา")}>
+          <TripCard
+            trip={featuredTrip}
+            now={now}
+            selectTrip={selectTrip}
+            priority
+          />
+        </section>
+      )}
+
+      <section className="dashboard-quick-actions" aria-label={t("ทางลัด")}>
+        <button type="button" onClick={createTrip}>
+          <Plus size={20} />
+          <strong>{t("สร้างทริป")}</strong>
+        </button>
+        <button type="button" onClick={() => viewAll("all")}>
+          <Luggage size={19} />
+          <strong>{t("ทริปทั้งหมด")}</strong>
+        </button>
+        <button type="button" onClick={viewTripIdeas}>
+          <Telescope size={19} />
+          <strong>{t("ทริปที่เล็งไว้")}</strong>
+        </button>
+      </section>
+
+      <section className="dashboard-shortcuts" aria-label={t("ทางลัดเพิ่มเติม")}>
         <div className="welcome-shortcuts">
           <button
             type="button"
@@ -2595,73 +2829,82 @@ function Dashboard({
             <span>{t("สถิติ")}</span>
           </button>
         </div>
-        <div className="welcome-content">
-          <div className="welcome-topline">
-            {profile && (
-              <div className="welcome-profile">
-                <AccountAvatar profile={profile} size="small" />
-                <div>
-                  <small>{t("ยินดีต้อนรับกลับมา")}</small>
-                  <strong>{profile.display_name}</strong>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="welcome-copy">
-            <span className="eyebrow">
-              <Sparkles size={13} /> OUR TRAVEL JOURNAL
-            </span>
-            <h1>{t("เรื่องราวระหว่างทาง")}</h1>
-            <p>{t("แพลนทริป หรือกลับมาเปิดดูความทรงจำเดิมได้ทุกเมื่อ")}</p>
-          </div>
-        </div>
-        <div className="welcome-actions">
-          <button className="primary-btn" onClick={createTrip}>
-            <Plus size={17} />
-            {t("สร้างทริปใหม่")}
-          </button>
-          <button className="welcome-all-btn" onClick={() => viewAll("all")}>
-            {t("ดูทริปทั้งหมด")}
-            <ArrowRight size={15} />
-          </button>
-        </div>
       </section>
-      {countryHighlights.length > 0 && (
-        <PastCountryHighlights items={countryHighlights} />
-      )}
       <TripInvitations
         revision={revision}
         onChanged={onInvitationChanged}
         notify={notify}
         confirmAction={confirmAction}
       />
-      <NearbyFlights openFlightTrip={openFlightTrip} notify={notify} />
-      {ongoing.length > 0 && (
+      <NearbyFlights
+        openFlightTrip={openFlightTrip}
+        notify={notify}
+        revision={revision}
+      />
+      {(upcomingForGrid.length > 0 || !featuredTrip) && (
         <>
           {heading(
-            "HAPPENING NOW",
-            "ทริปที่กำลังเดินทาง",
-            counts.ongoing,
-            "ongoing",
+            "UPCOMING JOURNEYS",
+            "ทริปที่กำลังจะมาถึง",
+            upcomingForGrid.length,
+            "upcoming",
           )}
-          {cards(ongoing, false, true)}
+          {upcomingForGrid.length ? (
+            cards(upcomingForGrid, false, false, "upcoming")
+          ) : (
+            <EmptyState
+              title="หน้ากระดาษนี้ยังว่าง"
+              description="สร้างทริปใหม่ แล้วเริ่มเติมสถานที่ที่อยากไปกัน"
+              action="สร้างทริปใหม่"
+              onClick={createTrip}
+            />
+          )}
         </>
       )}
-      {heading(
-        "UPCOMING JOURNEYS",
-        "ทริปที่กำลังจะมาถึง",
-        counts.upcoming,
-        "upcoming",
-      )}
-      {upcoming.length ? (
-        cards(upcoming, false, ongoing.length === 0)
-      ) : (
-        <EmptyState
-          title="หน้ากระดาษนี้ยังว่าง"
-          description="สร้างทริปใหม่ แล้วเริ่มเติมสถานที่ที่อยากไปกัน"
-          action="สร้างทริปใหม่"
-          onClick={createTrip}
-        />
+      <section className="dashboard-badge-section" aria-label={t("เข็มกลัดท่องเที่ยว")}>
+        <button type="button" onClick={viewBadges} aria-label={t("เปิดเข็มกลัดท่องเที่ยว")}>
+          <span
+            className="dashboard-badge-ring"
+            style={{ "--badge-progress": `${badgeProgress * 3.6}deg` } as CSSProperties}
+          >
+            <b>{badgeProgress}%</b>
+          </span>
+          <span className="dashboard-badge-copy">
+            <small>{t("สะสมแล้ว")}</small>
+            <strong>
+              <span className="dashboard-badge-count-current">{unlockedBadges} /</span>{" "}
+              <span className="dashboard-badge-count-total">{totalBadges}</span>
+            </strong>
+            <em>{t("ออกเดินทางต่อไป เก็บให้ครบทุกที่เลย!")}</em>
+          </span>
+          <Image
+            src="/badge-progress-mountains-v2.png"
+            alt=""
+            width={2043}
+            height={770}
+            className="dashboard-badge-art"
+            aria-hidden="true"
+          />
+        </button>
+      </section>
+      <section className="dashboard-memory-stats" aria-label={t("ความทรงจำของเรา")}>
+        <div>
+          <button type="button" onClick={viewAnalytics}>
+            <i><Luggage size={18} /></i>
+            <span><strong>{counts.total}</strong><small>{t("ทริปทั้งหมด")}</small></span>
+          </button>
+          <button type="button" onClick={viewAnalytics}>
+            <i><Globe2 size={18} /></i>
+            <span><strong>{visitedCountries}</strong><small>{t("ประเทศที่เคยไป")}</small></span>
+          </button>
+          <button type="button" onClick={viewAnalytics}>
+            <i><MapPin size={18} /></i>
+            <span><strong>{visitedDestinations}</strong><small>{t("จังหวัดที่เคยไป")}</small></span>
+          </button>
+        </div>
+      </section>
+      {countryHighlights.length > 0 && (
+        <PastCountryHighlights items={countryHighlights} />
       )}
       <div className="past-section">
         {heading(
@@ -2669,16 +2912,59 @@ function Dashboard({
           "ทริปที่ผ่านมาแล้ว",
           counts.past,
           "past",
-          "ย้อนกลับไปดูเส้นทางและความทรงจำเดิมได้เสมอ",
         )}
         {past.length ? (
-          cards(past, true)
+          cards(past.slice(0, 8), true, false, "upcoming")
         ) : (
           <article className="card past-empty">
             {t("เมื่อจบทริปแล้ว เราจะเก็บการเดินทางไว้ตรงนี้ให้อัตโนมัติ")}
           </article>
         )}
       </div>
+      {favoriteAccommodations.length > 0 && (
+        <section
+          className="dashboard-favorite-hotels"
+          aria-label={t("โรงแรมที่ชื่นชอบ")}
+        >
+          <div className="dashboard-favorite-hotels-head">
+            <span aria-hidden="true"><Heart size={16} fill="currentColor" /></span>
+            <h2>{t("โรงแรมที่ชื่นชอบ")}</h2>
+          </div>
+          <div className="dashboard-favorite-hotels-scroll">
+            {favoriteAccommodations.map((hotel, index) => (
+              <article
+                className="dashboard-favorite-hotel-card"
+                key={hotel.id}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      `/trips/${hotel.trip_id}?view=stays&accommodation=${hotel.id}`,
+                    )
+                  }
+                  aria-label={`${t("เปิดที่พัก")} ${hotel.name}`}
+                >
+                  <span className="dashboard-favorite-hotel-image">
+                    <Image
+                      src={hotel.image_url || "/travel-postcard-fallback.jpg"}
+                      alt={`รูป ${hotel.name}`}
+                      fill
+                      sizes="(max-width: 520px) 36vw, 160px"
+                      priority={index < 3}
+                      unoptimized
+                    />
+                    <i aria-hidden="true"><Heart size={14} fill="currentColor" /></i>
+                  </span>
+                  <strong>{hotel.name}</strong>
+                  <small>{hotel.location || hotel.destination}</small>
+                  <em>{hotel.trip_name}</em>
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -2688,13 +2974,12 @@ function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
   const lang = useContext(LanguageContext);
   const router = useRouter();
   return (
-    <section className="country-highlights" aria-label={t("ประเทศที่ประทับใจ")}>
+    <section className="country-highlights" aria-label={t("ประเทศที่เคยไป")}>
       <div className="country-highlights-head">
         <div>
           <span className="section-kicker">TRAVEL MEMORIES</span>
-          <h2>{t("ประเทศที่ประทับใจ")}</h2>
+          <h2><MapIcon size={18} />{t("ประเทศที่เคยไป")}</h2>
         </div>
-        <small>{t("เรียงตามคะแนนรีวิว")}</small>
       </div>
       <div className="country-highlights-scroll">
         {items.map((item) => {
@@ -2842,15 +3127,12 @@ function TravelAnalyticsDashboard({
     1,
     ...data.destinations.map((item) => item.trips),
   );
-  const expenseTotal = data.totals.travelExpense + data.totals.shoppingExpense;
-  const travelShare = expenseTotal
-    ? (data.totals.travelExpense / expenseTotal) * 100
-    : 0;
   const flightInsights = data.flights;
-  const maxAirlineFlights = Math.max(1, ...flightInsights.airlines.map((item) => item.flights));
-  const maxPeriodFlights = Math.max(1, ...flightInsights.periods.map((item) => item.flights));
-  const monthName = (month: number) =>
-    new Intl.DateTimeFormat("th-TH", { month: "short" }).format(new Date(2026, month - 1, 1));
+  const ranking = scope === "domestic" ? data.destinations : data.countries;
+  const topAirline = flightInsights.airlines[0];
+  const topPeriod = [...flightInsights.periods].sort((a, b) => b.flights - a.flights)[0];
+  const topRoute = flightInsights.routes[0];
+  const locationCount = scope === "domestic" ? data.totals.destinations : data.totals.countries;
   const scopeFilter = (
     <nav className="analytics-scope-filter" aria-label={t("กรองสถิติการเดินทาง")}>
       {([
@@ -2883,36 +3165,19 @@ function TravelAnalyticsDashboard({
     </button>
   );
   const analyticsHero = (
-    <header className="analytics-hero">
-      <nav className="welcome-shortcuts hero-shortcuts" aria-label={t("ทางลัด")}>
-        <Link className="welcome-insights-btn" href="/"><House size={15} /><span>Home</span></Link>
-        <Link className="welcome-insights-btn" href="/badges"><MapPin size={15} /><span>{t("เข็มกลัด")}</span></Link>
-        <Link className="welcome-insights-btn" href="/trip-ideas"><Telescope size={15} /><span>{t("เล็งไว้")}</span></Link>
-      </nav>
-      <div className="analytics-hero-copy">
-        <span className="section-kicker">JOURNEY INSIGHTS</span>
-        <h1>{t("เรื่องราวการเดินทาง")}</h1>
-        <p>{t("ทุกประเทศ ทุกทริป และทุกความทรงจำในภาพเดียว")}</p>
-        <div>
-          <b>{data.totals.trips}</b>
-          <span>{t("ทริปที่ผ่านมา")}</span>
-        </div>
+    <header className="analytics-memory-heading">
+      <div>
+        <h1>{t("ความทรงจำของเรา")} <MapIcon size={24} /></h1>
+        <p>{t("เก็บทุกการเดินทาง ให้เป็นเรื่องราวที่สวยงามเสมอ")} <Heart size={15} fill="currentColor" /></p>
       </div>
-      <div className="analytics-hero-art" aria-hidden="true">
-        <Cloud className="analytics-cloud analytics-cloud-one" />
-        <Cloud className="analytics-cloud analytics-cloud-two" />
-        <span className="analytics-sun" />
-        <span className="analytics-flight-path" />
-        <Plane className="analytics-plane" />
-        <span className="analytics-land analytics-land-one" />
-        <span className="analytics-land analytics-land-two" />
-      </div>
+      <span aria-hidden="true">Collect<br />Trips<br /><b>Not Things ♡</b></span>
+      {refreshButton}
     </header>
   );
 
   if (!data.totals.trips)
     return (
-      <div className="screen analytics-screen">
+      <div className="screen analytics-screen analytics-redesign">
         {refreshMessage && (
           <div className="toast toast-success" role="status" aria-live="polite">
             <CheckCircle2 size={17} />
@@ -2928,12 +3193,11 @@ function TravelAnalyticsDashboard({
             {t("เมื่อทริปจบแล้ว สถิติจะปรากฏที่หน้านี้โดยอัตโนมัติ")}
           </p>
         </article>
-        {refreshButton}
       </div>
     );
 
   return (
-    <div className="screen analytics-screen">
+    <div className="screen analytics-screen analytics-redesign">
       {refreshMessage && (
         <div className="toast toast-success" role="status" aria-live="polite">
           <CheckCircle2 size={17} />
@@ -2944,160 +3208,57 @@ function TravelAnalyticsDashboard({
 
       {scopeFilter}
 
-      <section className="analytics-kpis" aria-label={t("สถิติการเดินทาง")}>
-        <article className="analytics-kpi">
-          <span><CalendarDays size={17} /></span>
-          <small>{t("ทริปที่ผ่านมา")}</small>
-          <strong>{data.totals.trips}</strong>
-        </article>
-        <article className="analytics-kpi">
-          <span>{scope === "domestic" ? <MapPin size={17} /> : <Globe2 size={17} />}</span>
-          <small>{t(scope === "domestic" ? "จังหวัดที่เคยไป" : "ประเทศที่เคยไป")}</small>
-          <strong>{scope === "domestic" ? data.totals.destinations : data.totals.countries}</strong>
-        </article>
-        <article className="analytics-kpi analytics-kpi-wide">
-          <span><ReceiptText size={17} /></span>
-          <small>{t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}</small>
-          <strong>{money(data.totals.averageExpense)}</strong>
-        </article>
+      <section className="analytics-memory-kpis" aria-label={t("สถิติการเดินทาง")}>
+        <article className="is-orange"><i><Luggage size={24} /></i><div><strong>{data.totals.trips}</strong><b>{t("ทริปทั้งหมด")}</b><small>{t("การเดินทางที่เต็มไปด้วยเรื่องราว")}</small></div></article>
+        <article className="is-mint"><i><Globe2 size={24} /></i><div><strong>{locationCount}</strong><b>{t(scope === "domestic" ? "จังหวัดที่เคยไป" : "ประเทศที่เคยไป")}</b><small>{t("โลกกว้างยังมีอีกมากให้ค้นหา")}</small></div></article>
+        <article className="is-pink"><i><MapPin size={24} /></i><div><strong>{data.totals.destinations}</strong><b>{t("จุดหมายที่บันทึกไว้")}</b><small>{t("ทุกสถานที่คือความทรงจำ")}</small></div></article>
+        <article className="is-blue"><i><WalletCards size={24} /></i><div><strong>{money(data.totals.averageExpense)}</strong><b>{t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}</b><small>{t("จากค่าใช้จ่ายที่บันทึกไว้")}</small></div></article>
       </section>
 
-      <section className="card analytics-expense-card">
-        <div className="analytics-section-head">
-          <div>
-            <h2>{t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}</h2>
-            <p>{t("ค่าใช้จ่ายทั้งหมด")}: {money(data.totals.expense)}</p>
-          </div>
-          <strong>{money(data.totals.averageExpense)}</strong>
-        </div>
-        <div className="analytics-expense-summary">
-          <div
-            className="analytics-expense-route"
-            role="img"
-            aria-label={`${t("ค่าใช้จ่ายทริปเฉลี่ย")} ${travelShare.toFixed(0)}%`}
-          >
-            <span style={{ width: `${travelShare}%` }}><Plane size={14} /></span>
-            <span style={{ width: `${100 - travelShare}%` }}><Sparkles size={13} /></span>
-          </div>
-          <div className="analytics-expense-split">
-            <div className="analytics-expense-kind is-travel">
-              <i><Plane size={15} /></i>
-              <span>
-                <small>{t("ค่าใช้จ่ายทริปเฉลี่ย")}</small>
-                <strong>{money(data.totals.averageTravelExpense)}</strong>
-              </span>
-              <b>{travelShare.toFixed(0)}%</b>
-            </div>
-            <div className="analytics-expense-kind is-shopping">
-              <i><Sparkles size={15} /></i>
-              <span>
-                <small>{t("ค่า Shopping เฉลี่ย")}</small>
-                <strong>{money(data.totals.averageShoppingExpense)}</strong>
-              </span>
-              <b>{(100 - travelShare).toFixed(0)}%</b>
-            </div>
-          </div>
+      <section className="analytics-journey-map">
+        <div className="analytics-memory-section-head"><h2><MapPin size={18} />{t("แผนที่การเดินทางของเรา")}</h2><small>{data.totals.countries} {t("ประเทศ")} · {data.totals.destinations} {t("เมือง")}</small></div>
+        <div className="analytics-map-canvas" role="img" aria-label={t("แผนที่จุดหมายที่เคยเดินทาง")}>
+          <span className="analytics-map-land is-one" /><span className="analytics-map-land is-two" /><span className="analytics-map-land is-three" />
+          <span className="analytics-map-path is-one" /><span className="analytics-map-path is-two" />
+          <Plane className="analytics-map-plane" size={23} />
+          {(scope === "domestic" ? data.destinations : data.countries).slice(0, 5).map((item, index) => {
+            const label = "country" in item ? item.country : (lang === "EN" ? item.nameEn : item.nameTh);
+            const positions = [[18, 42], [55, 69], [76, 30], [43, 29], [82, 66]];
+            return <span className="analytics-map-pin" key={"country" in item ? item.country : item.id} style={{ "--map-x": `${positions[index][0]}%`, "--map-y": `${positions[index][1]}%` } as CSSProperties}><i />{label}</span>;
+          })}
+          <em>Good Trips<br />Happier Us ♡</em>
         </div>
       </section>
 
-      {flightInsights.totals.segments > 0 && <>
-        <section className="card analytics-flight-overview">
-          <div className="analytics-section-head">
-            <div>
-              <h2>{t("ข้อมูลการบิน")}</h2>
-              <p>{t("สรุปจากเที่ยวบินของทริปที่ผ่านมาแล้ว")}</p>
-            </div>
-            <span className="analytics-flight-badge"><Plane size={18} /></span>
-          </div>
-          <div className="analytics-flight-kpis">
-            <div><small>{t("ช่วงบินทั้งหมด")}</small><strong>{flightInsights.totals.segments}</strong><span>{flightInsights.totals.trips} {t("ทริป")}</span></div>
-            <div><small>{t("ค่าตั๋วรวม")}</small><strong>{money(flightInsights.totals.ticketCostThb)}</strong><span>{t("เฉลี่ย")} {money(flightInsights.totals.averageTicketCostThb)}</span></div>
-            <div><small>{t("เวลาบินเฉลี่ย")}</small><strong>{flightInsights.totals.averageDurationHours.toFixed(1)} ชม.</strong><span>{flightInsights.airlines.length} {t("สายการบิน")}</span></div>
+      <div className="analytics-memory-grid">
+        <section className="analytics-ranking-card">
+          <div className="analytics-memory-section-head"><h2><ChartNoAxesColumnIncreasing size={18} />{t(scope === "domestic" ? "จังหวัดที่ไปบ่อยที่สุด" : "ประเทศที่เราไปบ่อยที่สุด")}</h2></div>
+          <div className="analytics-ranking-list">
+            {ranking.slice(0, 5).map((item, index) => {
+              const domestic = "nameTh" in item;
+              const label = domestic ? (lang === "EN" ? item.nameEn : item.nameTh) : item.country;
+              const count = item.trips;
+              const maximum = domestic ? maxDestinationTrips : maxCountryTrips;
+              return <div key={domestic ? item.id : item.country}><b>{index + 1}</b><i>{domestic ? <MapPin size={15} /> : countryByCode(item.countryCode) ? <CountryFlagImage code={item.countryCode} label={label} /> : "🌍"}</i><span><strong>{label}</strong><em><u style={{ width: `${count / maximum * 100}%` }} /></em></span><small>{count} {t("ทริป")}</small></div>;
+            })}
           </div>
         </section>
 
-        <section className="card analytics-airline-card">
-          <div className="analytics-section-head">
-            <div><h2>{t("สายการบินที่ใช้บ่อย")}</h2><p>{t("จำนวนช่วงบินและค่าตั๋วที่บันทึกไว้")}</p></div>
-          </div>
-          <div className="analytics-airline-list">
-            {flightInsights.airlines.slice(0,6).map((item,index)=><div className="analytics-airline-row" key={item.code||item.name}>
-              <b>{index+1}</b><div><strong>{item.name}</strong><small>{item.code}</small><span><i style={{width:`${item.flights/maxAirlineFlights*100}%`}}/></span></div><aside><strong>{item.flights} {t("เที่ยว")}</strong>{item.ticketCostThb>0&&<small>{money(item.ticketCostThb)}</small>}</aside>
-            </div>)}
-          </div>
+        <section className="analytics-year-card">
+          <div className="analytics-memory-section-head"><h2><ArrowUp size={18} />{t("การเดินทางในแต่ละปี")}</h2></div>
+          <AnalyticsYearTrend years={data.years} money={money} tripLabel={t("ทริป")} />
+          <div className="analytics-year-summary"><span><Plane size={17} /><b>{flightInsights.totals.segments}</b><small>{t("ช่วงบินทั้งหมด")}</small></span><span><CalendarDays size={17} /><b>{data.years.length}</b><small>{t("ปีที่มีทริป")}</small></span></div>
         </section>
+      </div>
 
-        <section className="analytics-flight-pattern-grid">
-          <article className="card analytics-pattern-card">
-            <div className="analytics-section-head"><div><h2>{t("ช่วงเวลาที่บินบ่อย")}</h2><p>{t("อิงเวลาออกเดินทาง")}</p></div></div>
-            <div className="analytics-period-list">{flightInsights.periods.map(item=><div key={item.key}><span><strong>{t(item.label)}</strong><small>{item.flights} {t("เที่ยว")}</small></span><i><b style={{width:`${item.flights/maxPeriodFlights*100}%`}}/></i></div>)}</div>
-          </article>
-          <article className="card analytics-pattern-card">
-            <div className="analytics-section-head"><div><h2>{t("ชั้นโดยสาร")}</h2><p>{t("ประเภทที่เลือกใช้")}</p></div></div>
-            <div className="analytics-chip-cloud">{flightInsights.cabins.map(item=><span key={item.name}><Plane size={12}/><b>{item.name}</b><small>{item.flights}</small></span>)}</div>
-            <div className="analytics-months"><small>{t("เดือนที่บินบ่อย")}</small><div>{flightInsights.months.slice(0,6).map(item=><span key={item.month}><b>{monthName(item.month)}</b><small>{item.flights} {t("เที่ยว")}</small></span>)}</div></div>
-          </article>
-        </section>
-
-        <section className="card analytics-route-card">
-          <div className="analytics-section-head"><div><h2>{t("เส้นทางที่บินบ่อย")}</h2><p>{t("ต้นทางและปลายทางจากทุกช่วงบิน")}</p></div></div>
-          <div className="analytics-route-list">{flightInsights.routes.map((item,index)=><div key={item.route}><span>{index+1}</span><Plane size={15}/><strong>{item.route}</strong><small>{item.flights} {t("เที่ยว")}</small></div>)}</div>
-        </section>
-      </>}
-
-      <section className="card analytics-chart-card">
-        <div className="analytics-section-head">
-          <div>
-            <h2>{t("ทริปในแต่ละปี")}</h2>
-            <p>{t("จำนวนทริปและค่าใช้จ่ายรวมในปีนั้น")}</p>
-          </div>
-        </div>
-        <AnalyticsYearTrend years={data.years} money={money} tripLabel={t("ทริป")} />
-      </section>
-
-      <section className="card analytics-country-card">
-        <div className="analytics-section-head">
-          <div>
-            <h2>{t(scope === "domestic" ? "จังหวัดและจำนวนทริป" : "ประเทศและจำนวนครั้งที่ไป")}</h2>
-            <p>{t(scope === "domestic" ? "เรียงจากจุดหมายที่ไปบ่อยที่สุด" : "เรียงจากประเทศที่ไปบ่อยที่สุด")}</p>
-          </div>
-        </div>
-        <div className="analytics-country-list">
-          {scope === "domestic" ? data.destinations.map((item) => (
-            <div className="analytics-country-row" key={item.id}>
-              <b className="analytics-country-flag"><MapPin size={21} /></b>
-              <div>
-                <strong>{lang === "EN" ? item.nameEn : item.nameTh}</strong>
-                <span>
-                  <i style={{ width: `${(item.trips / maxDestinationTrips) * 100}%` }} />
-                </span>
-              </div>
-              <small><b>{item.trips} {t("ทริป")}</b></small>
-            </div>
-          )) : data.countries.map((item) => (
-            <div className="analytics-country-row" key={item.country}>
-              <b className="analytics-country-flag">
-                {countryByCode(item.countryCode) ? (
-                  <CountryFlagImage code={item.countryCode} label={item.country} />
-                ) : (
-                  "🌍"
-                )}
-              </b>
-              <div>
-                <strong>{item.country}</strong>
-                <span>
-                  <i style={{ width: `${(item.trips / maxCountryTrips) * 100}%` }} />
-                </span>
-              </div>
-              <small>
-                <b>{item.trips} {t("ครั้ง")}</b>
-                <span>{money(item.totalExpense)}</span>
-              </small>
-            </div>
-          ))}
+      <section className="analytics-insights">
+        <div className="analytics-memory-section-head"><h2><Sun size={18} />{t("อินไซต์การเดินทางของเรา")}</h2></div>
+        <div>
+          <article className="is-orange"><i><Plane size={20} /></i><span><small>{t("สายการบินที่ใช้บ่อย")}</small><strong>{topAirline?.name || t("ยังไม่มีข้อมูล")}</strong><em>{topAirline ? `${topAirline.flights} ${t("เที่ยว")}` : "—"}</em></span></article>
+          <article className="is-blue"><i><Moon size={20} /></i><span><small>{t("ช่วงเวลาที่บินบ่อย")}</small><strong>{topPeriod ? t(topPeriod.label) : t("ยังไม่มีข้อมูล")}</strong><em>{topPeriod ? `${topPeriod.flights} ${t("เที่ยว")}` : "—"}</em></span></article>
+          <article className="is-mint"><i><Navigation size={20} /></i><span><small>{t("เส้นทางที่บินบ่อย")}</small><strong>{topRoute?.route || t("ยังไม่มีข้อมูล")}</strong><em>{topRoute ? `${topRoute.flights} ${t("เที่ยว")}` : "—"}</em></span></article>
         </div>
       </section>
-      {refreshButton}
     </div>
   );
 }
@@ -3117,13 +3278,21 @@ function CompactTripCard({
   const temporal = tripTemporalStatus(trip, now);
   const budget = Number(trip.budget_thb || 0);
   const actualSpent = Number(trip.actual_spent_thb || 0);
+  const hasActualSpent = actualSpent > 0;
+  const displayedAmount = hasActualSpent ? actualSpent : budget;
+  const amountState = !hasActualSpent
+    ? "is-budget-placeholder"
+    : actualSpent > budget
+      ? "is-over-budget"
+      : "is-actual-spent";
   const ongoing = temporal.ongoing;
   const past = temporal.past;
+  const StatusIcon = past ? CheckCircle2 : ongoing ? Navigation : CalendarDays;
   const status = past
     ? t("ที่ผ่านมาแล้ว")
     : ongoing
       ? t("กำลังเดินทาง")
-      : t(`กำลังจะมาถึงในอีก ${temporal.daysUntil} วัน`);
+      : t(`อีก ${temporal.daysUntil} วัน`);
   return (
     <article
       id={`trip-card-${trip.id}`}
@@ -3148,12 +3317,13 @@ function CompactTripCard({
           priority={priority}
           className="compact-trip-cover-image"
         />
+        <span className="compact-trip-status">
+          <StatusIcon size={12} />
+          <span>{status}</span>
+        </span>
         {past && <TripRatingBadge trip={trip} variant="compact" />}
       </div>
       <div className="compact-trip-body">
-        <span className="compact-trip-status">
-          <span>{status}</span>
-        </span>
         <h3>{trip.name}</h3>
         <p>
           <TripCountryFlag trip={trip} />
@@ -3169,9 +3339,9 @@ function CompactTripCard({
           {tripRangeLabel(trip)} · ({t(`${trip.total_days} วัน`)})
         </small>
         <div className="compact-trip-meta">
-          <span>{t("งบ")} ฿{budget.toLocaleString("th-TH", { maximumFractionDigits: 2 })}</span>
-          <span className={actualSpent > budget && budget > 0 ? "is-over-budget" : "is-actual-spent"}>
-            {t("ใช้จริง")} ฿{actualSpent.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
+          <span className={amountState}>
+            <WalletCards size={12} />
+            ฿{displayedAmount.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
           </span>
         </div>
       </div>
@@ -3186,19 +3356,19 @@ function TripsDirectory({
   revision,
   selectTrip,
   createTrip,
-  refreshEnabled,
+  onRefreshComplete,
 }: {
   initialFilters: TripFilters;
-  initialData?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
+  initialData?: { items: Trip[]; total: number; years: number[]; hasMore: boolean; statusCounts?: Record<TripStatus,number> };
   revision: number;
   selectTrip: (trip: Trip, origin: string) => void;
   createTrip: () => void;
-  refreshEnabled: boolean;
+  onRefreshComplete?: () => void;
 }) {
   const t = useT();
   const router = useRouter();
   const validStatus = (value: string): TripStatus =>
-    ["ongoing", "upcoming", "past"].includes(value)
+    ["upcoming", "past"].includes(value)
       ? (value as TripStatus)
       : "all";
   const validType = (value: string): TripType =>
@@ -3218,19 +3388,20 @@ function TripsDirectory({
     applyCachedTripReviewSummaries(initialData?.items || []),
   );
   const [years, setYears] = useState<number[]>(initialData?.years || []);
-  const [total, setTotal] = useState(initialData?.total || 0);
+  const [statusCounts,setStatusCounts]=useState<Record<TripStatus,number>>(()=>initialData?.statusCounts||{all:initialData?.total||0,ongoing:0,upcoming:0,past:0});
   const [hasMore, setHasMore] = useState(Boolean(initialData?.hasMore));
+  const [filtersOpen,setFiltersOpen]=useState(false);
+  const [draftTripType,setDraftTripType]=useState<TripType>(()=>validType(initialFilters.type));
+  const [draftYear,setDraftYear]=useState(initialFilters.year||"all");
   const [loading, setLoading] = useState(!initialData);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const [pullDistance, setPullDistance] = useState(0);
   const [now] = useState(() => Date.now());
   const skipInitialFetch = useRef(Boolean(initialData));
   const hasContentRef = useRef(Boolean(initialData));
-  const pullDistanceRef = useRef(0);
   const lastRestoreRefreshRef = useRef(0);
   const restoredFocusRef = useRef(false);
+  useEffect(()=>{if(!filtersOpen)return;const root=document.documentElement;root.classList.add("confirm-open");return()=>root.classList.remove("confirm-open")},[filtersOpen]);
   const focusTripId = /^[0-9a-f-]{36}$/i.test(initialFilters.focus)
     ? initialFilters.focus
     : "";
@@ -3340,7 +3511,7 @@ function TripsDirectory({
           ];
           setItems(nextItems);
           setYears(Array.isArray(data.years) ? data.years : []);
-          setTotal(Number(data.total || 0));
+          if(data.statusCounts)setStatusCounts({all:Number(data.statusCounts.all||0),ongoing:Number(data.statusCounts.ongoing||0),upcoming:Number(data.statusCounts.upcoming||0),past:Number(data.statusCounts.past||0)});
           setHasMore(Boolean(data.hasMore));
           hasContentRef.current = true;
         } catch (error) {
@@ -3349,15 +3520,12 @@ function TripsDirectory({
             !hasContentRef.current
           ) {
             setItems([]);
-            setTotal(0);
             setHasMore(false);
           }
         } finally {
           if (!controller.signal.aborted) {
             setLoading(false);
-            setRefreshing(false);
-            pullDistanceRef.current = 0;
-            setPullDistance(0);
+            onRefreshComplete?.();
           }
         }
       },
@@ -3377,57 +3545,8 @@ function TripsDirectory({
     refreshToken,
     router,
     initialFilters.q,
+    onRefreshComplete,
   ]);
-  useEffect(() => {
-    if (!refreshEnabled || refreshing) return;
-    let startY: number | null = null;
-    let pulling = false;
-    const updateDistance = (distance: number) => {
-      pullDistanceRef.current = distance;
-      setPullDistance(distance);
-    };
-    const onTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1 || window.scrollY > 0) return;
-      startY = event.touches[0].clientY;
-      pulling = true;
-    };
-    const onTouchMove = (event: TouchEvent) => {
-      if (!pulling || startY === null || event.touches.length !== 1) return;
-      if (window.scrollY > 0) {
-        pulling = false;
-        startY = null;
-        updateDistance(0);
-        return;
-      }
-      const delta = event.touches[0].clientY - startY;
-      if (delta <= 0) {
-        updateDistance(0);
-        return;
-      }
-      event.preventDefault();
-      updateDistance(Math.min(92, delta * 0.44));
-    };
-    const onTouchEnd = () => {
-      if (!pulling) return;
-      pulling = false;
-      startY = null;
-      if (pullDistanceRef.current >= 68) {
-        setRefreshing(true);
-        updateDistance(54);
-        setRefreshToken((value) => value + 1);
-      } else updateDistance(0);
-    };
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onTouchEnd, { passive: true });
-    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
-    return () => {
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-      window.removeEventListener("touchcancel", onTouchEnd);
-    };
-  }, [refreshEnabled, refreshing]);
   async function loadMore() {
     setLoadingMore(true);
     const params = new URLSearchParams({
@@ -3453,64 +3572,18 @@ function TripsDirectory({
       setLoadingMore(false);
     }
   }
-  const statuses: Array<[TripStatus, string]> = [
-    ["all", "ทั้งหมด"],
-    ["ongoing", "กำลังเดินทาง"],
-    ["upcoming", "กำลังจะมาถึง"],
-    ["past", "ที่ผ่านมาแล้ว"],
+  const statuses: Array<{value:TripStatus;label:string;Icon:typeof Luggage}> = [
+    {value:"all",label:"ทั้งหมด",Icon:Luggage},
+    {value:"upcoming",label:"กำลังจะไป",Icon:Plane},
+    {value:"past",label:"ที่ผ่านมา",Icon:CheckCircle2},
   ];
   return (
     <>
-      <div
-        className={`pull-refresh-indicator ${refreshing ? "is-refreshing" : ""} ${pullDistance >= 68 ? "is-ready" : ""}`}
-        style={{
-          opacity: refreshing ? 1 : Math.min(1, pullDistance / 42),
-          transform: `translate3d(-50%, ${Math.max(-48, pullDistance - 48)}px, 0)`,
-        }}
-        role="status"
-        aria-live="polite"
-      >
-        <RefreshCw size={17} />
-        <span>
-          {t(
-            refreshing
-              ? "กำลังอัปเดต…"
-              : pullDistance >= 68
-                ? "ปล่อยเพื่อรีเฟรช"
-                : "ดึงลงเพื่อรีเฟรช",
-          )}
-        </span>
-      </div>
-      <div
-        className={`screen trips-directory dashboard-pull-content ${pullDistance > 0 && !refreshing ? "is-pulling" : ""}`}
-        style={
-          pullDistance > 0
-            ? { transform: `translate3d(0, ${pullDistance}px, 0)` }
-            : undefined
-        }
-      >
-      <div className="directory-title">
-        <div>
-          <span className="section-kicker">TRIP LIBRARY</span>
-          <h1>{t("ทริปทั้งหมด")}</h1>
-          <p>{t(`${total} ทริป`)}</p>
-        </div>
-      </div>
-      <div className="status-filter">
-        {statuses.map(([value, label]) => (
-          <button
-            key={value}
-            className={status === value ? "active" : ""}
-            onClick={() => setStatus(value)}
-          >
-            {t(label)}
-          </button>
-        ))}
-      </div>
-      <section className="trip-filter-panel">
-        <div className="filter-search-row">
-          <label className="trip-search">
-            <Search size={17} />
+      <div className="screen trips-directory">
+      <PageIntro title={t("ทริป")} titleIcon={<Heart size={22} fill="currentColor"/>} subtitle={t("เก็บทุกการเดินทาง ไว้ในที่เดียว")}/>
+      <div className="trip-directory-search-row">
+          <label className="trip-search trip-ideas-search trip-directory-search">
+            <Search size={20} />
             <input
               type="search"
               value={queryText}
@@ -3528,67 +3601,51 @@ function TripsDirectory({
               </button>
             )}
           </label>
-          <label className="trip-type-filter">
-            <span className="sr-only">{t("ประเภททริป")}</span>
-            <select
-              value={tripType}
-              onChange={(event) => setTripType(validType(event.target.value))}
-              aria-label={t("ประเภททริป")}
-            >
-              <option value="all">{t("ทั้งหมด")}</option>
-              <option value="domestic">{t("ในประเทศ")}</option>
-              <option value="international">{t("ต่างประเทศ")}</option>
-            </select>
-          </label>
-        </div>
-        <div className="filter-bottom">
-          <div className="year-filter">
-            <button
-              className={year === "all" ? "active" : ""}
-              onClick={() => setYear("all")}
-            >
-              {t("ทุกปี")}
-            </button>
-            {years.map((value) => (
-              <button
-                key={value}
-                className={year === String(value) ? "active" : ""}
-                onClick={() => setYear(String(value))}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
+          <button className={`trip-directory-filter-toggle ${filtersOpen||tripType!=="all"||year!=="all"?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYear(year);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/></button>
+      </div>
+      {filtersOpen&&(
+        <BottomSheet
+          title={t("เลือกตัวกรองทริป")}
+          subtitle={t("เลือกประเภทและปีที่ต้องการ แล้วกดยืนยันเพื่อแสดงผล")}
+          closeLabel={t("ยกเลิก")}
+          onClose={()=>setFiltersOpen(false)}
+          onSubmit={(event)=>{event.preventDefault();setTripType(draftTripType);setYear(draftYear);setFiltersOpen(false)}}
+          className="trip-directory-filter-sheet"
+          bodyClassName="bottom-sheet-body trip-directory-filter-body"
+          submitLabel={t("แสดงผล")}
+        >
+          <section className="trip-directory-filter-section">
+            <h3>{t("ประเภททริป")}</h3>
+            <div className="trip-type-options" role="group" aria-label={t("ประเภททริป")}>
+              {([['all','ทั้งหมด'],['domestic','ในประเทศ'],['international','ต่างประเทศ']] as Array<[TripType,string]>).map(([value,label])=><button type="button" key={value} className={draftTripType===value?"active":""} onClick={()=>setDraftTripType(value)}>{t(label)}</button>)}
+            </div>
+          </section>
+          <section className="trip-directory-filter-section">
+            <h3>{t("ปีที่เดินทาง")}</h3>
+            <div className="year-filter" role="group" aria-label={t("ปีที่เดินทาง")}>
+              <button type="button" className={draftYear==="all"?"active":""} onClick={()=>setDraftYear("all")}>{t("ทุกปี")}</button>
+              {years.map(value=><button type="button" key={value} className={draftYear===String(value)?"active":""} onClick={()=>setDraftYear(String(value))}>{value}</button>)}
+            </div>
+          </section>
+        </BottomSheet>
+      )}
+      <div className="status-filter">
+        {statuses.map(({value,label,Icon}) => (
+          <button
+            key={value}
+            className={`${status === value ? "active" : ""} status-${value}`}
+            onClick={() => setStatus(value)}
+          >
+            <Icon size={24}/><span><strong>{t(label)}</strong><small>{statusCounts[value]} {t("ทริป")}</small></span>
+          </button>
+        ))}
+      </div>
       {loading ? (
         <div className="directory-loading">{t("กำลังโหลดทริป…")}</div>
       ) : items.length ? (
         <>
           <div className="compact-trip-grid">
-            {items.map((trip, index) => {
-              const past = tripTemporalStatus(trip, now).past;
-              const showPastDivider =
-                status === "all" &&
-                sort === "latest" &&
-                past &&
-                (index === 0 || !tripTemporalStatus(items[index - 1], now).past);
-              return (
-                <Fragment key={trip.id}>
-                  {showPastDivider && (
-                    <div className="trip-past-divider">
-                      <span>{t("ที่ผ่านมาแล้ว")}</span>
-                    </div>
-                  )}
-                  <CompactTripCard
-                    trip={trip}
-                    now={now}
-                    priority={index < 3}
-                    selectTrip={openTrip}
-                  />
-                </Fragment>
-              );
-            })}
+            {items.map((trip, index) => <CompactTripCard key={trip.id} trip={trip} now={now} priority={index<3} selectTrip={openTrip}/>)}
           </div>
           {hasMore && (
             <button
@@ -3624,16 +3681,16 @@ function TripsDirectory({
 
 function TripHeader({
   trip,
-  back,
-  actions,
   openReviews,
   manageMembers,
+  goBack,
+  editTrip,
 }: {
   trip: Trip;
-  back: () => void;
-  actions?: ReactNode;
   openReviews?: () => void;
   manageMembers?: () => void;
+  goBack?: () => void;
+  editTrip?: () => void;
 }) {
   const t = useT();
   const coverUrl = trip.cover_image_url || DEFAULT_TRIP_COVER;
@@ -3649,19 +3706,22 @@ function TripHeader({
           className="trip-detail-cover-image"
         />
       </div>
-      <button
-        className="back-btn trip-cover-back"
-        onClick={back}
-        aria-label={t("ย้อนกลับ")}
-        title={t("ย้อนกลับ")}
-      >
-        <ChevronLeft size={19} />
-      </button>
-      {actions && <div className="trip-cover-actions">{actions}</div>}
+      {goBack && (
+        <button className="trip-cover-back" type="button" onClick={goBack} aria-label={t("ย้อนกลับ")}>
+          <ChevronLeft size={21} />
+        </button>
+      )}
+      {editTrip && (
+        <div className="trip-cover-actions">
+          <button type="button" onClick={editTrip} aria-label={t("แก้ไข")} title={t("แก้ไข")}>
+            <Pencil size={20} />
+          </button>
+        </div>
+      )}
       <div
         className={`trip-cover-copy ${trip.members?.length ? "has-collaborators" : ""}`}
       >
-        {ended && <b className="trip-history-badge">{t("ที่ผ่านมาแล้ว")}</b>}
+        <h1 className="page-title">{trip.name}</h1>
         <span className="eyebrow">
           <TripCountryFlag trip={trip} />
           {formatTripDestination(
@@ -3670,7 +3730,6 @@ function TripHeader({
             trip.country_name,
           )}
         </span>
-        <h1 className="page-title">{trip.name}</h1>
         <p className="page-sub">{tripHeaderRangeLabel(trip)}</p>
       </div>
       <SharedTripAvatars
@@ -3693,6 +3752,98 @@ function TripHeader({
         />
       )}
     </div>
+  );
+}
+
+type TripSectionView = "plan" | "expenses" | "flights" | "insurance" | "stays" | "workspace";
+
+function TripSectionNav({
+  trip,
+  active,
+  select,
+  workspaceTab,
+}: {
+  trip: Trip;
+  active: TripSectionView;
+  select: (view: TripSectionView, workspaceTab?: WorkspaceTab) => void;
+  workspaceTab?: WorkspaceTab;
+}) {
+  const t = useT();
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const root = document.documentElement;
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const previousPosition = body.style.position;
+    const previousTop = body.style.top;
+    const previousWidth = body.style.width;
+    const alreadyLocked = root.classList.contains("sheet-open");
+    root.classList.add("sheet-open");
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    return () => {
+      body.style.position = previousPosition;
+      body.style.top = previousTop;
+      body.style.width = previousWidth;
+      if (!alreadyLocked) root.classList.remove("sheet-open");
+      window.scrollTo(0, scrollY);
+    };
+  }, [moreOpen]);
+  type TripMenuItem = {
+    id: string;
+    label: string;
+    Icon: typeof MapIcon;
+    disabled?: boolean;
+    action: () => void;
+    active?: boolean;
+  };
+  const closeAndRun = (action: () => void) => {
+    setMoreOpen(false);
+    action();
+  };
+  const sections: TripMenuItem[] = [
+    { id: "plan", label: "แผน", Icon: MapIcon, active: active === "plan", action: () => select("plan") },
+    { id: "expenses", label: "ค่าใช้จ่าย", Icon: WalletCards, active: active === "expenses", action: () => select("expenses") },
+    { id: "flights", label: "เที่ยวบิน", Icon: Plane, disabled: !trip.has_flights, active: active === "flights", action: () => select("flights") },
+    { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", active: active === "insurance", action: () => select("insurance") },
+    { id: "stays", label: "ที่พัก", Icon: BedDouble, disabled: trip.total_days <= 1, active: active === "stays", action: () => select("stays") },
+    { id: "photos", label: "รูปภาพ / Link", Icon: Images, disabled: !trip.google_photos_url, action: () => trip.google_photos_url && window.open(trip.google_photos_url, "_blank", "noopener,noreferrer") },
+    { id: "export", label: "ดาวน์โหลด Plan", Icon: Download, action: () => { window.open(`/api/trips/${trip.id}/export-plan`, "_self"); } },
+    { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
+    { id: "checklist", label: "Checklist", Icon: ClipboardList, active: active === "workspace" && workspaceTab === "checklist", action: () => select("workspace", "checklist") },
+  ];
+  const primary = sections.filter(({ id }) => id !== "insurance").slice(0, 4);
+  return (
+    <>
+      <nav className="trip-section-nav has-5-items" aria-label={t("เลือกข้อมูลทริป")}>
+        {primary.map(({ id, label, Icon, action, active: isActive, disabled }) => (
+          <button type="button" className={`trip-menu-${id}${isActive ? " active" : ""}`} key={id} onClick={action} disabled={disabled} aria-current={isActive ? "page" : undefined}>
+            <i className="trip-section-icon"><Icon className="trip-menu-fill-icon" size={26} aria-hidden="true" /></i>
+            <span>{t(label)}</span>
+          </button>
+        ))}
+        <button type="button" className={`trip-menu-more${active === "workspace" || active === "insurance" ? " active" : ""}`} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen}>
+          <i className="trip-section-icon"><Menu className="trip-menu-fill-icon" size={26} aria-hidden="true" /></i>
+          <span>{t("อื่นๆ")}</span>
+        </button>
+      </nav>
+      {moreOpen && typeof document !== "undefined" && createPortal(
+        <div className="trip-menu-sheet-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setMoreOpen(false)}>
+          <section className="trip-menu-sheet" role="dialog" aria-modal="true" aria-label={t("เมนูทั้งหมด")}>
+            <span className="sheet-grabber" />
+            <header><div><strong>{t("เมนูทั้งหมด")}</strong><small>{t("เลือกข้อมูลหรือเครื่องมือของทริป")}</small></div><button type="button" onClick={() => setMoreOpen(false)} aria-label={t("ปิด")}><X size={19} /></button></header>
+            <div className="trip-menu-sheet-grid">
+              {sections.map(({ id, label, Icon, action, active: isActive, disabled }) => (
+                <button type="button" key={id} className={`trip-menu-${id}${isActive ? " active" : ""}`} disabled={disabled} onClick={() => closeAndRun(action)}>
+                  <i><Icon className="trip-menu-fill-icon" size={26} aria-hidden="true" /></i><span>{t(label)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>, document.body)}
+    </>
   );
 }
 
@@ -3733,28 +3884,6 @@ function TransportModeIcon({ mode }: { mode: string }) {
   return <TrainFront size={12} />;
 }
 
-function TravelStayIcon({ size = 23 }: { size?: number }) {
-  return (
-    <svg
-      className="travel-stay-glyph"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path
-        fill="currentColor"
-        d="M2.1 7.9c.08-.58.63-.96 1.2-.83l5.5 1.25 4.72-5.15a3.25 3.25 0 0 1 3.78-.77l1.25.6-4.2 6.48 4.38 1.02-1.32 2.08-6.12-1.12-3.18 2.73-1.77-.48 1.48-3.5-4.93-1.15a1 1 0 0 1-.79-1.16Z"
-      />
-      <path
-        fill="currentColor"
-        fillRule="evenodd"
-        d="M4 15h7v7H4v-7Zm2 1.7v1.35h1.35V16.7H6Zm2.7 0v1.35h1.35V16.7H8.7ZM6 19.4V22h4.05v-2.6H6ZM13 13.2h7v8.8h-7v-8.8Zm2 1.7v1.35h1.35V14.9H15Zm2.7 0v1.35h1.35V14.9H17.7ZM15 17.6v1.35h1.35V17.6H15Zm2.7 0v1.35h1.35V17.6H17.7ZM15 20.3V22h4.05v-1.7H15Z"
-      />
-    </svg>
-  );
-}
-
 function AccommodationBookingText({ platform }: { platform?: string | null }) {
   const bookingPlatform = bookingPlatformByValue(platform);
   if (!bookingPlatform) return null;
@@ -3763,22 +3892,6 @@ function AccommodationBookingText({ platform }: { platform?: string | null }) {
       จองผ่าน {bookingPlatform.label}
     </span>
   );
-}
-
-function useActiveDayScroll(day: number, tripId: string) {
-  const stripRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      const strip = stripRef.current;
-      const active = strip?.querySelector<HTMLElement>(`[data-day="${day}"]`);
-      if (!strip || !active) return;
-      const left =
-        active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
-      strip.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [day, tripId]);
-  return stripRef;
 }
 
 function useItinerariesByDay(items: Itinerary[]) {
@@ -3803,119 +3916,84 @@ function useItinerariesByDay(items: Itinerary[]) {
   }, [items]);
 }
 
-function TripTimelineSearch({
+function TimelineDayPicker({
   trip,
-  items,
-  onSelect,
+  day,
+  setDay,
+  dateLabel,
+  itemCount,
+  dayCounts,
+  swapDay,
 }: {
   trip: Trip;
-  items: Itinerary[];
-  onSelect: (item: Itinerary) => void;
+  day: number;
+  setDay: (day: number) => void;
+  dateLabel: string;
+  itemCount: number;
+  dayCounts?: Map<number, number>;
+  swapDay?: (targetDay: number) => Promise<void>;
 }) {
   const t = useT();
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const deferredQuery = useDeferredValue(query);
-  const keyword = deferredQuery.trim().toLocaleLowerCase();
-  const searchIndex = useMemo(
-    () =>
-      items.map((item) => ({
-        item,
-        text: [
-          item.place_name,
-          item.address,
-          item.transport_note,
-          ...(item.cost_items || []).map((cost) => cost.key),
-        ]
-          .join(" ")
-          .toLocaleLowerCase(),
-      })),
-    [items],
-  );
-  const results = useMemo(() => {
-    if (!keyword) return EMPTY_ITINERARIES;
-    const matches: Itinerary[] = [];
-    for (const entry of searchIndex) {
-      if (entry.text.includes(keyword)) matches.push(entry.item);
-      if (matches.length === 12) break;
+  const [pickerMode, setPickerMode] = useState<"select" | "swap" | null>(null);
+  const [busyDay, setBusyDay] = useState<number | null>(null);
+  const [pendingSwapDay, setPendingSwapDay] = useState<number | null>(null);
+  const [pickerError, setPickerError] = useState("");
+  const days = Array.from({ length: trip.total_days }, (_, index) => index + 1);
+  const chooseDay = (number: number) => {
+    if (pickerMode === "swap") {
+      if (number !== day) setPendingSwapDay(number);
+      return;
     }
-    return matches;
-  }, [keyword, searchIndex]);
-  function choose(item: Itinerary) {
-    if (document.activeElement instanceof HTMLElement)
-      document.activeElement.blur();
-    onSelect(item);
-    setQuery("");
-    setOpen(false);
-  }
+    startTransition(() => setDay(number));
+    setPickerMode(null);
+  };
+  const confirmSwap = async () => {
+    if (!swapDay || pendingSwapDay === null) return;
+    setBusyDay(pendingSwapDay);
+    setPickerError("");
+    try {
+      await swapDay(pendingSwapDay);
+      setPickerMode(null);
+      setPendingSwapDay(null);
+    } catch (error) {
+      setPickerError(error instanceof Error ? error.message : t("สลับวันไม่สำเร็จ"));
+    } finally {
+      setBusyDay(null);
+    }
+  };
   return (
-    <div
-      className="trip-timeline-search"
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-      }}
-    >
-      <label>
-        <Search size={16} />
-        <input
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              setOpen(false);
-              event.currentTarget.blur();
-            }
-          }}
-          placeholder={t("ค้นหาสถานที่หรือรายการ")}
-          aria-label={t("ค้นหาสถานที่หรือรายการ")}
-          autoComplete="off"
-        />
-        {query && (
-          <button
-            type="button"
-            onClick={() => {
-              setQuery("");
-              setOpen(false);
-            }}
-            aria-label={t("ล้างการค้นหา")}
-          >
-            <X size={14} />
+    <div className="timeline-day-picker">
+      <div className="timeline-day-picker-actions">
+        {trip.total_days > 1 ? (
+          <button type="button" className="timeline-day-picker-trigger" onClick={() => { setPickerError(""); setPickerMode("select"); }} aria-haspopup="dialog">
+            <strong>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</strong><ChevronDown size={20} aria-hidden="true" />
           </button>
+        ) : (
+          <div className="timeline-day-picker-static"><strong>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</strong></div>
         )}
-      </label>
-      {open && query.trim() && (
-        <div className="trip-search-results" role="listbox">
-          {results.map((item) => (
-            <button
-              type="button"
-              role="option"
-              aria-selected="false"
-              key={item.id}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => choose(item)}
-            >
-              <span>
-                DAY {displayTripDay(trip, item.day_number)}
-                <b>{item.start_time?.slice(0, 5) || "--:--"}</b>
-              </span>
-              <div>
-                <strong>{item.place_name}</strong>
-                <small>
-                  {item.address ||
-                    item.transport_note ||
-                    t("ยังไม่ได้ระบุสถานที่")}
-                </small>
-              </div>
-              <ChevronRight size={15} />
-            </button>
-          ))}
-          {!results.length && <p>{t("ไม่พบสถานที่หรือรายการในทริปนี้")}</p>}
-        </div>
-      )}
+        {swapDay && trip.total_days > 1 && <button type="button" className="timeline-swap-days" onClick={() => { setPendingSwapDay(null); setPickerError(""); setPickerMode("swap"); }}><ArrowUpDown size={15} /><span>{t("สลับวัน")}</span></button>}
+      </div>
+      <p>{dateLabel} · {t(`${itemCount} สถานที่`)}</p>
+      {trip.total_days > 1 && pickerMode && typeof document !== "undefined" && createPortal(
+        <div className="day-picker-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setPickerMode(null)}>
+          <section className="day-picker-dialog" role="dialog" aria-modal="true" aria-label={t(pickerMode === "swap" ? "เลือกวันที่ต้องการสลับ" : "เลือกวัน")}>
+            <i><ArrowUpDown size={20} /></i>
+            <h2>{t(pickerMode === "swap" ? "เลือกวันที่ต้องการสลับ" : "เลือกแผนการเดินทาง")}</h2>
+            <p>{t(pickerMode === "swap" ? `แผนและค่าใช้จ่ายของวันที่ ${displayTripDay(trip, day)} จะสลับกับวันที่เลือก` : "เลือกวันที่ต้องการดูแผนการเดินทาง")}</p>
+            {pickerError && <p className="day-picker-dialog-error" role="alert">{t(pickerError)}</p>}
+            <div className="day-picker-dialog-grid">
+              {days.map((number) => {
+                const sourceDay = number === day;
+                const selected = pickerMode === "swap" ? number === pendingSwapDay : sourceDay;
+                return <button type="button" key={number} className={`${selected ? "active" : ""} ${pickerMode === "swap" && sourceDay ? "source" : ""}`} disabled={(pickerMode === "swap" && sourceDay) || busyDay !== null} onClick={() => void chooseDay(number)}><small>DAY</small><strong>{displayTripDay(trip, number)}</strong><span>{dayCounts?.get(number) || 0} {t("สถานที่")}</span></button>;
+              })}
+            </div>
+            <div className="day-picker-dialog-actions">
+              <button type="button" className="day-picker-dialog-cancel" onClick={() => setPickerMode(null)}>{t("ยกเลิก")}</button>
+              {pickerMode === "swap" && <button type="button" className="day-picker-dialog-confirm" disabled={pendingSwapDay === null || busyDay !== null} onClick={() => void confirmSwap()}>{t(busyDay !== null ? "กำลังสลับ…" : "ยืนยันสลับวัน")}</button>}
+            </div>
+          </section>
+        </div>, document.body)}
     </div>
   );
 }
@@ -3951,12 +4029,10 @@ function TripHub({
   cards,
   day,
   setDay,
-  back,
-  editTrip,
-  deleteTrip,
   openReviews,
   manageCollaborators,
   leaveTrip,
+  editTrip,
   addPlace,
   editPlace,
   openCost,
@@ -3971,24 +4047,22 @@ function TripHub({
   cards: PaymentCard[];
   day: number;
   setDay: (day: number) => void;
-  back: () => void;
-  editTrip: () => void;
-  deleteTrip: () => void;
   openReviews: () => void;
   manageCollaborators: () => void;
   leaveTrip: () => void;
+  editTrip: () => void;
   addPlace: (day: number, defaultTime?: string) => void;
   editPlace: (item: Itinerary) => void;
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
   onFlightChanged: () => void | Promise<void>;
   notify: (message: string) => void;
   initialWorkspaceTab?: WorkspaceTab;
-  initialView?: "plan" | "flights" | "stays";
+  initialView?: "plan" | "flights" | "insurance" | "stays";
   initialAccommodationId?: string;
 }) {
   const t = useT();
-  const lang = useContext(LanguageContext);
-  const [view, setView] = useState<"plan" | "expenses" | "workspace" | "flights" | "stays">(
+  const router = useRouter();
+  const [view, setView] = useState<TripSectionView>(
     initialWorkspaceTab
       ? "workspace"
       : initialView === "stays" && trip.total_days <= 1
@@ -4000,10 +4074,6 @@ function TripHub({
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTab>(
     initialWorkspaceTab || "checklist",
   );
-  const [completion, setCompletion] = useState({
-    flightIncomplete: false,
-    checklistIncomplete: false,
-  });
   const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(
     initialAccommodationId || null,
   );
@@ -4013,45 +4083,9 @@ function TripHub({
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
-  const hubRef = useRef<HTMLDivElement>(null);
-  const pendingSearchTarget = useRef<string | null>(null);
-  const searchHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const searchScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
-  useEffect(() => {
-    let active = true;
-    async function loadCompletion() {
-      try {
-        const response = await fetch(`/api/trips/${trip.id}/completion`, {
-          cache: "no-store",
-        });
-        const body = await response.json();
-        if (active && response.ok)
-          setCompletion({
-            flightIncomplete: Boolean(body.flightIncomplete),
-            checklistIncomplete: Boolean(body.checklistIncomplete),
-          });
-      } catch {
-        // The dots are a convenience indicator; the screens remain usable offline.
-      }
-    }
-    const handleChanged = (event: Event) => {
-      const changedTripId = (event as CustomEvent<{ tripId?: string }>).detail
-        ?.tripId;
-      if (!changedTripId || changedTripId === trip.id) void loadCompletion();
-    };
-    void loadCompletion();
-    window.addEventListener("trip-completion-changed", handleChanged);
-    return () => {
-      active = false;
-      window.removeEventListener("trip-completion-changed", handleChanged);
-    };
-  }, [trip.id, trip.has_flights]);
   function selectView(
-    nextView: "plan" | "expenses" | "workspace" | "flights" | "stays",
+    nextView: TripSectionView,
     nextWorkspaceTab = activeWorkspaceTab,
   ) {
     setView(nextView);
@@ -4060,7 +4094,7 @@ function TripHub({
     if (nextView === "workspace")
       url.searchParams.set("workspace", nextWorkspaceTab);
     else url.searchParams.delete("workspace");
-    if (nextView === "flights" || nextView === "stays") url.searchParams.set("view", nextView);
+    if (nextView === "flights" || nextView === "insurance" || nextView === "stays") url.searchParams.set("view", nextView);
     else url.searchParams.delete("view");
     window.history.replaceState(
       window.history.state,
@@ -4101,6 +4135,17 @@ function TripHub({
   const baseDate = localDate(trip.outbound_departure_at, trip.start_date);
   const activeDateLabel = tripDayLabel(baseDate, day);
   const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
+  const swapDay = async (targetDay: number) => {
+    const response = await fetch(`/api/trips/${trip.id}/itineraries/swap-days`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sourceDay: day, targetDay }),
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || t("สลับวันไม่สำเร็จ"));
+    await onFlightChanged();
+    notify(t("สลับแผนระหว่างวันแล้ว"));
+  };
   const slots = {
     morning: t("เช้า"),
     afternoon: t("บ่าย"),
@@ -4116,233 +4161,39 @@ function TripHub({
           return start !== null && start <= nowMinutes ? index : found;
         }, -1)
       : -1;
-  function revealSearchTarget(id: string) {
-    const frame = requestAnimationFrame(() => {
-      const target = hubRef.current?.querySelector<HTMLElement>(
-        `[data-itinerary-id="${id}"]`,
-      );
-      if (!target) return;
-      pendingSearchTarget.current = null;
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
-      target.classList.add("search-reveal");
-      if (searchScrollTimer.current) clearTimeout(searchScrollTimer.current);
-      searchScrollTimer.current = setTimeout(() => {
-        hubRef.current
-          ?.querySelector<HTMLElement>(`[data-itinerary-id="${id}"]`)
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 360);
-      if (searchHighlightTimer.current)
-        clearTimeout(searchHighlightTimer.current);
-      searchHighlightTimer.current = setTimeout(
-        () => target.classList.remove("search-reveal"),
-        1800,
-      );
-    });
-    return frame;
-  }
-  function selectSearchResult(item: Itinerary) {
-    pendingSearchTarget.current = item.id;
-    if (item.day_number === day) revealSearchTarget(item.id);
-    else startTransition(() => setDay(item.day_number));
-  }
-  useEffect(() => {
-    const targetId = pendingSearchTarget.current;
-    if (!targetId) return;
-    const frame = revealSearchTarget(targetId);
-    return () => cancelAnimationFrame(frame);
-  }, [day]);
-  useEffect(
-    () => () => {
-      if (searchHighlightTimer.current)
-        clearTimeout(searchHighlightTimer.current);
-      if (searchScrollTimer.current) clearTimeout(searchScrollTimer.current);
-    },
-    [],
-  );
   return (
-      <div ref={hubRef} className="screen trip-hub-screen">
+      <div className="screen trip-hub-screen">
       <div className="trip-cover-region">
         <TripHeader
           trip={trip}
-          back={back}
           openReviews={openReviews}
+          goBack={() => router.back()}
+          editTrip={editTrip}
           manageMembers={
             trip.access_role !== "owner"
               ? leaveTrip
               : manageCollaborators
           }
-          actions={
-            <>
-              {trip.google_photos_url && (
-                <a
-                  href={trip.google_photos_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={t("เปิด Google Photos")}
-                  title={t("เปิด Google Photos")}
-                >
-                  <Images size={18} />
-                  <span>{t("เปิด Google Photos")}</span>
-                </a>
-              )}
-              {(trip.has_flights || trip.total_days > 1) && <button
-                className={
-                  view !== "flights" &&
-                  view !== "stays" &&
-                  trip.has_flights &&
-                  completion.flightIncomplete
-                    ? "has-notification-dot"
-                    : ""
-                }
-                type="button"
-                onClick={() =>
-                  selectView(
-                    view === "flights" || view === "stays"
-                      ? "plan"
-                      : trip.has_flights
-                        ? "flights"
-                        : "stays",
-                  )
-                }
-                aria-label={t(
-                  view === "flights" || view === "stays"
-                    ? "แพลน"
-                    : trip.has_flights && trip.total_days > 1
-                      ? "เที่ยวบินและที่พัก"
-                      : trip.has_flights
-                        ? "เที่ยวบิน"
-                        : "ที่พัก",
-                )}
-              >
-                {view === "flights" || view === "stays" ? (
-                  <Navigation size={18} />
-                ) : trip.has_flights && trip.total_days > 1 ? (
-                  <TravelStayIcon />
-                ) : trip.has_flights ? (
-                  <Plane size={18} />
-                ) : (
-                  <BedDouble size={18} />
-                )}
-                <span>
-                  {t(
-                    view === "flights" || view === "stays"
-                      ? "แพลน"
-                      : trip.has_flights && trip.total_days > 1
-                        ? "เที่ยวบินและที่พัก"
-                        : trip.has_flights
-                          ? "เที่ยวบิน"
-                          : "ที่พัก",
-                  )}
-                </span>
-                {view !== "flights" &&
-                  view !== "stays" &&
-                  trip.has_flights &&
-                  completion.flightIncomplete && (
-                    <i
-                      className="notification-dot"
-                      aria-label={t(
-                        trip.country_code === "TH"
-                          ? "ข้อมูลเที่ยวบินยังไม่ครบ"
-                          : "ข้อมูลเที่ยวบินหรือประกันเดินทางยังไม่ครบ",
-                      )}
-                    />
-                  )}
-              </button>}
-              <button
-                className={completion.checklistIncomplete ? "has-notification-dot" : ""}
-                type="button"
-                onClick={() =>
-                  selectView(view === "workspace" ? "plan" : "workspace")
-                }
-              >
-                {view === "workspace" ? (
-                  <Navigation size={18} />
-                ) : (
-                  <FolderOpen size={18} />
-                )}
-                <span>{t(view === "workspace" ? "แพลน" : "เตรียมทริป")}</span>
-                {completion.checklistIncomplete && <i className="notification-dot" aria-label={t("Checklist ยังไม่ครบ 100%")} />}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  selectView(view === "expenses" ? "plan" : "expenses")
-                }
-              >
-                {view === "expenses" ? (
-                  <Navigation size={18} />
-                ) : (
-                  <ReceiptText size={18} />
-                )}
-                <span>{t(view === "expenses" ? "แพลน" : "ค่าใช้จ่าย")}</span>
-              </button>
-              <button type="button" onClick={editTrip}>
-                <Pencil size={18} />
-                <span>{t("แก้ไข")}</span>
-              </button>
-              {trip.access_role === "owner" && (
-                <button type="button" onClick={deleteTrip}>
-                  <Trash2 size={18} />
-                  <span>{t("ลบทริป")}</span>
-                </button>
-              )}
-            </>
-          }
         />
       </div>
+      <TripSectionNav
+        trip={trip}
+        active={view}
+        workspaceTab={activeWorkspaceTab}
+        select={(nextView, nextWorkspaceTab) => selectView(nextView, nextWorkspaceTab)}
+      />
       <div className="trip-hub-body">
         {view === "plan" ? (
           <>
-            {trip.total_days > 1 && (
-              <div
-                ref={dayStripRef}
-                className={`day-strip plan-day-strip ${trip.total_days < 6 ? "is-short" : ""}`}
-              >
-                {Array.from(
-                  { length: trip.total_days },
-                  (_, index) => index + 1,
-                ).map((number) => {
-                  const date = new Date(`${baseDate}T00:00:00`);
-                  date.setDate(date.getDate() + number - 1);
-                  const isToday = tripDay === number;
-                  const isPast = tripDay !== null && tripDay > number;
-                  return (
-                    <button
-                      key={number}
-                      data-day={number}
-                      className={`day-pill ${day === number ? "active" : ""} ${isToday ? "today" : ""} ${isPast ? "past-day" : ""}`}
-                      onClick={() => startTransition(() => setDay(number))}
-                    >
-                      <small>DAY</small>
-                      <strong>{displayTripDay(trip, number)}</strong>
-                      <small>
-                        {isToday
-                          ? t("วันนี้")
-                          : date.toLocaleDateString(
-                              lang === "EN" ? "en-US" : "th-TH",
-                              { weekday: "short" },
-                            )}
-                      </small>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="section-head timeline-heading timeline-heading-search">
-              <div>
-                <h2>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</h2>
-                <p>
-                  {activeDateLabel} ·{" "}
-                  {tripDay === day
-                    ? `${t("เวลาปัจจุบัน")} ${now.toLocaleTimeString(lang === "EN" ? "en-GB" : "th-TH", { hour: "2-digit", minute: "2-digit", timeZone: trip.timezone || "Asia/Bangkok" })} · `
-                    : ""}
-                  {t(`${dayItems.length} สถานที่`)}
-                </p>
-              </div>
-              <TripTimelineSearch
+            <div className="section-head timeline-heading">
+              <TimelineDayPicker
                 trip={trip}
-                items={items}
-                onSelect={selectSearchResult}
+                day={day}
+                setDay={setDay}
+                dateLabel={activeDateLabel}
+                itemCount={dayItems.length}
+                dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
+                swapDay={trip.access_role === "view" ? undefined : swapDay}
               />
               <button
                 className="directory-fab timeline-fab"
@@ -4528,14 +4379,15 @@ function TripHub({
               </div>
             )}
           </>
-        ) : view === "flights" || view === "stays" ? (
+        ) : view === "flights" || view === "insurance" || view === "stays" ? (
           <div className="travel-stay-section">
-            {trip.has_flights && trip.total_days > 1 && <nav className="travel-stay-tabs" aria-label={t("เที่ยวบินและที่พัก")}><button type="button" className={view==="flights"?"active":""} onClick={()=>selectView("flights")}><Plane size={17}/><span>{t("เที่ยวบิน")}</span>{completion.flightIncomplete&&<i className="notification-dot"/>}</button><button type="button" className={view==="stays"?"active":""} onClick={()=>selectView("stays")}><BedDouble size={17}/><span>{t("ที่พัก")}</span></button></nav>}
-            {view === "flights" && trip.has_flights ? <TripFlights
+            {view === "flights" || view === "insurance" ? <TripFlights
+              key={view}
               tripId={trip.id}
               members={trip.members || []}
               tripOutboundAt={trip.outbound_departure_at}
               tripReturnAt={trip.return_departure_at}
+              mode={view}
               showTravelInsurance={trip.country_code !== "TH"}
               canDelete={trip.access_role !== "view"}
               notify={notify}
@@ -4581,7 +4433,6 @@ function TripHub({
         ) : (
           <TripWorkspace
             tripId={trip.id}
-            onUndo={() => location.reload()}
             label={t}
             initialTab={activeWorkspaceTab}
           />
@@ -4623,7 +4474,7 @@ function TimelineScreen({
   day,
   setDay,
   addPlace,
-  back,
+  editTrip,
   notify,
   onChanged,
 }: {
@@ -4633,16 +4484,15 @@ function TimelineScreen({
   day: number;
   setDay: (n: number) => void;
   addPlace: (day: number, defaultTime?: string) => void;
-  back: () => void;
+  editTrip: () => void;
   notify: (message: string) => void;
   onChanged: () => void | Promise<void>;
 }) {
   const t = useT();
-  const lang = useContext(LanguageContext);
+  const router = useRouter();
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
-  const dayStripRef = useActiveDayScroll(day, trip.id);
   const itinerariesByDay = useItinerariesByDay(items);
   const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(null);
   const [openAccommodationDay, setOpenAccommodationDay] = useState<number | null>(null);
@@ -4658,6 +4508,17 @@ function TimelineScreen({
     [trip.id, trip.total_days, tripDay, ended, setDay],
   );
   const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
+  const swapDay = async (targetDay: number) => {
+    const response = await fetch(`/api/trips/${trip.id}/itineraries/swap-days`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sourceDay: day, targetDay }),
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || t("สลับวันไม่สำเร็จ"));
+    await onChanged();
+    notify(t("สลับแผนระหว่างวันแล้ว"));
+  };
   const slots = {
     morning: t("เช้า"),
     afternoon: t("บ่าย"),
@@ -4677,47 +4538,29 @@ function TimelineScreen({
       : -1;
   return (
       <div className="screen timeline-screen">
-      <TripHeader trip={trip} back={back} />
-      <div
-        ref={dayStripRef}
-        className={`day-strip plan-day-strip ${trip.total_days < 6 ? "is-short" : ""}`}
-      >
-        {Array.from({ length: trip.total_days }, (_, i) => i + 1).map((n) => {
-          const date = new Date(`${baseDate}T00:00:00`);
-          date.setDate(date.getDate() + n - 1);
-          const isToday = tripDay === n;
-          const isPast = tripDay !== null && tripDay > n;
-          return (
-            <button
-              key={n}
-              data-day={n}
-              className={`day-pill ${day === n ? "active" : ""} ${isToday ? "today" : ""} ${isPast ? "past-day" : ""}`}
-              onClick={() => startTransition(() => setDay(n))}
-            >
-              <small>DAY</small>
-              <strong>{displayTripDay(trip, n)}</strong>
-              <small>
-                {isToday
-                  ? t("วันนี้")
-                  : date.toLocaleDateString(lang === "EN" ? "en-US" : "th-TH", {
-                      weekday: "short",
-                    })}
-              </small>
-            </button>
-          );
-        })}
+      <div className="trip-cover-region">
+        <TripHeader trip={trip} goBack={() => router.back()} editTrip={editTrip} />
       </div>
-      <div className="section-head">
-        <div>
-          <h2>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</h2>
-          <p>
-            {activeDateLabel} ·{" "}
-            {tripDay === day
-              ? `${t("เวลาปัจจุบัน")} ${now.toLocaleTimeString(lang === "EN" ? "en-GB" : "th-TH", { hour: "2-digit", minute: "2-digit" })} · `
-              : ""}
-            {t(`${dayItems.length} สถานที่`)}
-          </p>
-        </div>
+      <TripSectionNav
+        trip={trip}
+        active="plan"
+        select={(section, workspaceTab) => {
+          if (section === "plan") return;
+          if (section === "expenses") router.push(`/trips/${trip.id}/expenses`);
+          else if (section === "workspace") router.push(`/trips/${trip.id}?workspace=${workspaceTab || "checklist"}`);
+          else router.push(`/trips/${trip.id}?view=${section}`);
+        }}
+      />
+      <div className="section-head timeline-heading">
+        <TimelineDayPicker
+          trip={trip}
+          day={day}
+          setDay={setDay}
+          dateLabel={activeDateLabel}
+          itemCount={dayItems.length}
+          dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
+          swapDay={trip.access_role === "view" ? undefined : swapDay}
+        />
         <button
           className="directory-fab timeline-fab"
           onClick={() => addPlace(day)}
@@ -5058,6 +4901,9 @@ export function LegacyPlanExpensesContent({
 }) {
   const t = useT();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [collapsedDays, setCollapsedDays] = useState<Set<number>>(
+    () => new Set(),
+  );
   const total = items.reduce(
     (sum, item) =>
       sum +
@@ -5083,6 +4929,13 @@ export function LegacyPlanExpensesContent({
     new Set(items.map((item) => item.day_number)),
   ).sort((a, b) => a - b);
   const firstAvailableDay = availableDays[0];
+  const toggleDay = (dayNumber: number) =>
+    setCollapsedDays((current) => {
+      const next = new Set(current);
+      if (next.has(dayNumber)) next.delete(dayNumber);
+      else next.add(dayNumber);
+      return next;
+    });
   return (
     <div className="plan-expenses">
       <div className="toolbar expense-toolbar">
@@ -5139,6 +4992,7 @@ export function LegacyPlanExpensesContent({
               (sum, item) => sum + (item.cost_items || []).length,
               0,
             );
+            const isCollapsed = collapsedDays.has(dayNumber);
             return (
               <section
                 className={`expense-day-card ${dayItems.length ? "" : "without-timeline"}`}
@@ -5171,9 +5025,18 @@ export function LegacyPlanExpensesContent({
                     >
                       <Plus size={14} />
                     </button>
+                    <button
+                      type="button"
+                      className="expense-day-chevron"
+                      onClick={() => toggleDay(dayNumber)}
+                      aria-label={t(isCollapsed ? "ขยาย" : "ย่อ")}
+                      aria-expanded={!isCollapsed}
+                    >
+                      {isCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                    </button>
                   </div>
                 </div>
-                {count === 0 ? (
+                {!isCollapsed && (count === 0 ? (
                   <p className="expense-day-empty">
                     {t(
                       dayItems.length
@@ -5217,13 +5080,64 @@ export function LegacyPlanExpensesContent({
                       }),
                     )}
                   </div>
-                )}
+                ))}
               </section>
             );
           },
         )}
       </div>
     </div>
+  );
+}
+
+function expenseCategoryTone(category?: string | null) {
+  const normalized = (category || "อื่น ๆ").trim().toLocaleLowerCase();
+  let tone = "other";
+  if (normalized.includes("อาหาร") || normalized.includes("food")) {
+    tone = "food";
+  } else if (
+    normalized.includes("เดินทาง") ||
+    normalized.includes("transport")
+  ) {
+    tone = "transport";
+  } else if (normalized.includes("ที่พัก") || normalized.includes("hotel")) {
+    tone = "stay";
+  } else if (
+    normalized.includes("เครื่องบิน") ||
+    normalized.includes("flight")
+  ) {
+    tone = "flight";
+  } else if (
+    normalized.includes("กิจกรรม") ||
+    normalized.includes("ticket")
+  ) {
+    tone = "activity";
+  } else if (normalized.includes("shopping") || normalized.includes("ช้อป")) {
+    tone = "shopping";
+  }
+  return tone;
+}
+
+function ExpenseCategoryIcon({ category }: { category?: string | null }) {
+  const tone = expenseCategoryTone(category);
+  const Icon =
+    tone === "food"
+      ? Utensils
+      : tone === "transport"
+        ? CarFront
+        : tone === "stay"
+          ? BedDouble
+          : tone === "flight"
+            ? Plane
+            : tone === "activity"
+              ? Ticket
+              : tone === "shopping"
+                ? ShoppingBag
+                : ReceiptText;
+  return (
+    <i className={`expense-category-icon is-${tone}`} aria-hidden="true">
+      <Icon size={20} strokeWidth={2.5} />
+    </i>
   );
 }
 
@@ -5239,50 +5153,54 @@ function ExpenseSplitSummary({
   const t = useT();
   const tripBudget = Number(trip.budget_thb);
   const shoppingBudget = Number(trip.shopping_budget_thb);
-  const tripPercent = tripBudget > 0 ? (tripTotal / tripBudget) * 100 : 0;
-  const shoppingPercent =
-    shoppingBudget > 0 ? (shoppingTotal / shoppingBudget) * 100 : 0;
-  const budgetCard = (
-    label: string,
-    total: number,
-    budget: number,
-    percent: number,
-    className = "",
-  ) => (
-    <article
-      className={`${className} ${total > budget && budget > 0 ? "over-budget" : ""}`}
-    >
-      <span>{t(label)}</span>
-      <strong>฿{bahtFormat(total)}</strong>
-      <div className="expense-budget-meta">
-        <small>
-          {label === "ค่า Shopping" ? t("งบ Shopping") : t("งบหลัก")} ฿
-          {bahtFormat(budget)}
-        </small>
-        <em>{percent.toFixed(1)}%</em>
-      </div>
-      <div
-        className="expense-budget-progress"
-        role="progressbar"
-        aria-label={`${t(label)} ${percent.toFixed(1)}%`}
-        aria-valuenow={Math.round(Math.min(Math.max(percent, 0), 100))}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <i style={{ width: `${Math.min(Math.max(percent, 0), 100)}%` }} />
-      </div>
-    </article>
-  );
+  const totalBudget = tripBudget + shoppingBudget;
+  const totalSpent = tripTotal + shoppingTotal;
+  const remaining = totalBudget - totalSpent;
+  const totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+  const boundedPercent = Math.min(Math.max(totalPercent, 0), 100);
   return (
-    <section className="separated-expense-totals">
-      {budgetCard("ค่าใช้จ่ายทริป", tripTotal, tripBudget, tripPercent)}
-      {budgetCard(
-        "ค่า Shopping",
-        shoppingTotal,
-        shoppingBudget,
-        shoppingPercent,
-        "shopping-total",
-      )}
+    <section className={`expense-overview ${remaining < 0 ? "is-over-budget" : ""}`}>
+      <div className="expense-overview-title">
+        <span><ChartNoAxesColumnIncreasing size={20} /></span>
+        <h2>{t("ภาพรวมค่าใช้จ่าย")}</h2>
+      </div>
+      <div className="expense-overview-stats">
+        <article className="is-budget">
+          <WalletCards size={18} />
+          <span>{t("งบประมาณรวม")}</span>
+          <strong>฿{bahtFormat(totalBudget)}</strong>
+        </article>
+        <article className="is-spent">
+          <WalletCards size={18} />
+          <span>{t("ใช้ไปแล้ว")}</span>
+          <strong>฿{bahtFormat(totalSpent)}</strong>
+          <small>{totalPercent.toFixed(0)}%</small>
+        </article>
+        <article className="is-remaining">
+          <ChartNoAxesColumnIncreasing size={18} />
+          <span>{t(remaining < 0 ? "เกินงบ" : "คงเหลือ")}</span>
+          <strong>฿{bahtFormat(Math.abs(remaining))}</strong>
+          <small>{totalBudget > 0 ? Math.abs(100 - totalPercent).toFixed(0) : "0"}%</small>
+        </article>
+      </div>
+      <div className="expense-overview-progress">
+        <div
+          className="expense-progress-ring"
+          style={{ "--expense-progress": `${boundedPercent * 3.6}deg` } as CSSProperties}
+          role="progressbar"
+          aria-label={`${t("ใช้ไปแล้ว")} ${totalPercent.toFixed(0)}%`}
+          aria-valuenow={Math.round(boundedPercent)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <span>{totalPercent.toFixed(0)}%</span>
+        </div>
+        <div>
+          <p>{t("ใช้ไปแล้ว")} ฿{bahtFormat(totalSpent)} {t("จาก")} ฿{bahtFormat(totalBudget)}</p>
+          <div className="expense-overview-bar"><i style={{ width: `${boundedPercent}%` }} /></div>
+          <small>{t(remaining < 0 ? "เกินงบ" : "ยังอยู่ในงบประมาณ")} <CheckCircle2 size={13} /></small>
+        </div>
+      </div>
     </section>
   );
 }
@@ -5493,6 +5411,9 @@ function PlanExpensesContent({
   const { guests: expenseGuests } = useExpenseGuests(trip.id);
   const [showBackTop, setShowBackTop] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [collapsedDays, setCollapsedDays] = useState<Set<number>>(
+    () => new Set(),
+  );
   const allCosts = items.flatMap((item) => item.cost_items || []);
   const isShopping = (cost: CostItem) =>
     (cost.category || "").toLowerCase() === "shopping";
@@ -5512,7 +5433,7 @@ function PlanExpensesContent({
     0,
   );
   const categories = Array.from(
-    tripCosts.reduce(
+    allCosts.reduce(
       (map, cost) =>
         map.set(
           cost.category || "อื่น ๆ",
@@ -5521,6 +5442,7 @@ function PlanExpensesContent({
       new Map<string, number>(),
     ),
   ).sort((a, b) => b[1] - a[1]);
+  const grandTotal = tripTotal + shoppingTotal;
   const selectedCategoryTotal = selectedCategory
     ? categories.find(([category]) => category === selectedCategory)?.[1] || 0
     : 0;
@@ -5528,18 +5450,15 @@ function PlanExpensesContent({
     new Set(items.map((item) => item.day_number)),
   ).sort((a, b) => a - b);
   const firstAvailableDay = availableDays[0];
+  const toggleDay = (dayNumber: number) =>
+    setCollapsedDays((current) => {
+      const next = new Set(current);
+      if (next.has(dayNumber)) next.delete(dayNumber);
+      else next.add(dayNumber);
+      return next;
+    });
   return (
-    <div className="plan-expenses">
-      <div className="toolbar expense-toolbar">
-        <div>
-          <h2 style={{ margin: 0, fontWeight: 500 }}>
-            {t("สรุปค่าใช้จ่ายจากแพลน")}
-          </h2>
-          <p className="page-sub" style={{ margin: 0 }}>
-            {t("ยอดรวมแปลงเป็นเงินบาทด้วยเรตของวันที่บันทึก")}
-          </p>
-        </div>
-      </div>
+    <div className="plan-expenses redesigned-plan-expenses">
       <ExpenseSplitSummary
         trip={trip}
         tripTotal={tripTotal}
@@ -5547,16 +5466,28 @@ function PlanExpensesContent({
       />
       <CategoryDonut
         categories={categories}
-        total={tripTotal}
+        total={grandTotal}
         selectedCategory={selectedCategory}
         onSelectedCategoryChange={setSelectedCategory}
       />
-      <PaymentMethodSummary costs={allCosts} cards={cards} />
-      <ExpenseMemberSummary
-        costs={allCosts}
-        members={trip.members || []}
-        guests={expenseGuests}
-      />
+      <details className="expense-insight-details">
+        <summary>
+          <span><ChartNoAxesColumnIncreasing size={17} />{t("ดูรายละเอียด")}</span>
+          <ChevronDown size={17} />
+        </summary>
+        <div>
+          <PaymentMethodSummary costs={allCosts} cards={cards} />
+          <ExpenseMemberSummary
+            costs={allCosts}
+            members={trip.members || []}
+            guests={expenseGuests}
+          />
+        </div>
+      </details>
+      <div className="expense-list-heading">
+        <span><CalendarDays size={18} /></span>
+        <h2>{t("รายการค่าใช้จ่าย")}</h2>
+      </div>
       <div className="expense-days">
         {Array.from({ length: trip.total_days }, (_, index) => index + 1).map(
           (dayNumber) => {
@@ -5584,16 +5515,23 @@ function PlanExpensesContent({
               0,
             );
             const count = visibleDayCosts.length;
+            const isCollapsed = collapsedDays.has(dayNumber);
+            const dayGrandTotal = dayTripTotal + dayShoppingTotal;
             return (
               <section
-                className={`expense-day-card ${dayItems.length ? "" : "without-timeline"}`}
+                className={`expense-day-card ${dayItems.length ? "" : "without-timeline"} ${isCollapsed ? "is-collapsed" : ""}`}
                 key={dayNumber}
               >
                 <div className="expense-day-head">
-                  <div>
-                    <span>DAY {displayTripDay(trip, dayNumber)}</span>
-                    <small>{t(`${count} รายการ`)}</small>
-                  </div>
+                  <button
+                    type="button"
+                    className="expense-day-toggle"
+                    onClick={() => toggleDay(dayNumber)}
+                    aria-expanded={!isCollapsed}
+                  >
+                    <span>{tripDayLabel(localDate(trip.outbound_departure_at, trip.start_date), dayNumber)}</span>
+                    <small>DAY {displayTripDay(trip, dayNumber)} · {t(`${count} รายการ`)}</small>
+                  </button>
                   <div className="expense-day-actions">
                     {selectedCategory ? (
                       <div className="day-split-total is-category-filtered">
@@ -5605,13 +5543,10 @@ function PlanExpensesContent({
                     ) : (
                       <div className="day-split-total">
                         <span>
-                          {t("ค่าใช้จ่ายทริป")}{" "}
-                          <strong>฿{bahtFormat(dayTripTotal)}</strong>
+                          {t("รวมค่าใช้จ่าย")}{" "}
+                          <strong>฿{bahtFormat(dayGrandTotal)}</strong>
                         </span>
-                        <span>
-                          {t("ค่า Shopping")}{" "}
-                          <strong>฿{bahtFormat(dayShoppingTotal)}</strong>
-                        </span>
+                        <small>{t("ค่าใช้จ่ายทริป")} ฿{bahtFormat(dayTripTotal)} · {t("ค่า Shopping")} ฿{bahtFormat(dayShoppingTotal)}</small>
                       </div>
                     )}
                     <button
@@ -5634,9 +5569,18 @@ function PlanExpensesContent({
                     >
                       <Plus size={14} />
                     </button>
+                    <button
+                      type="button"
+                      className="expense-day-chevron"
+                      onClick={() => toggleDay(dayNumber)}
+                      aria-label={t(isCollapsed ? "ขยาย" : "ย่อ")}
+                      aria-expanded={!isCollapsed}
+                    >
+                      {isCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                    </button>
                   </div>
                 </div>
-                {count === 0 ? (
+                {!isCollapsed && (count === 0 ? (
                   <p className="expense-day-empty">
                     {t(
                       selectedCategory
@@ -5665,15 +5609,17 @@ function PlanExpensesContent({
                             key={cost.id || `${item.id}-${costIndex}`}
                             onClick={() => openCost(item, costIndex)}
                           >
-                            <div>
+                            <ExpenseCategoryIcon category={cost.category} />
+                            <div className="expense-plan-copy">
                               <strong>{cost.key}</strong>
                               <small>
-                                {t(cost.category || "อื่น ๆ")} ·{" "}
-                                {item.start_time?.slice(0, 5) || "--:--"} ·{" "}
-                                {item.place_name}
+                                {item.place_name} · {item.start_time?.slice(0, 5) || "--:--"}
                               </small>
                             </div>
-                            <span>
+                            <small className={`expense-category-pill is-${expenseCategoryTone(cost.category)}`}>
+                              {t(cost.category || "อื่น ๆ")}
+                            </small>
+                            <span className="expense-plan-amount">
                               <b>
                                 {isBaht ? "" : "≈ "}฿{bahtFormat(cost.value)}
                               </b>
@@ -5697,13 +5643,13 @@ function PlanExpensesContent({
                       }),
                     )}
                   </div>
-                )}
+                ))}
               </section>
             );
           },
         )}
       </div>
-      {selectedCategory && (
+      {selectedCategory && typeof document !== "undefined" && createPortal(
         <button
           type="button"
           className="expense-filter-fab"
@@ -5716,7 +5662,8 @@ function PlanExpensesContent({
             <b>฿{bahtFormat(selectedCategoryTotal)}</b>
           </span>
           <X size={16} aria-hidden="true" />
-        </button>
+        </button>,
+        document.body,
       )}
       {showBackTop && (
         <button
@@ -5754,21 +5701,36 @@ function ExpensesScreen({
   trip,
   items,
   cards,
-  back,
   openCost,
+  editTrip,
 }: {
   trip: Trip;
   items: Itinerary[];
   cards: PaymentCard[];
-  back: () => void;
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
+  editTrip: () => void;
 }) {
+  const router = useRouter();
   return (
     <ExpenseTripMembersContext.Provider value={trip.members || []}>
       <div className="screen trip-hub-screen">
         <div className="trip-cover-region">
-          <TripHeader trip={trip} back={back} />
+          <TripHeader trip={trip} goBack={() => router.back()} editTrip={editTrip} />
         </div>
+        <TripSectionNav
+          trip={trip}
+          active="expenses"
+          select={(section, workspaceTab) => {
+            if (section === "expenses") return;
+            router.push(
+              section === "plan"
+                ? `/trips/${trip.id}`
+                : section === "workspace"
+                  ? `/trips/${trip.id}?workspace=${workspaceTab || "checklist"}`
+                : `/trips/${trip.id}?view=${section}`,
+            );
+          }}
+        />
         <div className="trip-hub-body">
           <PlanExpensesContent
             trip={trip}
@@ -6225,7 +6187,6 @@ function SettingsContent({
   dark,
   toggleTheme,
   lang,
-  setLang,
   logout,
   cards,
   saveCard,
@@ -6236,7 +6197,6 @@ function SettingsContent({
   dark: boolean;
   toggleTheme: () => void;
   lang: Lang;
-  setLang: (l: Lang) => void;
   logout: () => void;
   cards: PaymentCard[];
   saveCard: (
@@ -6389,37 +6349,6 @@ function SettingsContent({
                 aria-pressed={dark}
               >
                 <Moon size={15} />
-              </button>
-            </div>
-          </div>
-        </article>
-        <article className="card">
-          <div className="setting-row">
-            <div className="setting-label">
-              <span className="stat-icon">
-                <Languages size={17} />
-              </span>
-              <div>
-                <strong>{t("ภาษา · Language")}</strong>
-                <small>{t("ภาษาอินเทอร์เฟซหลัก")}</small>
-              </div>
-            </div>
-            <div className="segmented">
-              <button
-                type="button"
-                className={lang === "TH" ? "active" : ""}
-                onClick={() => setLang("TH")}
-                aria-pressed={lang === "TH"}
-              >
-                TH
-              </button>
-              <button
-                type="button"
-                className={lang === "EN" ? "active" : ""}
-                onClick={() => setLang("EN")}
-                aria-pressed={lang === "EN"}
-              >
-                EN
               </button>
             </div>
           </div>
@@ -6620,7 +6549,7 @@ function SettingsScreen(
 ) {
   const t = (value: string) =>
     props.lang === "EN" ? translateUiText(value) : value;
-  const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [profile, setProfile] = useState<AccountProfile | null>(() => getCachedCurrentAccount());
   const [storageOpen, setStorageOpen] = useState(false);
   useEffect(() => {
     let active = true;
@@ -7014,7 +6943,7 @@ export function CoverImagePicker({
             <small>
               {t(
                 preview
-                  ? "แตะเพื่อเลือกและครอบรูปใหม่"
+                  ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะเพื่อเลือกและครอบรูปใหม่"
                   : "เลือกภาพ แล้วจัดตำแหน่งในกรอบแนวนอน 16:9",
               )}
             </small>
@@ -7908,38 +7837,27 @@ function CostSheet({
     "อื่น ๆ",
   ];
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) close();
-      }}
-    >
-      <form
-        ref={formRef}
-        className="modal cost-sheet"
-        onChange={checkForChanges}
+    <>
+      <BottomSheet
+        title={t(existing ? "แก้ไขค่าใช้จ่าย" : "เพิ่มค่าใช้จ่าย")}
+        subtitle={t(
+          existing
+            ? "แก้ไขหรือย้ายรายการไปยัง Timeline อื่นได้"
+            : "เลือกรายการในแพลนที่ค่าใช้จ่ายนี้เกิดขึ้น",
+        )}
+        closeLabel={t("ยกเลิก")}
+        onClose={close}
         onSubmit={handle}
+        formRef={formRef}
+        onChange={checkForChanges}
+        busy={saving}
+        className="cost-sheet"
+        submitLabel={t(saving ? "กำลังบันทึก…" : "บันทึกค่าใช้จ่าย")}
+        submitDisabled={saving || rateLoading || !targetId || !hasChanges}
+        onDelete={canDelete && existing && modal.item && modal.costIndex !== undefined ? () => setConfirmDelete(true) : undefined}
+        deleteDisabled={saving}
+        deleteLabel={t("ลบค่าใช้จ่ายนี้")}
       >
-        <div className="modal-head">
-          <div>
-            <h2>{t(existing ? "แก้ไขค่าใช้จ่าย" : "เพิ่มค่าใช้จ่าย")}</h2>
-            <p>
-              {t(
-                existing
-                  ? "แก้ไขหรือย้ายรายการไปยัง Timeline อื่นได้"
-                  : "เลือกรายการในแพลนที่ค่าใช้จ่ายนี้เกิดขึ้น",
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={close}
-            aria-label={t("ยกเลิก")}
-          >
-            <X size={18} />
-          </button>
-        </div>
         <div className="form-grid">
           <div className="form-row">
             <div className="field">
@@ -8233,30 +8151,7 @@ function CostSheet({
           </fieldset>
         </div>
         {error && <p className="login-error">{t(error)}</p>}
-        <div className="modal-submit-actions">
-          <button
-            className="primary-btn"
-            disabled={saving || rateLoading || !targetId || !hasChanges}
-          >
-            {t(saving ? "กำลังบันทึก…" : "บันทึกค่าใช้จ่าย")}
-          </button>
-          {canDelete &&
-            existing &&
-            modal.item &&
-            modal.costIndex !== undefined && (
-              <button
-                type="button"
-                className="delete-record-btn"
-                onClick={() => setConfirmDelete(true)}
-                disabled={saving}
-                aria-label={t("ลบค่าใช้จ่ายนี้")}
-                title={t("ลบค่าใช้จ่ายนี้")}
-              >
-                <Trash2 size={18} />
-              </button>
-            )}
-        </div>
-      </form>
+      </BottomSheet>
       {canDelete &&
         confirmDelete &&
         modal.item &&
@@ -8290,7 +8185,7 @@ function CostSheet({
           close={() => setGuestDeleteTarget(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -8491,6 +8386,40 @@ export function TripDestinationPicker({
   );
 }
 
+type TimelineDocument = {
+  id: string;
+  title: string;
+  original_filename: string;
+  mime_type: string;
+  file_size: number;
+  itinerary_id: string | null;
+};
+
+type PendingTimelineDocument = {
+  id: string;
+  title: string;
+  file: File;
+};
+
+async function uploadTimelineDocument(tripId:string,itineraryId:string,item:PendingTimelineDocument){
+  const file=await prepareDocumentFile(item.file);
+  const payload=new FormData();
+  payload.set("title",item.title);
+  payload.set("file",file);
+  payload.set("itineraryId",itineraryId);
+  const response=await fetch(`/api/trips/${tripId}/documents`,{method:"POST",body:payload});
+  const body=await response.json().catch(()=>({}));
+  if(response.ok)return body as TimelineDocument;
+  if(response.status!==400||body.error!=="กรุณาอัปโหลดผ่าน Client Upload")throw new Error(body.error||"อัปโหลดเอกสารไม่สำเร็จ");
+  const extension=file.name.split(".").pop()?.replace(/[^a-z0-9]/gi,"")||"bin";
+  const pathname=`documents/${tripId}/doc-${crypto.randomUUID()}.${extension}`;
+  const blob=await uploadPrivateDocument({tripId,pathname,file});
+  const finalized=await fetch(`/api/trips/${tripId}/documents`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:item.title,originalFilename:file.name,mimeType:file.type,size:file.size,blobUrl:blob.url,pathname:blob.pathname,itineraryId})});
+  const saved=await finalized.json().catch(()=>({}));
+  if(!finalized.ok)throw new Error(saved.error||"อัปโหลดเอกสารไม่สำเร็จ");
+  return saved as TimelineDocument;
+}
+
 function ModalForm({
   modal,
   trip,
@@ -8507,7 +8436,7 @@ function ModalForm({
   day: number;
   items: Itinerary[];
   close: (reason?: "cancel" | "saved") => void;
-  submit: (data: Record<string, unknown>) => Promise<void>;
+  submit: (data: Record<string, unknown>) => Promise<unknown>;
   deleteItem: (item: Itinerary) => Promise<void>;
   deleteTrip: (trip: Trip) => Promise<void>;
   canDelete: boolean;
@@ -8516,8 +8445,22 @@ function ModalForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [summaryImageFile, setSummaryImageFile] = useState<File | null>(null);
+  const [summaryImagePreview, setSummaryImagePreview] = useState(modal.type==="trip"?modal.trip?.summary_image_url||"":"");
+  const [summaryImageRemoved, setSummaryImageRemoved] = useState(false);
+  const [timelineDocuments, setTimelineDocuments] = useState<TimelineDocument[]>([]);
+  const [pendingTimelineDocuments, setPendingTimelineDocuments] = useState<PendingTimelineDocument[]>([]);
+  const [documentTitle, setDocumentTitle] = useState("");
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentsLoading, setDocumentsLoading] = useState(modal.type==="place"&&Boolean(modal.item));
+  const [documentDeletingId, setDocumentDeletingId] = useState<string | null>(null);
+  const [persistedNewPlaceId, setPersistedNewPlaceId] = useState<string | null>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const summaryImageInputRef = useRef<HTMLInputElement>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [confirmDisableFlights, setConfirmDisableFlights] = useState(false);
+  const [fileRemovalConfirmation,setFileRemovalConfirmation]=useState<Confirmation|null>(null);
+  const [mediaPreview,setMediaPreview]=useState<{url:string;title:string;mimeType:string;temporary:boolean}|null>(null);
   const flightDisableConfirmed = useRef(false);
   const modalBackdropRef = useRef<HTMLDivElement>(null);
   const focusedTripFieldRef = useRef<HTMLElement | null>(null);
@@ -8529,6 +8472,16 @@ function ModalForm({
       ? `trip:${modal.trip?.id || "new"}`
       : `place:${modal.item?.id || "new"}`;
   const { formRef, hasChanges, checkForChanges } = useFormDirty(formDirtyKey);
+  useEffect(()=>{
+    if(modal.type!=="place"||!modal.item||!trip)return;
+    let active=true;
+    fetch(`/api/trips/${trip.id}/documents?itineraryId=${encodeURIComponent(modal.item.id)}`)
+      .then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error||"โหลดเอกสารไม่สำเร็จ");if(active)setTimelineDocuments(Array.isArray(body)?body:[])})
+      .catch(reason=>{if(active)setError(reason instanceof Error?reason.message:"โหลดเอกสารไม่สำเร็จ")})
+      .finally(()=>{if(active)setDocumentsLoading(false)});
+    return()=>{active=false};
+  },[modal,trip]);
+  useEffect(()=>()=>{if(summaryImagePreview.startsWith("blob:"))URL.revokeObjectURL(summaryImagePreview)},[summaryImagePreview]);
   const initialCountry =
     modal.type === "trip"
       ? countryByCode(modal.trip?.country_code) ||
@@ -8586,6 +8539,9 @@ function ModalForm({
       const modalElement = formRef.current;
       const focused = focusedTripFieldRef.current;
       if (!modalElement || !focused || !modalElement.contains(focused)) return;
+      const scrollElement =
+        modalElement.querySelector<HTMLElement>(".bottom-sheet-body") ||
+        modalElement;
       const field = focused.closest<HTMLElement>(".field") || focused;
       const fieldRect = field.getBoundingClientRect();
       const modalRect = modalElement.getBoundingClientRect();
@@ -8595,12 +8551,12 @@ function ModalForm({
         viewport.offsetTop + viewport.height - 14,
       );
       if (fieldRect.top < visibleTop) {
-        modalElement.scrollTop = Math.max(
+        scrollElement.scrollTop = Math.max(
           0,
-          modalElement.scrollTop + fieldRect.top - visibleTop,
+          scrollElement.scrollTop + fieldRect.top - visibleTop,
         );
       } else if (fieldRect.bottom > visibleBottom) {
-        modalElement.scrollTop += fieldRect.bottom - visibleBottom;
+        scrollElement.scrollTop += fieldRect.bottom - visibleBottom;
       }
     };
     const scheduleFocusedFieldVisibility = () => {
@@ -8614,6 +8570,18 @@ function ModalForm({
       );
     };
     const syncViewport = () => {
+      const modalElement = formRef.current;
+      const focused = focusedTripFieldRef.current;
+      if (
+        !modalElement ||
+        !focused ||
+        document.activeElement !== focused ||
+        !modalElement.contains(focused)
+      ) {
+        backdrop.style.removeProperty("--modal-viewport-height");
+        backdrop.style.removeProperty("--modal-viewport-top");
+        return;
+      }
       backdrop.style.setProperty("--modal-viewport-height", `${viewport.height}px`);
       backdrop.style.setProperty("--modal-viewport-top", `${viewport.offsetTop}px`);
       scheduleFocusedFieldVisibility();
@@ -8621,14 +8589,32 @@ function ModalForm({
     const handleFocus = (event: FocusEvent) => {
       if (!(event.target instanceof HTMLElement)) return;
       focusedTripFieldRef.current = event.target;
+      backdrop.classList.remove("sheet-keyboard-dismissed");
+      syncViewport();
       scheduleFocusedFieldVisibility();
+    };
+    const handleBlur = () => {
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        const isEditing =
+          active instanceof HTMLElement &&
+          backdrop.contains(active) &&
+          active.matches("input,textarea,select,[contenteditable='true']");
+        if (isEditing) return;
+        focusedTripFieldRef.current = null;
+        backdrop.style.removeProperty("--modal-viewport-height");
+        backdrop.style.removeProperty("--modal-viewport-top");
+        backdrop.classList.add("sheet-keyboard-dismissed");
+      }, 0);
     };
     syncViewport();
     backdrop.addEventListener("focusin", handleFocus);
+    backdrop.addEventListener("focusout", handleBlur);
     viewport.addEventListener("resize", syncViewport, { passive: true });
     viewport.addEventListener("scroll", syncViewport, { passive: true });
     return () => {
       backdrop.removeEventListener("focusin", handleFocus);
+      backdrop.removeEventListener("focusout", handleBlur);
       viewport.removeEventListener("resize", syncViewport);
       viewport.removeEventListener("scroll", syncViewport);
       if (focusVisibilityTimerRef.current) {
@@ -8680,6 +8666,62 @@ function ModalForm({
     );
   const amount = (f: FormData, name: string) =>
     Number(String(f.get(name) || "0").replace(/,/g, ""));
+  function selectSummaryImage(file:File|null){
+    if(summaryImagePreview.startsWith("blob:"))URL.revokeObjectURL(summaryImagePreview);
+    setSummaryImageFile(file);
+    setSummaryImageRemoved(false);
+    setSummaryImagePreview(file?URL.createObjectURL(file):(modal.type==="trip"?modal.trip?.summary_image_url||"":""));
+    checkForChanges();
+  }
+  function removeSummaryImage(){
+    if(summaryImagePreview.startsWith("blob:"))URL.revokeObjectURL(summaryImagePreview);
+    setSummaryImageFile(null);
+    setSummaryImagePreview("");
+    setSummaryImageRemoved(true);
+    if(summaryImageInputRef.current)summaryImageInputRef.current.value="";
+    checkForChanges();
+  }
+  function askRemoveSummaryImage(){
+    setFileRemovalConfirmation({title:"ลบรูป Plan รวม?",description:"รูปจะถูกนำออกเมื่อกดบันทึกการแก้ไข",confirmLabel:"ลบรูป",onConfirm:removeSummaryImage});
+  }
+  function closeMediaPreview(){
+    setMediaPreview(current=>{if(current?.temporary)URL.revokeObjectURL(current.url);return null});
+  }
+  function openStoredDocument(document:TimelineDocument){
+    if(!trip)return;
+    setMediaPreview({url:`/api/trips/${trip.id}/documents/${document.id}/file`,title:document.title,mimeType:document.mime_type,temporary:false});
+  }
+  function openPendingDocument(document:PendingTimelineDocument){
+    setMediaPreview({url:URL.createObjectURL(document.file),title:document.title,mimeType:document.file.type,temporary:true});
+  }
+  function askRemovePendingDocument(document:PendingTimelineDocument){
+    setFileRemovalConfirmation({title:`นำ “${document.title}” ออกจากลิสต์?`,description:"ไฟล์นี้จะไม่ถูกอัปโหลดเมื่อกดบันทึก",confirmLabel:"นำออก",onConfirm:()=>setPendingTimelineDocuments(current=>current.filter(item=>item.id!==document.id))});
+  }
+  function askRemoveExistingDocument(document:TimelineDocument){
+    setFileRemovalConfirmation({title:`ลบ “${document.title}”?`,description:"ไฟล์นี้จะถูกลบออกจากรายการอย่างถาวร",confirmLabel:"ลบไฟล์",onConfirm:()=>removeExistingDocument(document.id)});
+  }
+  function addPendingDocument(){
+    const title=documentTitle.trim();
+    if(!title||!documentFile){setError("กรุณาตั้งชื่อและเลือกเอกสาร");return}
+    setPendingTimelineDocuments(current=>[...current,{id:crypto.randomUUID(),title,file:documentFile}]);
+    setDocumentTitle("");
+    setDocumentFile(null);
+    if(documentInputRef.current)documentInputRef.current.value="";
+    setError("");
+    checkForChanges();
+  }
+  async function removeExistingDocument(documentId:string){
+    if(!trip)return;
+    setDocumentDeletingId(documentId);
+    try{
+      const response=await fetch(`/api/trips/${trip.id}/documents/${documentId}`,{method:"DELETE"});
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(body.error||"ลบเอกสารไม่สำเร็จ");
+      setTimelineDocuments(current=>current.filter(document=>document.id!==documentId));
+      invalidateClientResourcesContaining(`trip:${trip.id}:`);
+    }catch(reason){setError(reason instanceof Error?reason.message:"ลบเอกสารไม่สำเร็จ")}
+    finally{setDocumentDeletingId(null)}
+  }
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -8708,7 +8750,18 @@ function ModalForm({
           const result = await response.json();
           if (!response.ok)
             throw new Error(result.error || "อัปโหลดรูปไม่สำเร็จ");
+          if (typeof result.url !== "string" || !result.url) {
+            throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");
+          }
           coverImageUrl = result.url;
+        }
+        let summaryImageUrl=summaryImageRemoved?null:modal.trip?.summary_image_url||null;
+        if(summaryImageFile){
+          const upload=new FormData();upload.set("file",summaryImageFile);
+          const response=await fetch("/api/uploads",{method:"POST",body:upload});
+          const result=await response.json();
+          if(!response.ok)throw new Error(result.error||"อัปโหลดรูป Plan ไม่สำเร็จ");
+          summaryImageUrl=result.url;
         }
         await submit({
           name: f.get("name"),
@@ -8723,25 +8776,41 @@ function ModalForm({
           shoppingBudgetThb: amount(f, "shoppingBudgetThb"),
           hasFlights: f.get("hasFlights") === "true",
           coverImageUrl,
+          summaryImageUrl,
         });
       }
       if (modal.type === "place") {
+        const stagedTimelineDocuments=[...pendingTimelineDocuments];
+        if(documentFile){
+          const title=documentTitle.trim();
+          if(!title)throw new Error("กรุณาตั้งชื่อเอกสาร");
+          stagedTimelineDocuments.push({id:crypto.randomUUID(),title,file:documentFile});
+        }
         const startTime = String(f.get("startTime"));
         const hour = Number(startTime.slice(0, 2));
         const timeSlot =
           hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-        await submit({
-          placeName: f.get("placeName"),
-          address: f.get("address"),
-          transportMode: placeIsFirst
-            ? undefined
-            : f.get("transportMode"),
-          transportNote: f.get("transportNote"),
-          costItems: modal.item?.cost_items || [],
-          dayNumber: Number(f.get("dayNumber")),
-          timeSlot,
-          startTime,
-        });
+        const saved=modal.item||!persistedNewPlaceId?await submit({
+            placeName: f.get("placeName"),
+            address: f.get("address"),
+            transportMode: placeIsFirst
+              ? undefined
+              : f.get("transportMode"),
+            transportNote: f.get("transportNote"),
+            costItems: modal.item?.cost_items || [],
+            dayNumber: Number(f.get("dayNumber")),
+            timeSlot,
+            startTime,
+          }) as Itinerary:null;
+        const itineraryId=saved?.id||persistedNewPlaceId||modal.item?.id;
+        if(!modal.item&&saved?.id)setPersistedNewPlaceId(saved.id);
+        if(trip&&itineraryId&&stagedTimelineDocuments.length){
+          for(const document of stagedTimelineDocuments){
+            await uploadTimelineDocument(trip.id,itineraryId,document);
+            setPendingTimelineDocuments(current=>current.filter(item=>item.id!==document.id));
+          }
+          invalidateClientResourcesContaining(`trip:${trip.id}:`);
+        }
       }
       close("saved");
     } catch (err) {
@@ -8768,30 +8837,24 @@ function ModalForm({
     "เรือ",
   ];
   return (
-    <div
-      ref={modalBackdropRef}
-      className="modal-backdrop trip-modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) close();
-      }}
-    >
-      <form
-        ref={formRef}
-        className="modal"
-        onChange={checkForChanges}
+    <>
+      <BottomSheet
+        title={title}
+        subtitle={t(modal.type === "trip" ? "จัดการข้อมูลและรายละเอียดของทริป" : "จัดการรายละเอียดของรายการใน Timeline")}
+        closeLabel={t("ยกเลิก")}
+        onClose={() => close()}
         onSubmit={handle}
+        formRef={formRef}
+        onChange={checkForChanges}
+        busy={saving}
+        backdropClassName="trip-modal-backdrop"
+        backdropRef={modalBackdropRef}
+        submitLabel={t(saving ? "กำลังบันทึก…" : "บันทึก")}
+        submitDisabled={saving || (!hasChanges && !coverFile && !summaryImageFile && !summaryImageRemoved && !documentFile && pendingTimelineDocuments.length===0)}
+        onDelete={canDeleteCurrent && ((modal.type === "place" && modal.item) || (modal.type === "trip" && modal.trip)) ? () => setPendingDelete(true) : undefined}
+        deleteDisabled={saving}
+        deleteLabel={t(modal.type === "trip" ? "ลบทริป" : "ลบรายการ")}
       >
-        <div className="modal-head">
-          <h2>{title}</h2>
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => close()}
-            aria-label={t("ยกเลิก")}
-          >
-            <X size={18} />
-          </button>
-        </div>
         <div className="form-grid">
           {modal.type === "trip" && (
             <>
@@ -8919,6 +8982,14 @@ function ModalForm({
                   />
                 </div>
               </div>
+              <section className="trip-plan-image-editor">
+                <div className="trip-plan-image-head">
+                  <div><strong>{t("รูป Plan รวม")}</strong><small>{t("ไม่บังคับ · เพิ่มได้หนึ่งรูป และเปลี่ยนหรือลบได้ภายหลัง")}</small></div>
+                  {summaryImagePreview&&<button type="button" onClick={askRemoveSummaryImage} aria-label={t("ลบรูป Plan")}><Trash2 size={16}/></button>}
+                </div>
+                {summaryImagePreview&&<button type="button" className="trip-plan-image-preview" aria-label={t("เปิดรูป Plan เต็มจอ")} onClick={()=>setMediaPreview({url:summaryImagePreview,title:t("รูป Plan รวม"),mimeType:summaryImageFile?.type||"image/jpeg",temporary:false})} style={{backgroundImage:`url("${summaryImagePreview}")`}}/>}
+                <DocumentFilePicker fileName={summaryImageFile?.name||""} inputRef={summaryImageInputRef} onFileChange={selectSummaryImage} accept="image/jpeg,image/png,image/webp" idleLabel={summaryImagePreview?t("เลือกรูปใหม่เพื่อแทนที่"):t("เลือกรูป Plan")} idleNote={t("รองรับ JPG, PNG และ WebP · เพิ่มได้หนึ่งรูป")} selectedNote={t("พร้อมอัปโหลดเมื่อกดบันทึก")}/>
+              </section>
             </>
           )}
           {modal.type === "place" && (
@@ -9008,33 +9079,22 @@ function ModalForm({
                   placeholder={t("รายละเอียดร้าน การเดินทาง หรือสิ่งที่ต้องจำ")}
                 />
               </div>
+              <section className="timeline-document-editor">
+                <div className="timeline-document-heading"><div><strong>{t("เอกสารแนบ")}</strong><small>{t("เพิ่มรูปหรือ PDF พร้อมตั้งชื่อไฟล์")}</small></div></div>
+                {documentsLoading?<p className="timeline-document-loading">{t("กำลังโหลดเอกสาร…")}</p>:null}
+                {(timelineDocuments.length>0||pendingTimelineDocuments.length>0)&&<div className="timeline-document-list">
+                  {timelineDocuments.map(document=><div className="timeline-document-row" key={document.id}><FileText size={17}/><button type="button" className="timeline-document-open" onClick={()=>openStoredDocument(document)}><strong>{document.title}</strong><small>{document.original_filename}</small></button>{canDeleteCurrent?<button type="button" disabled={documentDeletingId===document.id} onClick={()=>askRemoveExistingDocument(document)} aria-label={t("ลบเอกสาร")}><Trash2 size={15}/></button>:null}</div>)}
+                  {pendingTimelineDocuments.map(document=><div className="timeline-document-row is-pending" key={document.id}><FileText size={17}/><button type="button" className="timeline-document-open" onClick={()=>openPendingDocument(document)}><strong>{document.title}</strong><small>{document.file.name} · {t("พร้อมอัปโหลดเมื่อกดบันทึก")}</small></button><button type="button" onClick={()=>askRemovePendingDocument(document)} aria-label={t("นำออกจากลิสต์")}><Trash2 size={15}/></button></div>)}
+                </div>}
+                <div className="field"><label>{t("ชื่อไฟล์")}</label><input value={documentTitle} onChange={event=>setDocumentTitle(event.target.value)} maxLength={180} placeholder={t("เช่น ใบจองโรงแรม")}/></div>
+                <DocumentFilePicker fileName={documentFile?.name||""} inputRef={documentInputRef} onFileChange={file=>{setDocumentFile(file);if(file&&!documentTitle.trim())setDocumentTitle(file.name.replace(/\.[^.]+$/,"").slice(0,180))}} selectedNote={t("พร้อมอัปโหลดเมื่อกดบันทึก")}/>
+                <button className="secondary-btn timeline-document-add" type="button" onClick={addPendingDocument} disabled={!documentFile||!documentTitle.trim()}><Plus size={16}/>{t("เพิ่มในลิสต์")}</button>
+              </section>
             </>
           )}
         </div>
         {error && <p className="login-error">{t(error)}</p>}
-        <div className="modal-submit-actions">
-          <button
-            className="primary-btn"
-            disabled={saving || (!hasChanges && !coverFile)}
-          >
-            {t(saving ? "กำลังบันทึก…" : "บันทึก")}
-          </button>
-          {canDeleteCurrent &&
-            ((modal.type === "place" && modal.item) ||
-              (modal.type === "trip" && modal.trip)) && (
-              <button
-                type="button"
-                className="delete-record-btn"
-                onClick={() => setPendingDelete(true)}
-                disabled={saving}
-                aria-label={t(modal.type === "trip" ? "ลบทริป" : "ลบรายการ")}
-                title={t(modal.type === "trip" ? "ลบทริป" : "ลบรายการ")}
-              >
-                <Trash2 size={18} />
-              </button>
-            )}
-        </div>
-      </form>
+      </BottomSheet>
       {canDeleteCurrent && pendingDelete && modal.type === "place" && modal.item && (
         <ConfirmDialog
           confirmation={{
@@ -9083,7 +9143,12 @@ function ModalForm({
           close={() => setPendingDelete(false)}
         />
       )}
-    </div>
+      {fileRemovalConfirmation&&<ConfirmDialog confirmation={fileRemovalConfirmation} close={()=>setFileRemovalConfirmation(null)}/>}
+      {mediaPreview&&<div className="attachment-preview-overlay" role="dialog" aria-modal="true" aria-label={mediaPreview.title} onMouseDown={event=>{if(event.target===event.currentTarget)closeMediaPreview()}}>
+        <header><strong>{mediaPreview.title}</strong><button type="button" onClick={closeMediaPreview} aria-label={t("ปิดรูปเต็มจอ")}><X size={20}/></button></header>
+        <div className="attachment-preview-content">{mediaPreview.mimeType.startsWith("image/")?<Image src={mediaPreview.url} alt={mediaPreview.title} fill sizes="100vw" unoptimized/>:<iframe src={mediaPreview.url} title={mediaPreview.title}/>}</div>
+      </div>}
+    </>
   );
 }
 
@@ -9100,6 +9165,7 @@ export function BNTripApp({
   accommodationId,
   initialDashboard,
   initialAnalytics,
+  initialAlbumTrips,
   initialTrip,
   initialItineraries,
   initialTripCards,
@@ -9123,21 +9189,23 @@ export function BNTripApp({
   returnTo?: string;
   authError?: string;
   workspaceTab?: WorkspaceTab;
-  tripView?: "flights" | "stays";
+  tripView?: "flights" | "insurance" | "stays";
   accommodationId?: string;
   initialDashboard?: {
     ongoing: Trip[];
     upcoming: Trip[];
     past: Trip[];
+    favoriteAccommodations: FavoriteAccommodation[];
     counts: DashboardCounts;
     countryHighlights: CountryHighlight[];
   };
   initialAnalytics?: TravelAnalyticsCollection;
+  initialAlbumTrips?: Trip[];
   initialTrip?: Trip | null;
   initialItineraries?: Itinerary[];
   initialTripCards?: PaymentCard[];
   initialTripFilters?: TripFilters;
-  initialTripDirectory?: { items: Trip[]; total: number; years: number[]; hasMore: boolean };
+  initialTripDirectory?: { items: Trip[]; total: number; years: number[]; hasMore: boolean; statusCounts?: Record<TripStatus,number> };
   initialTripPreset?: TripCreationPreset | null;
 }) {
   const initialDashboardTrips = initialDashboard
@@ -9147,17 +9215,25 @@ export function BNTripApp({
         ...initialDashboard.past,
       ])
     : null;
+  const cachedDashboardSnapshot =
+    page === "dashboard" ? dashboardSnapshotCache : null;
+  // Client-side navigation can reuse an older RSC payload for a trip route.
+  // Prefer the client snapshot because it is updated immediately after edits;
+  // a hard reload still starts from `initialTrip` because the module cache is
+  // empty in that case.
   const initialSelected = tripId
-    ? initialTrip || tripListCache?.find((trip) => trip.id === tripId) || null
+    ? tripListCache?.find((trip) => trip.id === tripId) || initialTrip || null
     : null;
   const cachedSelected = initialSelected
     ? applyCachedTripReviewSummary(initialSelected)
     : null;
   const router = useRouter();
   const [dark, setDark] = useState(false);
-  const [lang, setLang] = useState<Lang>("TH");
+  const lang: Lang = "TH";
+  const [headerProfile, setHeaderProfile] = useState<AccountProfile | null>(() => getCachedCurrentAccount());
   const [trips, setTrips] = useState<Trip[]>(() =>
-    initialDashboardTrips ||
+    cachedDashboardSnapshot?.trips ||
+      initialDashboardTrips ||
       (cachedSelected ? [cachedSelected] : tripListCache || []),
   );
   const [selected, setSelected] = useState<Trip | null>(cachedSelected);
@@ -9181,24 +9257,79 @@ export function BNTripApp({
   );
   const [activeDay, setActiveDay] = useState(1);
   const [dashboardCounts, setDashboardCounts] = useState<DashboardCounts>(
-    initialDashboard?.counts || { total: 0, ongoing: 0, upcoming: 0, past: 0 },
+    cachedDashboardSnapshot?.counts ||
+      initialDashboard?.counts || { total: 0, ongoing: 0, upcoming: 0, past: 0 },
   );
   const [dashboardCountryHighlights, setDashboardCountryHighlights] = useState<
     CountryHighlight[]
-  >(initialDashboard?.countryHighlights || []);
+  >(
+    cachedDashboardSnapshot?.countryHighlights ||
+      initialDashboard?.countryHighlights ||
+      [],
+  );
+  const [dashboardFavoriteAccommodations, setDashboardFavoriteAccommodations] = useState<FavoriteAccommodation[]>(
+    initialDashboard?.favoriteAccommodations ||
+      cachedDashboardSnapshot?.favoriteAccommodations ||
+      [],
+  );
   const [tripRevision, setTripRevision] = useState(0);
   const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0);
   const [refreshingDashboard, setRefreshingDashboard] = useState(false);
+  const [tripDirectoryRefreshToken, setTripDirectoryRefreshToken] = useState(0);
+  const [refreshingTripDirectory, setRefreshingTripDirectory] = useState(false);
+  const tripDirectoryRefreshRequestedRef = useRef(false);
+  const finishTripDirectoryRefresh = useCallback(
+    () => {
+      setRefreshingTripDirectory(false);
+      if (!tripDirectoryRefreshRequestedRef.current) return;
+      tripDirectoryRefreshRequestedRef.current = false;
+      setToast("อัปเดตหน้ารวมทริปแล้ว");
+      window.setTimeout(() => setToast(""), 1800);
+    },
+    [],
+  );
+  useEffect(() => {
+    let active = true;
+    getCurrentAccount()
+      .then((profile) => {
+        if (active) setHeaderProfile(profile);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [dashboardRefreshToken]);
   useEffect(() => {
     if (initialDashboard) {
-      tripListCache = applyCachedTripReviewSummaries([
+      setDashboardFavoriteAccommodations(
+        initialDashboard.favoriteAccommodations || [],
+      );
+      if (dashboardSnapshotCache) {
+        dashboardSnapshotCache = {
+          ...dashboardSnapshotCache,
+          favoriteAccommodations:
+            initialDashboard.favoriteAccommodations || [],
+        };
+      }
+    }
+    if (initialDashboard && !dashboardSnapshotCache) {
+      const initialTrips = applyCachedTripReviewSummaries([
         ...initialDashboard.ongoing,
         ...initialDashboard.upcoming,
         ...initialDashboard.past,
       ]);
+      tripListCache = initialTrips;
+      dashboardSnapshotCache = {
+        trips: initialTrips,
+        favoriteAccommodations: initialDashboard.favoriteAccommodations || [],
+        counts: initialDashboard.counts,
+        countryHighlights: initialDashboard.countryHighlights,
+      };
     }
     if (tripId && initialTrip) {
-      const nextInitialTrip = applyCachedTripReviewSummary(initialTrip);
+      const nextInitialTrip =
+        tripListCache?.find((trip) => trip.id === tripId) ||
+        applyCachedTripReviewSummary(initialTrip);
       tripListCache = [
         nextInitialTrip,
         ...(tripListCache || []).filter((trip) => trip.id !== initialTrip.id),
@@ -9225,11 +9356,6 @@ export function BNTripApp({
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setDark(document.documentElement.classList.contains("dark"));
-      const saved = localStorage.getItem("bn-lang") as Lang | null;
-      if (saved) {
-        activeLang = saved;
-        setLang(saved);
-      }
     });
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -9245,9 +9371,10 @@ export function BNTripApp({
     };
   }, []);
   useEffect(() => {
-    activeLang = lang;
-    document.documentElement.lang = lang === "EN" ? "en" : "th";
-  }, [lang]);
+    activeLang = "TH";
+    document.documentElement.lang = "th";
+    localStorage.removeItem("bn-lang");
+  }, []);
   useEffect(() => {
     if (!authenticated || page !== "settings") return;
     let active = true;
@@ -9286,7 +9413,7 @@ export function BNTripApp({
     // loading here after hydration briefly replaces that UI with the loading
     // card when navigating back to Home/Plan, which presents as a one-frame
     // flash even though there is nothing left to fetch.
-    if (page === "dashboard" && initialDashboard && tripRevision === 0) return;
+    if (page === "dashboard" && initialDashboard) return;
     if (
       page !== "dashboard" &&
       tripId &&
@@ -9320,6 +9447,7 @@ export function BNTripApp({
             },
           );
           setDashboardCountryHighlights(data.countryHighlights || []);
+          setDashboardFavoriteAccommodations(data.favoriteAccommodations || []);
         } else if (tripId) {
           const cached = tripListCache?.find((trip) => trip.id === tripId);
           if (cached) {
@@ -9363,43 +9491,40 @@ export function BNTripApp({
       active = false;
     };
   }, [selected]);
-  async function refreshDashboard() {
-    if (page !== "dashboard" || refreshingDashboard) return;
+  async function refreshDashboard({
+    announce = true,
+  }: { announce?: boolean } = {}) {
+    if (refreshingDashboard) return;
     setRefreshingDashboard(true);
+    if (announce) clearCurrentAccount();
     try {
-      const response = await fetch("/api/trips?mode=dashboard", {
-        cache: "no-store",
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Refresh failed");
-      const rows: Trip[] = [
-        ...(data.ongoing || []),
-        ...(data.upcoming || []),
-        ...(data.past || []),
-      ];
-      tripListCache = rows;
+      const snapshot = await fetchFreshDashboardSnapshot();
       startTransition(() => {
-        setTrips(rows);
-        setDashboardCounts(
-          data.counts || {
-            total: rows.length,
-            ongoing: 0,
-            upcoming: 0,
-            past: 0,
-          },
-        );
-        setDashboardCountryHighlights(data.countryHighlights || []);
+        setTrips(snapshot.trips);
+        setDashboardCounts(snapshot.counts);
+        setDashboardCountryHighlights(snapshot.countryHighlights);
+        setDashboardFavoriteAccommodations(snapshot.favoriteAccommodations);
         setDashboardRefreshToken((value) => value + 1);
       });
-      setToast("อัปเดตหน้าแรกแล้ว");
-      window.setTimeout(() => setToast(""), 1800);
+      if (announce) {
+        setToast("อัปเดตหน้าแรกแล้ว");
+        window.setTimeout(() => setToast(""), 1800);
+      }
     } catch {
-      setToast("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
-      window.setTimeout(() => setToast(""), 2400);
+      if (announce) {
+        setToast("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
+        window.setTimeout(() => setToast(""), 2400);
+      }
     } finally {
       setRefreshingDashboard(false);
     }
   }
+  useEffect(() => {
+    if (page !== "dashboard") return;
+    if (sessionStorage.getItem("bn-trip-favorites-changed") !== "1") return;
+    sessionStorage.removeItem("bn-trip-favorites-changed");
+    void refreshDashboard({ announce: false });
+  }, [page]);
   if (!authenticated)
     return (
       <LanguageContext.Provider value={lang}>
@@ -9448,18 +9573,41 @@ export function BNTripApp({
           body: JSON.stringify(data),
         },
       );
+      // Use the URL returned by the upload immediately. Apart from making the
+      // UI deterministic, this prevents a stale API snapshot from restoring
+      // the previous cover while the edit sheet is closing.
+      const requestedCoverImageUrl =
+        typeof data.coverImageUrl === "string" && data.coverImageUrl
+          ? data.coverImageUrl
+          : response.cover_image_url;
       const saved: Trip = {
         ...response,
+        cover_image_url: requestedCoverImageUrl,
         members: response.members ?? modal.trip?.members ?? [],
       };
+      const cachedTrips = tripListCache || trips;
+      tripListCache = modal.trip
+        ? cachedTrips.map((trip) => (trip.id === saved.id ? saved : trip))
+        : [saved, ...cachedTrips.filter((trip) => trip.id !== saved.id)];
+      if (dashboardSnapshotCache) {
+        dashboardSnapshotCache = {
+          ...dashboardSnapshotCache,
+          trips: modal.trip
+            ? dashboardSnapshotCache.trips.map((trip) =>
+                trip.id === saved.id ? saved : trip,
+              )
+            : [
+                saved,
+                ...dashboardSnapshotCache.trips.filter(
+                  (trip) => trip.id !== saved.id,
+                ),
+              ],
+        };
+      }
       setTrips((old) => {
         const next: Trip[] = modal.trip
           ? old.map((t) => (t.id === saved.id ? saved : t))
           : [saved, ...old];
-        const cached = tripListCache || old;
-        tripListCache = modal.trip
-          ? cached.map((trip) => (trip.id === saved.id ? saved : trip))
-          : [saved, ...cached.filter((trip) => trip.id !== saved.id)];
         return next;
       });
       setTripRevision((value) => value + 1);
@@ -9483,6 +9631,9 @@ export function BNTripApp({
         router.replace(`/trips/${saved.id}`);
       }
       setSelected(saved);
+      if (!modal.trip && page === "dashboard") {
+        await refreshDashboard({ announce: false });
+      }
       flash(
         modal.trip
           ? "แก้ไขทริปแล้ว"
@@ -9496,6 +9647,7 @@ export function BNTripApp({
         router.push(
           `/trips/${saved.id}${origin ? `?returnTo=${encodeURIComponent(origin)}` : ""}`,
         );
+      return saved;
     }
     if (modal.type === "place" && selected) {
       const editing = modal.item;
@@ -9529,6 +9681,7 @@ export function BNTripApp({
           ? "อัปเดตวัน เวลา และรายละเอียดแล้ว"
           : "เพิ่มแผนเที่ยวและเรียง Timeline แล้ว",
       );
+      return saved;
     }
   }
   async function removeItinerary(item: Itinerary) {
@@ -9611,6 +9764,7 @@ export function BNTripApp({
     setTripRevision((value) => value + 1);
     itineraryCache.delete(trip.id);
     if (selected?.id === trip.id) setSelected(null);
+    await refreshDashboard({ announce: false });
     if (page !== "trips") {
       sessionStorage.setItem(NAVIGATION_TOAST_KEY, "ลบทริปสำเร็จแล้ว");
       router.push("/");
@@ -9760,6 +9914,9 @@ export function BNTripApp({
     clearCurrentAccount();
     await fetch("/api/auth/logout", { method: "POST" });
     tripListCache = null;
+    dashboardSnapshotCache = null;
+    tripInvitationsCache = null;
+    nearbyFlightsCache = null;
     itineraryCache.clear();
     location.href = "/";
   };
@@ -9779,6 +9936,7 @@ export function BNTripApp({
   ) : page === "dashboard" ? (
     <Dashboard
       trips={trips}
+      favoriteAccommodations={dashboardFavoriteAccommodations}
       counts={dashboardCounts}
       countryHighlights={dashboardCountryHighlights}
       revision={tripRevision + dashboardRefreshToken}
@@ -9791,20 +9949,50 @@ export function BNTripApp({
       viewAnalytics={() => router.push("/analytics")}
       viewBadges={() => router.push("/badges")}
       viewTripIdeas={() => router.push("/trip-ideas")}
-      onInvitationChanged={() => setTripRevision((value) => value + 1)}
+      onInvitationChanged={() => {
+        setTripRevision((value) => value + 1);
+        void refreshDashboard({ announce: false });
+      }}
       notify={flash}
       confirmAction={setConfirmation}
     />
   ) : page === "analytics" && initialAnalytics ? (
     <TravelAnalyticsDashboard datasets={initialAnalytics} />
+  ) : page === "album" ? (
+    <TripsDirectory
+      initialFilters={{
+        status: "past",
+        type: "",
+        year: "",
+        q: "",
+        sort: "latest",
+        focus: "",
+        loaded: "",
+      }}
+      initialData={{
+        items: initialAlbumTrips || [],
+        total: initialAlbumTrips?.length || 0,
+        years: [
+          ...new Set(
+            (initialAlbumTrips || []).map((trip) =>
+              Number(trip.start_date.slice(0, 4)),
+            ),
+          ),
+        ].filter(Boolean).sort((a, b) => b - a),
+        hasMore: false,
+      }}
+      revision={tripRevision}
+      selectTrip={selectTrip}
+      createTrip={protect(() => setModal({ type: "trip" }))}
+    />
   ) : page === "trips" ? (
     <TripsDirectory
       initialFilters={initialTripFilters}
       initialData={initialTripDirectory}
-      revision={tripRevision}
+      revision={tripRevision + tripDirectoryRefreshToken}
       selectTrip={selectTrip}
       createTrip={protect(() => setModal({ type: "trip" }))}
-      refreshEnabled={!modal && !confirmation}
+      onRefreshComplete={finishTripDirectoryRefresh}
     />
   ) : page === "trip" && selected ? (
     <TripHub
@@ -9813,17 +10001,6 @@ export function BNTripApp({
       cards={tripCards}
       day={activeDay}
       setDay={setActiveDay}
-      back={() => router.push(returnTo || "/")}
-      editTrip={protect(() => setModal({ type: "trip", trip: selected }))}
-      deleteTrip={protect(() =>
-        setConfirmation({
-          title: `ลบทริป “${selected.name}”?`,
-          description:
-            "แผนเที่ยว ค่าใช้จ่าย และข้อมูลทั้งหมดในทริปนี้จะถูกลบถาวร",
-          confirmLabel: "ลบทริป",
-          onConfirm: () => removeTrip(selected),
-        }),
-      )}
       openReviews={() => setModal({ type: "reviews", trip: selected })}
       manageCollaborators={protect(() =>
         setModal({ type: "collaborators", trip: selected }),
@@ -9831,6 +10008,7 @@ export function BNTripApp({
       leaveTrip={protect(() =>
         setModal({ type: "collaborators", trip: selected }),
       )}
+      editTrip={protect(() => setModal({ type: "trip", trip: selected }))}
       addPlace={protect((day, defaultTime?: string) => {
         setActiveDay(day);
         setModal({ type: "place", defaultDay: day, defaultTime });
@@ -9866,7 +10044,7 @@ export function BNTripApp({
         setActiveDay(day);
         setModal({ type: "place", defaultDay: day, defaultTime });
       })}
-      back={() => router.push(`/trips/${selected.id}`)}
+      editTrip={protect(() => setModal({ type: "trip", trip: selected }))}
       notify={flash}
       onChanged={() => refreshActiveTrip(selected.id)}
     />
@@ -9875,19 +10053,14 @@ export function BNTripApp({
       trip={selected}
       items={itineraries}
       cards={tripCards}
-      back={() => router.push(`/trips/${selected.id}`)}
       openCost={protect(openCost)}
+      editTrip={protect(() => setModal({ type: "trip", trip: selected }))}
     />
   ) : page === "settings" ? (
     <SettingsScreen
       dark={dark}
       toggleTheme={toggleTheme}
       lang={lang}
-      setLang={(value) => {
-        activeLang = value;
-        setLang(value);
-        localStorage.setItem("bn-lang", value);
-      }}
       logout={logout}
       cards={cards}
       saveCard={saveCard}
@@ -9972,67 +10145,75 @@ export function BNTripApp({
       canDelete={selected?.access_role !== "view"}
     />
   );
-  const label = (value: string) =>
-    lang === "EN" ? translateUiText(value) : value;
+  const label = (value: string) => value;
+  const mainNavigationPage = page === "dashboard" || page === "trips" || page === "settings";
+  const tripNavigationPage =
+    Boolean(selected) && ["trip", "timeline", "expenses"].includes(page);
+  const refreshingMainPage =
+    page === "dashboard"
+      ? refreshingDashboard
+      : page === "trips"
+        ? refreshingTripDirectory
+        : false;
   return (
     <LanguageContext.Provider value={lang}>
       <div
-        className={`app-shell flow-shell ${page === "trip" || page === "expenses" ? "trip-page-shell" : ""} ${demo ? "demo-mode" : ""}`}
+        className={`app-shell flow-shell ${page === "dashboard" ? "dashboard-page-shell" : ""} ${mainNavigationPage ? "main-nav-page-shell" : ""} ${page === "trip" || page === "expenses" ? "trip-page-shell" : ""} ${page === "timeline" ? "timeline-page-shell" : ""} ${demo ? "demo-mode" : ""}`}
       >
         {toast && (
           <div className="toast toast-success" role="status">
             <CheckCircle2 size={17} />
-            {lang === "EN" ? translateUiText(toast) : toast}
+            {toast}
           </div>
         )}
         <main>
-          <header className="mobile-head flow-header">
-            <Brand />
-            <nav
-              className="mobile-actions"
-              aria-label={lang === "EN" ? "Main menu" : "เมนูหลัก"}
-            >
-              {page !== "dashboard" && (
-                <button
-                  className="icon-btn"
-                  onClick={() => router.push("/")}
-                  aria-label={lang === "EN" ? "Home" : "หน้าแรก"}
-                  title={lang === "EN" ? "Home" : "หน้าแรก"}
+          {!tripNavigationPage && (
+            <header className="mobile-head flow-header">
+              <>
+                <Brand />
+                <nav
+                  className="mobile-actions"
+                  aria-label="เมนูหลัก"
                 >
-                  <House size={18} />
-                </button>
-              )}
-              {page === "dashboard" && (
-                <button
-                  className="icon-btn"
-                  type="button"
-                  onClick={() => void refreshDashboard()}
-                  disabled={refreshingDashboard}
-                  aria-label={label(
-                    refreshingDashboard ? "กำลังอัปเดต…" : "รีเฟรช",
+                  {!mainNavigationPage && (
+                    <button className="icon-btn" onClick={() => router.push("/")} aria-label="หน้าแรก" title="หน้าแรก">
+                      <House size={18} />
+                    </button>
                   )}
-                  title={label(
-                    refreshingDashboard ? "กำลังอัปเดต…" : "รีเฟรช",
+                  {mainNavigationPage && (
+                    <>
+                      <button className="icon-btn home-refresh-btn" type="button" onClick={() => {
+                        if (page === "dashboard") void refreshDashboard();
+                        else if (page === "trips") {
+                          if (refreshingTripDirectory) return;
+                          tripDirectoryRefreshRequestedRef.current = true;
+                          setRefreshingTripDirectory(true);
+                          setTripDirectoryRefreshToken((value) => value + 1);
+                        } else router.refresh();
+                      }} disabled={refreshingMainPage} aria-label={label(refreshingMainPage ? "กำลังอัปเดต…" : "รีเฟรช")} title={label(refreshingMainPage ? "กำลังอัปเดต…" : "รีเฟรช")}>
+                        <RefreshCw className={refreshingMainPage ? "analytics-refresh-spinning" : ""} size={24} />
+                      </button>
+                      <button className="icon-btn home-notification-btn" type="button" onClick={() => {
+                        const invitations = document.querySelector(".trip-invitations");
+                        if (invitations) invitations.scrollIntoView({ behavior: "smooth", block: "start" });
+                        else flash("ไม่มีการแจ้งเตือนใหม่");
+                      }} aria-label={label("การแจ้งเตือน")} title={label("การแจ้งเตือน")}>
+                        <Bell size={24} />
+                      </button>
+                      <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์">
+                        <AccountAvatar profile={headerProfile} size="small" />
+                      </button>
+                    </>
                   )}
-                >
-                  <RefreshCw
-                    className={
-                      refreshingDashboard ? "analytics-refresh-spinning" : ""
-                    }
-                    size={18}
-                  />
-                </button>
-              )}
-              <button
-                className={`icon-btn ${page === "settings" ? "active" : ""}`}
-                onClick={() => router.push("/settings")}
-                aria-label={lang === "EN" ? "Settings" : "ตั้งค่า"}
-                title={lang === "EN" ? "Settings" : "ตั้งค่า"}
-              >
-                <Settings2 size={18} />
-              </button>
-            </nav>
-          </header>
+                  {!mainNavigationPage && (
+                    <button className="icon-btn" onClick={() => router.push("/settings")} aria-label="ตั้งค่า" title="ตั้งค่า">
+                      <Settings2 size={18} />
+                    </button>
+                  )}
+                </nav>
+              </>
+            </header>
+          )}
           {demo && (
             <aside className="demo-banner" role="status">
               <div>
