@@ -4221,6 +4221,7 @@ function SwipeableTimelineDay({
   const suppressClick = useRef(false);
   const targetDay = useRef<number | null>(null);
   const settling = useRef(false);
+  if (totalDays <= 1) return <>{children(day)}</>;
   const centerTrack = () => {
     const track = trackRef.current;
     if (!track) return;
