@@ -3355,6 +3355,10 @@ button:disabled {
 .trip-directory-filter-sheet .year-filter button {
   background: var(--surface-2);
 }
+.trip-directory-type-options { margin:0; }
+.trip-directory-type-options .status-domestic > svg { color:#19a66f; }
+.trip-directory-type-options .status-international > svg { color:#5c76d8; }
+.trip-directory-type-options button.active > svg { color:#fff; }
 .directory-title {
   margin: 4px 2px 4px;
   display: flex;

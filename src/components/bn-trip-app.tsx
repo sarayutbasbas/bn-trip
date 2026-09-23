@@ -3368,13 +3368,14 @@ function TripsDirectory({
     ["domestic", "international"].includes(value)
       ? (value as TripType)
       : "all";
+  const parseYears = (value:string) => [...new Set(value.split(",").map(item=>item.trim()).filter(item=>/^\d{4}$/.test(item)))];
   const [status, setStatus] = useState<TripStatus>(() =>
     validStatus(initialFilters.status),
   );
   const [tripType, setTripType] = useState<TripType>(() =>
     validType(initialFilters.type),
   );
-  const [year, setYear] = useState(initialFilters.year || "all");
+  const [selectedYears, setSelectedYears] = useState<string[]>(()=>parseYears(initialFilters.year));
   const [queryText, setQueryText] = useState(initialFilters.q || "");
   const sort = "latest";
   const [items, setItems] = useState<Trip[]>(() =>
@@ -3385,7 +3386,7 @@ function TripsDirectory({
   const [hasMore, setHasMore] = useState(Boolean(initialData?.hasMore));
   const [filtersOpen,setFiltersOpen]=useState(false);
   const [draftTripType,setDraftTripType]=useState<TripType>(()=>validType(initialFilters.type));
-  const [draftYear,setDraftYear]=useState(initialFilters.year||"all");
+  const [draftYears,setDraftYears]=useState<string[]>(()=>parseYears(initialFilters.year));
   const [loading, setLoading] = useState(!initialData);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -3474,7 +3475,7 @@ function TripsDirectory({
           limit: "20",
           offset: "0",
         });
-        if (year !== "all") params.set("year", year);
+        if (selectedYears.length) params.set("year", selectedYears.join(","));
         if (queryText.trim()) params.set("q", queryText.trim());
         const visibleParams = new URLSearchParams(params);
         visibleParams.delete("mode");
@@ -3531,7 +3532,7 @@ function TripsDirectory({
   }, [
     status,
     tripType,
-    year,
+    selectedYears,
     queryText,
     sort,
     revision,
@@ -3550,7 +3551,7 @@ function TripsDirectory({
       limit: "20",
       offset: String(items.length),
     });
-    if (year !== "all") params.set("year", year);
+    if (selectedYears.length) params.set("year", selectedYears.join(","));
     if (queryText.trim()) params.set("q", queryText.trim());
     try {
       const response = await fetch(`/api/trips?${params}`);
@@ -3569,6 +3570,11 @@ function TripsDirectory({
     {value:"all",label:"ทั้งหมด",Icon:Luggage},
     {value:"upcoming",label:"กำลังจะไป",Icon:Plane},
     {value:"past",label:"ที่ผ่านมา",Icon:CheckCircle2},
+  ];
+  const tripTypes:Array<{value:TripType;label:string;Icon:typeof Luggage}>=[
+    {value:"all",label:"ทั้งหมด",Icon:Luggage},
+    {value:"domestic",label:"ในประเทศ",Icon:MapPin},
+    {value:"international",label:"ต่างประเทศ",Icon:Globe2},
   ];
   return (
     <>
@@ -3594,30 +3600,30 @@ function TripsDirectory({
               </button>
             )}
           </label>
-          <button className={`trip-directory-filter-toggle ${filtersOpen||tripType!=="all"||year!=="all"?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYear(year);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/></button>
+          <button className={`trip-directory-filter-toggle ${filtersOpen||tripType!=="all"||selectedYears.length?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/></button>
       </div>
       {filtersOpen&&(
         <BottomSheet
           title={t("เลือกตัวกรองทริป")}
-          subtitle={t("เลือกประเภทและปีที่ต้องการ แล้วกดยืนยันเพื่อแสดงผล")}
+          subtitle={t("เลือกประเภทและปีที่ต้องการได้มากกว่า 1 ปี แล้วกดยืนยันเพื่อแสดงผล")}
           closeLabel={t("ยกเลิก")}
           onClose={()=>setFiltersOpen(false)}
-          onSubmit={(event)=>{event.preventDefault();setTripType(draftTripType);setYear(draftYear);setFiltersOpen(false)}}
+          onSubmit={(event)=>{event.preventDefault();setTripType(draftTripType);setSelectedYears([...draftYears].sort((a,b)=>Number(b)-Number(a)));setFiltersOpen(false)}}
           className="trip-directory-filter-sheet"
           bodyClassName="bottom-sheet-body trip-directory-filter-body"
           submitLabel={t("แสดงผล")}
         >
           <section className="trip-directory-filter-section">
             <h3>{t("ประเภททริป")}</h3>
-            <div className="trip-type-options" role="group" aria-label={t("ประเภททริป")}>
-              {([['all','ทั้งหมด'],['domestic','ในประเทศ'],['international','ต่างประเทศ']] as Array<[TripType,string]>).map(([value,label])=><button type="button" key={value} className={draftTripType===value?"active":""} onClick={()=>setDraftTripType(value)}>{t(label)}</button>)}
+            <div className="trip-type-options status-filter trip-directory-type-options" role="group" aria-label={t("ประเภททริป")}>
+              {tripTypes.map(({value,label,Icon})=><button type="button" key={value} className={`${draftTripType===value?"active":""} status-${value}`} onClick={()=>setDraftTripType(value)} aria-pressed={draftTripType===value}><Icon size={24}/><span><strong>{t(label)}</strong></span></button>)}
             </div>
           </section>
           <section className="trip-directory-filter-section">
             <h3>{t("ปีที่เดินทาง")}</h3>
             <div className="year-filter" role="group" aria-label={t("ปีที่เดินทาง")}>
-              <button type="button" className={draftYear==="all"?"active":""} onClick={()=>setDraftYear("all")}>{t("ทุกปี")}</button>
-              {years.map(value=><button type="button" key={value} className={draftYear===String(value)?"active":""} onClick={()=>setDraftYear(String(value))}>{value}</button>)}
+              <button type="button" className={!draftYears.length?"active":""} onClick={()=>setDraftYears([])} aria-pressed={!draftYears.length}>{t("ทุกปี")}</button>
+              {years.map(value=>{const stringValue=String(value);const active=draftYears.includes(stringValue);return <button type="button" key={value} className={active?"active":""} onClick={()=>setDraftYears(current=>active?current.filter(item=>item!==stringValue):[...current,stringValue])} aria-pressed={active}>{value}</button>})}
             </div>
           </section>
         </BottomSheet>

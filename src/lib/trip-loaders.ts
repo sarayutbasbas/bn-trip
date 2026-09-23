@@ -600,10 +600,10 @@ export async function loadTripDirectory(
   const incomplete = tripIncompleteSetupSql("t");
   const status = params.get("status") || "all";
   const tripType = params.get("type") || "all";
-  const year = Number(params.get("year") || 0);
+  const selectedYears = [...new Set(params.getAll("year").flatMap((value) => value.split(",")).map(Number).filter((year) => Number.isInteger(year) && year >= 2000 && year <= 2200))].slice(0, 50);
   const search = (params.get("q") || "").trim().slice(0, 80);
   const sort = params.get("sort") || "latest";
-  const values: Array<string | number> = [session.userId];
+  const values: Array<string | number | number[]> = [session.userId];
   const where = [access];
   if (status === "ongoing")
     where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
@@ -614,22 +614,22 @@ export async function loadTripDirectory(
   if (tripType === "domestic") where.push("t.country_code='TH'");
   if (tripType === "international")
     where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
-  if (year >= 2000 && year <= 2200) {
-    values.push(year);
-    where.push(`EXTRACT(YEAR FROM start_date)=$${values.length}`);
+  if (selectedYears.length) {
+    values.push(selectedYears);
+    where.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${values.length}::int[])`);
   }
   if (search) {
     values.push(`%${search}%`);
     where.push(`(name ILIKE $${values.length} OR destination ILIKE $${values.length} OR country_name ILIKE $${values.length})`);
   }
-  const statusCountValues: Array<string | number> = [session.userId];
+  const statusCountValues: Array<string | number | number[]> = [session.userId];
   const statusCountWhere = [access];
   if (tripType === "domestic") statusCountWhere.push("t.country_code='TH'");
   if (tripType === "international")
     statusCountWhere.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
-  if (year >= 2000 && year <= 2200) {
-    statusCountValues.push(year);
-    statusCountWhere.push(`EXTRACT(YEAR FROM start_date)=$${statusCountValues.length}`);
+  if (selectedYears.length) {
+    statusCountValues.push(selectedYears);
+    statusCountWhere.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${statusCountValues.length}::int[])`);
   }
   if (search) {
     statusCountValues.push(`%${search}%`);
