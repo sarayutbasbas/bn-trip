@@ -2356,7 +2356,7 @@ function TripCard({
             )}
             {dateRangeLabel && hasDuration && (
               <i className="trip-card-facts-separator" aria-hidden="true">
-                •••
+                •
               </i>
             )}
             {hasDuration && (

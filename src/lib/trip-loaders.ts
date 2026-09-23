@@ -526,27 +526,37 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
       ORDER BY favorite.favorited_at DESC,accommodation.id DESC
       LIMIT 10`, [session.userId]),
     query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past,count(DISTINCT COALESCE(NULLIF(btrim(t.country_code),''),NULLIF(btrim(t.country_name),''))) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS countries,COALESCE(sum(t.total_days) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))),0)::int AS travel_days FROM trips t WHERE ${access}`, [session.userId]),
-    query<{country_code:string;country:string;trips:number;average_rating:number;review_count:number}>(`SELECT
-        btrim(COALESCE(t.country_code,'')) AS country_code,
-        COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ') AS country,
+    query<{country_code:string;country:string;trips:number;average_rating:number;review_count:number}>(`WITH trip_country_rows AS (
+        SELECT
+          upper(btrim(COALESCE(t.country_code,''))) AS country_code,
+          COALESCE(NULLIF(btrim(t.country_name),''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ') AS country,
+          review.average_rating,
+          review.review_count
+        FROM trips t
+        LEFT JOIN LATERAL (
+          SELECT avg(trip_review.rating) AS average_rating,count(*)::int AS review_count
+          FROM trip_reviews trip_review
+          WHERE trip_review.trip_id=t.id
+            AND (trip_review.user_id=t.owner_id OR EXISTS (
+              SELECT 1 FROM trip_collaborators review_member
+              WHERE review_member.trip_id=t.id AND review_member.user_id=trip_review.user_id
+            ))
+        ) review ON true
+        WHERE ${access}
+          AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)
+            < (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
+      )
+      SELECT
+        max(country_code) AS country_code,
+        max(country) AS country,
         count(*)::int AS trips,
-        COALESCE(round(avg(review.average_rating),1),0)::float AS average_rating,
-        COALESCE(sum(review.review_count),0)::int AS review_count
-      FROM trips t
-      LEFT JOIN LATERAL (
-        SELECT avg(trip_review.rating) AS average_rating,count(*)::int AS review_count
-        FROM trip_reviews trip_review
-        WHERE trip_review.trip_id=t.id
-          AND (trip_review.user_id=t.owner_id OR EXISTS (
-            SELECT 1 FROM trip_collaborators review_member
-            WHERE review_member.trip_id=t.id AND review_member.user_id=trip_review.user_id
-          ))
-      ) review ON true
-      WHERE ${access}
-        AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)
-          < (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
-      GROUP BY btrim(COALESCE(t.country_code,'')),
-        COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ')
+        COALESCE(round(avg(average_rating),1),0)::float AS average_rating,
+        COALESCE(sum(review_count),0)::int AS review_count
+      FROM trip_country_rows
+      GROUP BY CASE
+        WHEN country_code<>'' THEN 'code:'||country_code
+        ELSE 'name:'||lower(btrim(country))
+      END
       ORDER BY average_rating DESC,trips DESC,country ASC`, [session.userId]),
     query<{total:number}>(`SELECT count(DISTINCT destination.value->>'id')::int AS total
       FROM trips destination_trip
