@@ -5300,6 +5300,13 @@ html.dark .trip-section-nav button.active {
   background: linear-gradient(180deg,rgba(255,169,98,.5) 0%,#ff7830 18%,#ff9e43 72%,rgba(255,177,107,.56) 100%);
   box-shadow: 0 0 10px rgba(255,122,48,.2);
 }
+.editable-timeline:has(> .timeline-stop:first-child:last-child)::before {
+  background: transparent;
+  box-shadow: none;
+}
+.editable-timeline:has(> .timeline-stop:first-child:last-child) .event-dot {
+  visibility: hidden;
+}
 .timeline-stop {
   position: relative;
 }
@@ -5639,7 +5646,10 @@ html.dark .trip-section-nav button.active {
   gap: 12px;
 }
 .editable-event-card .event-copy {
+  min-height: 116px;
   padding: 11px 0 9px;
+  display: flex;
+  flex-direction: column;
 }
 .editable-event-card .timeline-title-row {
   width: 100%;
@@ -5659,6 +5669,33 @@ html.dark .trip-section-nav button.active {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   max-height: 2.7em;
+}
+.timeline-expense-summary {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 22px;
+  margin-top: auto;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb,#139889 18%,var(--line));
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: color-mix(in srgb,#078577 86%,var(--ink));
+  background: color-mix(in srgb,#27b5a5 10%,var(--surface-solid));
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeline-expense-summary svg {
+  flex: 0 0 auto;
+}
+.dark .timeline-expense-summary {
+  color: #75d9ce;
+  background: color-mix(in srgb,#27b5a5 14%,#1c1c1e);
 }
 .timeline-screen .event-card {
   min-height: 82px;
@@ -5760,9 +5797,9 @@ html.dark .trip-section-nav button.active {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line-strong);
-  color: var(--orange);
-  background: var(--surface-solid);
+  border: 1px solid color-mix(in srgb,#139889 24%,var(--line));
+  color: color-mix(in srgb,#139889 82%,var(--ink));
+  background: color-mix(in srgb,#27b5a5 9%,var(--surface-solid));
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   box-shadow: 0 1px 0 var(--glass-highlight) inset,0 4px 10px rgba(45,45,48,.1);
@@ -5856,47 +5893,61 @@ html.dark .trip-section-nav button.active {
   font-size: 10px;
   font-weight: 700;
 }
-.timeline-expense-sheet {
-  height: auto;
-  max-height: min(72dvh,620px);
+.modal-backdrop > .modal.bottom-sheet.timeline-expense-sheet {
+  height: fit-content !important;
+  min-height: 0 !important;
+  max-height: min(85dvh,calc(100dvh - env(safe-area-inset-top) - 14px)) !important;
 }
 .timeline-expense-sheet-body {
   min-height: 0;
   display: grid;
-  gap: 12px;
-  overflow-y: auto;
+  grid-template-rows: auto auto;
+  gap: 10px;
+  overflow: hidden;
   overscroll-behavior: contain;
 }
 .timeline-expense-sheet .timeline-expense-list {
-  max-height: none;
+  max-height: calc(85dvh - 188px);
   padding: 0;
-  display: grid;
-  gap: 8px;
-  overflow: visible;
+  display: block;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .timeline-expense-sheet .timeline-expense-list > button {
-  min-height: 58px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  grid-template-columns: 36px minmax(0,1fr) auto;
-  gap: 10px;
-  background: var(--surface-2);
-  box-shadow: 0 1px 0 var(--glass-highlight) inset;
+  min-height: 48px;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: .5px solid var(--line);
+  border-radius: 0;
+  grid-template-columns: 30px minmax(0,1fr) auto;
+  gap: 8px;
+  background: transparent;
+  box-shadow: none;
 }
+.timeline-expense-sheet .timeline-expense-list > button:last-child { border-bottom:0; }
 .timeline-expense-sheet .timeline-expense-list i {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 9px;
 }
-.timeline-expense-sheet .timeline-expense-list b { font-size:12px; }
-.timeline-expense-sheet .timeline-expense-list small { font-size:9px; }
-.timeline-expense-sheet .timeline-expense-list em { font-size:12px; }
+.timeline-expense-sheet .timeline-expense-list .expense-category-icon.is-food { color:#ef5d1a;background:#fff0e7; }
+.timeline-expense-sheet .timeline-expense-list .expense-category-icon.is-transport { color:#0a9a7b;background:#def7f0; }
+.timeline-expense-sheet .timeline-expense-list .expense-category-icon.is-stay { color:#ee4660;background:#ffe7eb; }
+.timeline-expense-sheet .timeline-expense-list .expense-category-icon.is-flight { color:#527ce7;background:#e8efff; }
+.timeline-expense-sheet .timeline-expense-list .expense-category-icon.is-activity { color:#8f4be2;background:#f1e7ff; }
+.timeline-expense-sheet .timeline-expense-list .expense-category-icon.is-shopping { color:#d69410;background:#fff3d7; }
+.timeline-expense-sheet .timeline-expense-list .expense-category-icon.is-other { color:#697386;background:#edf0f5; }
+.timeline-expense-sheet .timeline-expense-list b { font-size:11px; }
+.timeline-expense-sheet .timeline-expense-list small { font-size:8px; }
+.timeline-expense-sheet .timeline-expense-list em { font-size:11px; }
 .timeline-expense-sheet .timeline-expense-empty {
-  min-height: 132px;
-  padding: 22px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 18px;
+  min-height: 104px;
+  padding: 16px;
+  border: 0;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   align-content: center;
@@ -5905,7 +5956,7 @@ html.dark .trip-section-nav button.active {
   background: var(--surface-2);
   text-align: center;
 }
-.timeline-expense-sheet .timeline-expense-empty svg { color:var(--orange); }
+.timeline-expense-sheet .timeline-expense-empty svg { color:#139889; }
 .timeline-expense-sheet .timeline-expense-empty strong { color:var(--ink);font-size:13px; }
 .timeline-expense-sheet .timeline-expense-empty small { font-size:9px; }
 .timeline-expense-sheet .timeline-expense-add {
@@ -14358,8 +14409,8 @@ html.dark .dashboard-favorite-hotel-card > button { background:color-mix(in srgb
 .flight-page .flight-card-compact { padding:13px 13px 12px 16px;border:.5px solid var(--line);border-left:4px solid var(--orange);border-radius:18px;background:var(--surface-solid);box-shadow:0 6px 18px rgba(35,42,53,.08); }
 .flight-page .flight-card-compact::after { display:block; }
 .flight-page .flight-card-compact::before { display:none; }
-.flight-airline-mark { width:38px;height:38px;flex:0 0 38px;padding:4px;border:1px solid color-mix(in srgb,var(--line) 82%,transparent);border-radius:50%;display:grid;place-items:center;overflow:hidden;color:var(--ink);background:#fff;box-shadow:0 4px 10px rgba(30,42,60,.1);font-size:9px;font-weight:800; }
-.flight-airline-mark img { width:100%;height:100%;object-fit:contain; }
+.flight-airline-mark { width:38px;height:38px;flex:0 0 38px;padding:0;border:1px solid color-mix(in srgb,var(--line) 82%,transparent);border-radius:50%;display:grid;place-items:center;overflow:hidden;color:var(--ink);background:#fff;box-shadow:0 4px 10px rgba(30,42,60,.1);font-size:9px;font-weight:800; }
+.flight-airline-mark img { width:100%;height:100%;border-radius:50%;object-fit:cover;transform:scale(1.18); }
 .flight-airline-mark.is-fallback { padding:0;border-color:transparent;color:#fff;background:linear-gradient(145deg,#ff5a1f,#ff982f);box-shadow:0 4px 10px rgba(255,103,24,.2); }
 .flight-airline-mark b { font-size:9px;font-weight:800; }
 .flight-duration-label { min-height:11px;margin-top:2px;color:var(--muted);font-size:8px;font-weight:650;line-height:1.2;text-align:center;white-space:nowrap; }
@@ -14370,6 +14421,14 @@ html.dark .dashboard-favorite-hotel-card > button { background:color-mix(in srgb
 .flight-page .flight-passenger-info-group { background:#f7f8fa; }
 html.dark .flight-card-compact::after,
 html.dark .nearby-flight-card::after { filter:grayscale(1) invert(1) contrast(.8);opacity:.11; }
+html.dark .flight-page .flight-card-compact { background:#1c1c1e;box-shadow:0 7px 20px rgba(0,0,0,.3); }
+html.dark .flight-page .flight-terminal-grid,
+html.dark .flight-page .flight-passenger-info-group { color:#a1a1a6;background:#2c2c2e; }
+html.dark .flight-page .flight-terminal-grid b,
+html.dark .flight-page .flight-passenger-info-value > b { color:#e5e5ea; }
+html.dark .flight-airline-mark { border-color:#48484a;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.3); }
+html.dark .flight-airline-mark img { filter:drop-shadow(0 0 1px rgba(255,255,255,.42)); }
+html.dark .flight-airline-mark.is-fallback { border-color:transparent;background:linear-gradient(145deg,#ff5a1f,#ff982f); }
 .dashboard-featured-flight .nearby-flight-card { margin:0;box-shadow:0 12px 30px rgba(22,25,35,.14); }
 .dashboard-featured-flight .nearby-flight-status-stack > b { color:#16835f;background:#e6f8f0; }
 
@@ -14413,6 +14472,27 @@ html.dark .modal.bottom-sheet textarea,
 html.dark .modal.bottom-sheet select {
   color:var(--ink);
   background-color:var(--surface-2);
+}
+html.dark .modal.bottom-sheet .country-picker-control,
+html.dark .modal.bottom-sheet .trip-destination-control {
+  border-color:var(--line);
+  background:var(--surface-2);
+}
+html.dark .modal.bottom-sheet .country-picker-control:focus-within,
+html.dark .modal.bottom-sheet .trip-destination-control:focus-within {
+  border-color:var(--line-strong);
+  background:var(--surface-solid);
+}
+html.dark .modal.bottom-sheet .field .country-picker-control input,
+html.dark .modal.bottom-sheet .field .trip-destination-search input,
+html.dark .modal.bottom-sheet .field .country-picker-control input:focus,
+html.dark .modal.bottom-sheet .field .trip-destination-search input:focus {
+  border:0;
+  color:var(--ink);
+  background:transparent;
+  box-shadow:none;
+  outline:0;
+  -webkit-text-fill-color:var(--ink);
 }
 
 html.dark .trips-directory .compact-trip-card,

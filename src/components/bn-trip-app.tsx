@@ -366,7 +366,13 @@ type Modal =
       defaultDay?: number;
       defaultTime?: string;
     }
-  | { type: "cost"; item?: Itinerary; costIndex?: number; defaultDay?: number }
+  | {
+      type: "cost";
+      item?: Itinerary;
+      costIndex?: number;
+      defaultDay?: number;
+      returnToExpenseList?: () => void;
+    }
   | { type: "collaborators"; trip: Trip }
   | { type: "reviews"; trip: Trip }
   | null;
@@ -4078,19 +4084,29 @@ function TripSectionNav({
 function TimelineExpenseMenu({
   item,
   openCost,
+  open,
+  onOpen,
+  onClose,
 }: {
   item: Itinerary;
-  openCost: (item: Itinerary, index?: number) => void;
+  openCost: (
+    item: Itinerary,
+    index?: number,
+    defaultDay?: number,
+    returnToExpenseList?: () => void,
+  ) => void;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
 }) {
   const t = useT();
   const costs = item.cost_items || [];
-  const [open, setOpen] = useState(false);
   return (
     <div className="timeline-expense-menu">
       <button
         type="button"
         className="timeline-expense-trigger"
-        onClick={() => setOpen(true)}
+        onClick={onOpen}
         aria-label={t("รายการค่าใช้จ่าย")}
         aria-expanded={open}
       >
@@ -4101,7 +4117,7 @@ function TimelineExpenseMenu({
           title={t("รายการค่าใช้จ่าย")}
           subtitle={item.place_name}
           closeLabel={t("ปิด")}
-          onClose={() => setOpen(false)}
+          onClose={onClose}
           className="timeline-expense-sheet"
           bodyClassName="bottom-sheet-body timeline-expense-sheet-body"
         >
@@ -4111,11 +4127,11 @@ function TimelineExpenseMenu({
                 type="button"
                 key={cost.id || `${cost.key}-${index}`}
                 onClick={() => {
-                  setOpen(false);
-                  openCost(item, index);
+                  onClose();
+                  openCost(item, index, undefined, onOpen);
                 }}
               >
-                <i><ReceiptText size={16} /></i>
+                <ExpenseCategoryIcon category={cost.category} />
                 <span><b>{cost.key}</b><small>{costSourceLabel(cost)}</small></span>
                 <em>฿{bahtFormat(cost.value)}</em>
               </button>
@@ -4125,8 +4141,8 @@ function TimelineExpenseMenu({
             type="button"
             className="timeline-expense-add"
             onClick={() => {
-              setOpen(false);
-              openCost(item);
+              onClose();
+              openCost(item, undefined, undefined, onOpen);
             }}
           >
             <Plus size={17} />
@@ -4515,7 +4531,12 @@ function TripHub({
   editTrip: () => void;
   addPlace: (day: number, defaultTime?: string) => void;
   editPlace: (item: Itinerary) => void;
-  openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
+  openCost: (
+    item?: Itinerary,
+    index?: number,
+    defaultDay?: number,
+    returnToExpenseList?: () => void,
+  ) => void;
   onFlightChanged: () => void | Promise<void>;
   notify: (message: string) => void;
   initialWorkspaceTab?: WorkspaceTab;
@@ -4542,6 +4563,7 @@ function TripHub({
   const [openAccommodationDay, setOpenAccommodationDay] = useState<
     number | null
   >(null);
+  const [openTimelineExpenseId, setOpenTimelineExpenseId] = useState<string | null>(null);
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
@@ -4672,6 +4694,21 @@ function TripHub({
             ) : (
               <div className="timeline editable-timeline">
                 {dayItems.map((item, index) => {
+                  const itemCosts = item.cost_items || [];
+                  const itemExpenseTotal = itemCosts.reduce(
+                    (total, cost) => total + Number(cost.value || 0),
+                    0,
+                  );
+                  const openTimelineItem = () => {
+                    if (itemCosts.length) {
+                      setOpenTimelineExpenseId(item.id);
+                    } else if (item.accommodation_id) {
+                      setOpenAccommodationDay(item.day_number);
+                      setOpenAccommodationId(item.accommodation_id);
+                    } else {
+                      editPlace(item);
+                    }
+                  };
                   const isCurrent = index === currentIndex;
                   const isPast =
                     tripDay !== null &&
@@ -4722,22 +4759,14 @@ function TripHub({
                             if (
                               !(event.target as HTMLElement).closest("button,a")
                             ) {
-                              if (item.accommodation_id) {
-                                setOpenAccommodationDay(item.day_number);
-                                setOpenAccommodationId(item.accommodation_id);
-                              }
-                              else editPlace(item);
+                              openTimelineItem();
                             }
                           }}
                         >
                           <button
+                            type="button"
                             className="event-card-main"
-                            onClick={() => {
-                              if (item.accommodation_id) {
-                                setOpenAccommodationDay(item.day_number);
-                                setOpenAccommodationId(item.accommodation_id);
-                              } else editPlace(item);
-                            }}
+                            onClick={openTimelineItem}
                           >
                             <span className={`event-image ${item.image_url||item.location_image_url||item.accommodation_image_url?"":"is-placeholder"}`}>
                               <Image
@@ -4788,6 +4817,12 @@ function TripHub({
                                   {item.transport_note}
                                 </p>
                               )}
+                              {itemCosts.length > 0 && (
+                                <span className="timeline-expense-summary">
+                                  <WalletCards size={12} aria-hidden="true" />
+                                  {t("ค่าใช้จ่ายรวม")} {bahtFormat(itemExpenseTotal)} {t("บาท")}
+                                </span>
+                              )}
                             </div>
                           </button>
                           <div className="navigate-actions">
@@ -4815,7 +4850,13 @@ function TripHub({
                             </a>
                           </div>
                         </article>
-                        <TimelineExpenseMenu item={item} openCost={openCost} />
+                        <TimelineExpenseMenu
+                          item={item}
+                          openCost={openCost}
+                          open={openTimelineExpenseId === item.id}
+                          onOpen={() => setOpenTimelineExpenseId(item.id)}
+                          onClose={() => setOpenTimelineExpenseId(null)}
+                        />
                       </div>
                       {index === dayItems.length - 1 && (
                         <TimelineInsertPlaceButton
@@ -5549,7 +5590,11 @@ export function LegacyPlanExpensesContent({
 function expenseCategoryTone(category?: string | null) {
   const normalized = (category || "อื่น ๆ").trim().toLocaleLowerCase();
   let tone = "other";
-  if (normalized.includes("อาหาร") || normalized.includes("food")) {
+  if (
+    normalized.includes("อาหาร") ||
+    normalized.includes("กิน") ||
+    normalized.includes("food")
+  ) {
     tone = "food";
   } else if (
     normalized.includes("เดินทาง") ||
@@ -5568,7 +5613,11 @@ function expenseCategoryTone(category?: string | null) {
     normalized.includes("ticket")
   ) {
     tone = "activity";
-  } else if (normalized.includes("shopping") || normalized.includes("ช้อป")) {
+  } else if (
+    normalized.includes("shopping") ||
+    normalized.includes("ช้อป") ||
+    normalized.includes("ของฝาก")
+  ) {
     tone = "shopping";
   }
   return tone;
@@ -10528,8 +10577,18 @@ export function BNTripApp({
     itineraryCache.clear();
     location.href = "/";
   };
-  const openCost = (item?: Itinerary, index?: number, defaultDay?: number) =>
-    setModal({ type: "cost", item, costIndex: index, defaultDay });
+  const openCost = (
+    item?: Itinerary,
+    index?: number,
+    defaultDay?: number,
+    returnToExpenseList?: () => void,
+  ) => setModal({
+    type: "cost",
+    item,
+    costIndex: index,
+    defaultDay,
+    returnToExpenseList,
+  });
   const protect =
     <T extends unknown[]>(action: (...args: T) => void) =>
     (...args: T) => {
@@ -10736,7 +10795,13 @@ export function BNTripApp({
         trip={selected}
         items={itineraries}
         cards={tripCards}
-        close={() => setModal(null)}
+        close={() => {
+          const returnToExpenseList = modal.returnToExpenseList;
+          setModal(null);
+          if (returnToExpenseList) {
+            window.requestAnimationFrame(returnToExpenseList);
+          }
+        }}
         saveCost={saveCost}
         deleteCost={deleteCost}
         canDelete={selected.access_role !== "view"}
