@@ -694,9 +694,34 @@ export async function loadItineraries(session: SessionUser, id: string) {
   if (!(await getTripRole(id, session.userId))) return [];
   const result = await query(
     `SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
-       accommodation.image_url AS accommodation_image_url
+       COALESCE(accommodation.image_url,address_accommodation.image_url) AS accommodation_image_url,
+       COALESCE(accommodation.image_url,address_itinerary.image_url,address_accommodation.image_url) AS location_image_url
      FROM itineraries i
      LEFT JOIN trip_accommodations accommodation ON accommodation.id=i.accommodation_id
+     LEFT JOIN LATERAL (
+       SELECT candidate.image_url
+       FROM itineraries candidate
+       WHERE candidate.id<>i.id
+         AND candidate.trip_id=i.trip_id
+         AND candidate.image_url IS NOT NULL
+         AND BTRIM(COALESCE(candidate.address,''))<>''
+         AND regexp_replace(lower(BTRIM(candidate.address)),'[[:space:]]+',' ','g')=
+             regexp_replace(lower(BTRIM(COALESCE(i.address,''))),'[[:space:]]+',' ','g')
+       ORDER BY candidate.updated_at DESC,candidate.id
+       LIMIT 1
+     ) address_itinerary ON true
+     LEFT JOIN LATERAL (
+       SELECT candidate.image_url
+       FROM trip_accommodations candidate
+       WHERE i.accommodation_id IS NULL
+         AND candidate.trip_id=i.trip_id
+         AND candidate.image_url IS NOT NULL
+         AND BTRIM(candidate.location)<>''
+         AND regexp_replace(lower(BTRIM(candidate.location)),'[[:space:]]+',' ','g')=
+             regexp_replace(lower(BTRIM(COALESCE(i.address,''))),'[[:space:]]+',' ','g')
+       ORDER BY candidate.updated_at DESC,candidate.id
+       LIMIT 1
+     ) address_accommodation ON true
      WHERE i.trip_id=$1 AND i.place_name IS NOT NULL
      ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order`,
     [id],

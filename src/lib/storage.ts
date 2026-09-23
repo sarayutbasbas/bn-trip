@@ -22,6 +22,19 @@ function blobPath(filename: string) {
   return `uploads/${filename}`;
 }
 
+export function uploadFilenameFromUrl(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const pathname = new URL(value, "http://bn-trip.local").pathname;
+    const prefix = "/api/uploads/";
+    if (!pathname.startsWith(prefix)) return null;
+    const filename = decodeURIComponent(pathname.slice(prefix.length));
+    return /^[a-f0-9-]+\.(?:jpg|png|webp)$/.test(filename) ? filename : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveUpload(filename: string, data: Buffer, contentType: string) {
   if (getStorageBackend() === "blob") {
     requireBlobCredentials();

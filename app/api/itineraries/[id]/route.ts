@@ -7,6 +7,7 @@ import { logTripActivity } from "@/src/lib/activity";
 import { clearFirstItineraryTransport } from "@/src/lib/itinerary-order";
 import { syncAccommodationCostsFromItineraries } from "@/src/lib/accommodation-linked-records";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
+import { deleteUpload,uploadFilenameFromUrl } from "@/src/lib/storage";
 
 const schema=z.object({
   dayNumber:z.number().int().min(1),
@@ -34,7 +35,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     await ensureLatestDatabaseSchema();
     const {id}=await params;
     const x=schema.parse(await request.json());
-    const current=await query<{trip_id:string;day_number:number;cost_items:Array<{id?:string}>}&Record<string,unknown>>("SELECT * FROM itineraries WHERE id=$1",[id]);const existing=current.rows[0];if(!existing)return NextResponse.json({error:"Not found"},{status:404});const role=await getTripRole(existing.trip_id,session.userId);if(!role)return NextResponse.json({error:"Not found"},{status:404});
+    const current=await query<{trip_id:string;day_number:number;image_url:string|null;cost_items:Array<{id?:string}>}&Record<string,unknown>>("SELECT * FROM itineraries WHERE id=$1",[id]);const existing=current.rows[0];if(!existing)return NextResponse.json({error:"Not found"},{status:404});const role=await getTripRole(existing.trip_id,session.userId);if(!role)return NextResponse.json({error:"Not found"},{status:404});
     const accommodationCosts=await query<{cost_item_id:string}>("SELECT cost_item_id::text FROM trip_accommodations WHERE trip_id=$1",[existing.trip_id]);
     const accommodationCostIds=new Set(accommodationCosts.rows.map(row=>row.cost_item_id));
     const costItems=x.costItems.map(item=>item.id&&accommodationCostIds.has(item.id)?{...item,category:"ที่พัก"}:item);
@@ -45,7 +46,30 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     if(role==="view"&&existing.cost_items.length>x.costItems.length){const nextIds=new Set(x.costItems.map(item=>item.id).filter(Boolean));const removed=existing.cost_items.filter(item=>!item.id||!nextIds.has(item.id));if(removed.some(item=>!item.id))return NextResponse.json({error:"สิทธิ์ View ไม่มีสิทธิลบค่าใช้จ่าย"},{status:403});const moved=await query<{id:string}>("SELECT DISTINCT cost->>'id' AS id FROM itineraries other CROSS JOIN LATERAL jsonb_array_elements(other.cost_items) cost WHERE other.trip_id=$1 AND other.id<>$2 AND cost->>'id'=ANY($3::text[])",[existing.trip_id,id,removed.map(item=>item.id)]);const movedIds=new Set(moved.rows.map(row=>row.id));if(removed.some(item=>!movedIds.has(item.id!)))return NextResponse.json({error:"สิทธิ์ View ไม่มีสิทธิลบค่าใช้จ่าย"},{status:403});}
     const hasImageUrl=Object.prototype.hasOwnProperty.call(x,"imageUrl");
     const result=await query("UPDATE itineraries i SET day_number=$1,time_slot=$2,start_time=$3,place_name=$4,address=$5,image_url=CASE WHEN $6 THEN $7 ELSE image_url END,transport_mode=$8,transport_note=$9,cost_items=$10::jsonb,updated_at=now() FROM trips t WHERE i.id=$11 AND t.id=i.trip_id AND $1 BETWEEN 1 AND t.total_days RETURNING i.*",[x.dayNumber,x.timeSlot,x.startTime,x.placeName,x.address||null,hasImageUrl,x.imageUrl??null,x.transportMode||null,x.transportNote||null,JSON.stringify(costItems),id]);
-    if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await clearFirstItineraryTransport(existing.trip_id,[existing.day_number,x.dayNumber]);await syncAccommodationCostsFromItineraries(existing.trip_id);const saved=await query("SELECT * FROM itineraries WHERE id=$1",[id]);await logTripActivity({tripId:existing.trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"update",summary:`แก้ไขแผน “${x.placeName}”`,before:current.rows[0],after:saved.rows[0]});return NextResponse.json(saved.rows[0]);
+    if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await clearFirstItineraryTransport(existing.trip_id,[existing.day_number,x.dayNumber]);await syncAccommodationCostsFromItineraries(existing.trip_id);const saved=await query(`SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
+      COALESCE(accommodation.image_url,address_accommodation.image_url) AS accommodation_image_url,
+      COALESCE(accommodation.image_url,address_itinerary.image_url,address_accommodation.image_url) AS location_image_url
+      FROM itineraries i
+      LEFT JOIN trip_accommodations accommodation ON accommodation.id=i.accommodation_id
+      LEFT JOIN LATERAL (
+        SELECT candidate.image_url FROM itineraries candidate
+        WHERE candidate.id<>i.id AND candidate.trip_id=i.trip_id AND candidate.image_url IS NOT NULL
+          AND BTRIM(COALESCE(candidate.address,''))<>''
+          AND regexp_replace(lower(BTRIM(candidate.address)),'[[:space:]]+',' ','g')=
+              regexp_replace(lower(BTRIM(COALESCE(i.address,''))),'[[:space:]]+',' ','g')
+        ORDER BY candidate.updated_at DESC,candidate.id LIMIT 1
+      ) address_itinerary ON true
+      LEFT JOIN LATERAL (
+        SELECT candidate.image_url FROM trip_accommodations candidate
+        WHERE i.accommodation_id IS NULL AND candidate.trip_id=i.trip_id AND candidate.image_url IS NOT NULL
+          AND BTRIM(candidate.location)<>''
+          AND regexp_replace(lower(BTRIM(candidate.location)),'[[:space:]]+',' ','g')=
+              regexp_replace(lower(BTRIM(COALESCE(i.address,''))),'[[:space:]]+',' ','g')
+        ORDER BY candidate.updated_at DESC,candidate.id LIMIT 1
+      ) address_accommodation ON true
+      WHERE i.id=$1`,[id]);await logTripActivity({tripId:existing.trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"update",summary:`แก้ไขแผน “${x.placeName}”`,before:current.rows[0],after:saved.rows[0]});
+    if(hasImageUrl&&existing.image_url&&existing.image_url!==saved.rows[0]?.image_url){const filename=uploadFilenameFromUrl(existing.image_url);if(filename)await deleteUpload(filename).catch(error=>console.error("Delete replaced itinerary image failed",{filename,error}));}
+    return NextResponse.json(saved.rows[0]);
   }catch{return NextResponse.json({error:"ข้อมูลรายการไม่ถูกต้อง"},{status:400});}
 }
 
@@ -56,6 +80,6 @@ export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){
   await ensureLatestDatabaseSchema();
   const {id}=await params;
   const trip=await query<{trip_id:string;day_number:number}>("SELECT trip_id,day_number FROM itineraries WHERE id=$1",[id]);const role=trip.rows[0]?await getTripRole(trip.rows[0].trip_id,session.userId):null;if(role!=="owner"&&role!=="admin")return NextResponse.json({error:"สิทธิ์ View ไม่มีสิทธิลบรายการ"},{status:403});
-  const result=await query("DELETE FROM itineraries WHERE id=$1 RETURNING *",[id]);
-  if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await clearFirstItineraryTransport(trip.rows[0].trip_id,[trip.rows[0].day_number]);await syncAccommodationCostsFromItineraries(trip.rows[0].trip_id);await logTripActivity({tripId:trip.rows[0].trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"delete",summary:`ลบแผน “${result.rows[0].place_name}”`,before:result.rows[0]});return NextResponse.json({ok:true});
+  const result=await query<{image_url:string|null;place_name:string}&Record<string,unknown>>("DELETE FROM itineraries WHERE id=$1 RETURNING *",[id]);
+  if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await clearFirstItineraryTransport(trip.rows[0].trip_id,[trip.rows[0].day_number]);await syncAccommodationCostsFromItineraries(trip.rows[0].trip_id);await logTripActivity({tripId:trip.rows[0].trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"delete",summary:`ลบแผน “${result.rows[0].place_name}”`,before:result.rows[0]});const filename=uploadFilenameFromUrl(result.rows[0].image_url);if(filename)await deleteUpload(filename).catch(error=>console.error("Delete itinerary image failed",{filename,error}));return NextResponse.json({ok:true});
 }

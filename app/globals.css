@@ -4740,6 +4740,32 @@ html.dark .trip-section-nav button.active {
   align-items: flex-start;
   gap: 8px;
 }
+.timeline-day-swipe {
+  min-width: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  touch-action: pan-y;
+}
+.timeline-day-swipe-track {
+  width: 300%;
+  display: flex;
+  align-items: flex-start;
+  transform: translate3d(-33.333333%, 0, 0);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+.timeline-day-swipe-panel {
+  width: 33.333333%;
+  min-width: 33.333333%;
+  flex: 0 0 33.333333%;
+  backface-visibility: hidden;
+  contain: layout style;
+}
+.timeline-day-swipe-panel:not(.is-current) {
+  height: 0;
+  pointer-events: none;
+  user-select: none;
+}
 .timeline-day-picker {
   min-width: 0;
   flex: 1 1 auto;
@@ -8299,6 +8325,35 @@ html.dark .expense-overview.is-over-budget .expense-overview-stats .is-remaining
 .trip-location-suggestions small {
   color: var(--muted);
   font-size: 9px;
+}
+.timeline-location-image-status {
+  min-height: 34px;
+  margin: -5px 2px 1px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.timeline-location-image-status svg {
+  flex: 0 0 15px;
+}
+.timeline-location-image-status.has-image {
+  border-color: color-mix(in srgb, #34c759 28%, var(--line));
+  color: #139c55;
+  background: color-mix(in srgb, #34c759 7%, var(--surface-solid));
+}
+.timeline-location-image-status.uses-default {
+  border-color: color-mix(in srgb, var(--orange) 25%, var(--line));
+  color: var(--muted);
+  background: color-mix(in srgb, var(--orange) 5%, var(--surface-solid));
+}
+.timeline-location-image-status.uses-default svg {
+  color: var(--orange);
 }
 .field .native-picker-control {
   position: relative;
@@ -13188,8 +13243,8 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-breakfast-status.is-excluded { color:#a45a52; }
 .accommodation-breakfast-status > span { overflow:hidden;text-overflow:ellipsis; }
 .accommodation-booking-badge,.accommodation-payment-badge { min-width:0;display:inline-flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.accommodation-booking-badge { grid-column:1;height:18px;align-self:center;justify-self:start;font-size:7px; }
-.accommodation-booking-badge img { width:auto;max-width:44px;height:18px;object-fit:contain;object-position:left center; }
+.accommodation-booking-badge { grid-column:1;width:44px;height:44px;align-self:center;justify-self:start;font-size:7px; }
+.accommodation-booking-badge img { width:44px;height:44px;object-fit:contain;object-position:left center; }
 .accommodation-booking-badge svg { color:#ff6718; }
 .accommodation-payment-badge { width:fit-content;max-width:100%;padding:3px 6px;border-radius:999px;color:#188568;background:#e7f8f1;font-size:6px; }
 .accommodation-total-price { grid-column:2;grid-row:1 / span 2;align-self:center;margin:0;text-align:right;color:var(--ink);font-size:20px;line-height:1;white-space:nowrap; }

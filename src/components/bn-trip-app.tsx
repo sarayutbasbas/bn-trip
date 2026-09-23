@@ -137,6 +137,10 @@ const TripFlights = dynamic(
   () => import("@/src/components/trip-flights").then((module) => module.TripFlights),
   { loading: () => <div className="card">กำลังเปิดข้อมูลเที่ยวบิน…</div> },
 );
+const TripInsurance = dynamic(
+  () => import("@/src/components/trip-flights").then((module) => module.TripFlights),
+  { loading: () => <div className="card">กำลังเปิดข้อมูลประกัน…</div> },
+);
 const TripAccommodations = dynamic(
   () => import("@/src/components/trip-accommodations").then((module) => module.TripAccommodations),
   { loading: () => <div className="card">กำลังเปิดข้อมูลที่พัก…</div> },
@@ -343,6 +347,7 @@ export type Itinerary = {
   accommodation_nights?: number | null;
   accommodation_booking_platform?: string | null;
   accommodation_image_url?: string | null;
+  location_image_url?: string | null;
 };
 type Modal =
   | { type: "trip"; trip?: Trip; preset?: TripCreationPreset }
@@ -3976,6 +3981,163 @@ function useItinerariesByDay(items: Itinerary[]) {
   }, [items]);
 }
 
+function SwipeableTimelineDay({
+  day,
+  totalDays,
+  setDay,
+  children,
+}: {
+  day: number;
+  totalDays: number;
+  setDay: (day: number) => void;
+  children: (day: number) => ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const pointerStart = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    startedAt: number;
+    axis: "horizontal" | "vertical" | null;
+    deltaX: number;
+  } | null>(null);
+  const suppressClick = useRef(false);
+  const targetDay = useRef<number | null>(null);
+  const settling = useRef(false);
+  const centerTrack = () => {
+    const track = trackRef.current;
+    if (!track) return;
+    track.style.transition = "none";
+    track.style.transform = "translate3d(-33.333333%, 0, 0)";
+  };
+  const settleTrack = (transform: string, nextDay: number | null) => {
+    const track = trackRef.current;
+    if (!track) return;
+    settling.current = true;
+    targetDay.current = nextDay;
+    track.style.transition =
+      "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)";
+    track.style.transform = transform;
+  };
+  const finishSwipe = (clientX: number, clientY: number) => {
+    const start = pointerStart.current;
+    pointerStart.current = null;
+    if (!start) return;
+    const deltaX = clientX - start.x;
+    const deltaY = clientY - start.y;
+    if (
+      start.axis !== "horizontal" ||
+      Math.abs(deltaX) <= Math.abs(deltaY)
+    ) {
+      centerTrack();
+      return;
+    }
+    const width = containerRef.current?.clientWidth || 320;
+    const fastSwipe =
+      performance.now() - start.startedAt < 240 && Math.abs(deltaX) >= 30;
+    const horizontalSwipe = Math.abs(deltaX) >= Math.max(56, width * 0.18) || fastSwipe;
+    if (!horizontalSwipe) {
+      settleTrack("translate3d(-33.333333%, 0, 0)", null);
+      return;
+    }
+    const nextDay = deltaX < 0 ? Math.min(totalDays, day + 1) : Math.max(1, day - 1);
+    if (nextDay === day) {
+      settleTrack("translate3d(-33.333333%, 0, 0)", null);
+      return;
+    }
+    suppressClick.current = true;
+    settleTrack(
+      deltaX < 0
+        ? "translate3d(-66.666667%, 0, 0)"
+        : "translate3d(0, 0, 0)",
+      nextDay,
+    );
+  };
+  const panels = [day - 1, day, day + 1];
+  return (
+    <div
+      ref={containerRef}
+      className="timeline-day-swipe"
+      onPointerDown={(event) => {
+        if (!event.isPrimary || settling.current) return;
+        pointerStart.current = {
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          startedAt: performance.now(),
+          axis: null,
+          deltaX: 0,
+        };
+        centerTrack();
+      }}
+      onPointerMove={(event) => {
+        const start = pointerStart.current;
+        if (!start || start.id !== event.pointerId) return;
+        const deltaX = event.clientX - start.x;
+        const deltaY = event.clientY - start.y;
+        if (!start.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 7) {
+          start.axis =
+            Math.abs(deltaX) > Math.abs(deltaY) * 1.15
+              ? "horizontal"
+              : "vertical";
+          if (start.axis === "horizontal") {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            suppressClick.current = true;
+          }
+        }
+        if (start.axis !== "horizontal") return;
+        event.preventDefault();
+        const atBoundary =
+          (day === 1 && deltaX > 0) ||
+          (day === totalDays && deltaX < 0);
+        start.deltaX = atBoundary ? deltaX * 0.2 : deltaX;
+        const track = trackRef.current;
+        if (track)
+          track.style.transform = `translate3d(calc(-33.333333% + ${start.deltaX}px), 0, 0)`;
+      }}
+      onPointerUp={(event) => finishSwipe(event.clientX, event.clientY)}
+      onPointerCancel={() => {
+        pointerStart.current = null;
+        settleTrack("translate3d(-33.333333%, 0, 0)", null);
+      }}
+      onClickCapture={(event) => {
+        if (!suppressClick.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
+      <div
+        ref={trackRef}
+        className="timeline-day-swipe-track"
+        onTransitionEnd={(event) => {
+          if (event.currentTarget !== event.target || event.propertyName !== "transform") return;
+          const nextDay = targetDay.current;
+          targetDay.current = null;
+          settling.current = false;
+          centerTrack();
+          if (nextDay !== null) setDay(nextDay);
+          window.setTimeout(() => {
+            suppressClick.current = false;
+          }, 80);
+        }}
+      >
+        {panels.map((panelDay, index) => (
+          <div
+            key={`${day}:${index}`}
+            className={`timeline-day-swipe-panel${index === 1 ? " is-current" : ""}`}
+            aria-hidden={index !== 1}
+          >
+            {panelDay >= 1 && panelDay <= totalDays
+              ? children(panelDay)
+              : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TimelineDayPicker({
   trip,
   day,
@@ -4218,8 +4380,6 @@ function TripHub({
     [trip.id, trip.total_days, tripDay, ended, setDay],
   );
   const baseDate = localDate(trip.outbound_departure_at, trip.start_date);
-  const activeDateLabel = tripDayLabel(baseDate, day);
-  const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
   const swapDay = async (targetDay: number) => {
     const response = await fetch(`/api/trips/${trip.id}/itineraries/swap-days`, {
       method: "POST",
@@ -4232,15 +4392,6 @@ function TripHub({
     notify(t("สลับแผนระหว่างวันแล้ว"));
   };
   const nowMinutes = zonedClock(now, trip.timezone).minutes;
-  const currentIndex =
-    tripDay === day
-      ? dayItems.reduce((found, item, index) => {
-          const start = timeInMinutes(
-            item.start_time || (item.accommodation_id ? "23:30" : null),
-          );
-          return start !== null && start <= nowMinutes ? index : found;
-        }, -1)
-      : -1;
   return (
       <div className="screen trip-hub-screen">
       <div className="trip-cover-region">
@@ -4264,13 +4415,29 @@ function TripHub({
       />
       <div className="trip-hub-body">
         {view === "plan" ? (
-          <>
+          <SwipeableTimelineDay day={day} totalDays={trip.total_days} setDay={setDay}>
+          {(day) => {
+            const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
+            const currentIndex =
+              tripDay === day
+                ? dayItems.reduce((found, item, index) => {
+                    const start = timeInMinutes(
+                      item.start_time ||
+                        (item.accommodation_id ? "23:30" : null),
+                    );
+                    return start !== null && start <= nowMinutes
+                      ? index
+                      : found;
+                  }, -1)
+                : -1;
+            return (
+            <>
             <div className="section-head timeline-heading">
               <TimelineDayPicker
                 trip={trip}
                 day={day}
                 setDay={setDay}
-                dateLabel={activeDateLabel}
+                dateLabel={tripDayLabel(baseDate, day)}
                 itemCount={dayItems.length}
                 dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
                 swapDay={trip.access_role === "view" ? undefined : swapDay}
@@ -4363,9 +4530,9 @@ function TripHub({
                               } else editPlace(item);
                             }}
                           >
-                            <span className={`event-image ${item.image_url||item.accommodation_image_url?"":"is-placeholder"}`}>
+                            <span className={`event-image ${item.image_url||item.location_image_url||item.accommodation_image_url?"":"is-placeholder"}`}>
                               <Image
-                                src={item.image_url||item.accommodation_image_url||"/travel-postcard-fallback.jpg"}
+                                src={item.image_url||item.location_image_url||item.accommodation_image_url||"/travel-postcard-fallback.jpg"}
                                 alt={`รูป ${item.place_name}`}
                                 fill
                                 sizes="108px"
@@ -4446,16 +4613,28 @@ function TripHub({
                 })}
               </div>
             )}
-          </>
+            </>
+            );
+          }}
+          </SwipeableTimelineDay>
         ) : view === "flights" || view === "insurance" || view === "stays" ? (
           <div className="travel-stay-section">
-            {view === "flights" || view === "insurance" ? <TripFlights
-              key={view}
+            {view === "flights" ? <TripFlights
               tripId={trip.id}
               members={trip.members || []}
               tripOutboundAt={trip.outbound_departure_at}
               tripReturnAt={trip.return_departure_at}
-              mode={view}
+              showTravelInsurance={trip.country_code !== "TH"}
+              canDelete={trip.access_role !== "view"}
+              notify={notify}
+              onChanged={onFlightChanged}
+              onOpenDocuments={() => selectView("workspace", "documents")}
+            /> : view === "insurance" ? <TripInsurance
+              tripId={trip.id}
+              members={trip.members || []}
+              tripOutboundAt={trip.outbound_departure_at}
+              tripReturnAt={trip.return_departure_at}
+              mode="insurance"
               showTravelInsurance={trip.country_code !== "TH"}
               canDelete={trip.access_role !== "view"}
               notify={notify}
@@ -4575,7 +4754,6 @@ function TimelineScreen({
       ),
     [trip.id, trip.total_days, tripDay, ended, setDay],
   );
-  const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
   const swapDay = async (targetDay: number) => {
     const response = await fetch(`/api/trips/${trip.id}/itineraries/swap-days`, {
       method: "POST",
@@ -4588,17 +4766,7 @@ function TimelineScreen({
     notify(t("สลับแผนระหว่างวันแล้ว"));
   };
   const baseDate = localDate(trip.outbound_departure_at, trip.start_date);
-  const activeDateLabel = tripDayLabel(baseDate, day);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const currentIndex =
-    tripDay === day
-      ? dayItems.reduce((found, item, index) => {
-          const start = timeInMinutes(
-            item.start_time || (item.accommodation_id ? "23:30" : null),
-          );
-          return start !== null && start <= nowMinutes ? index : found;
-        }, -1)
-      : -1;
   return (
       <div className="screen timeline-screen">
       <div className="trip-cover-region">
@@ -4614,12 +4782,26 @@ function TimelineScreen({
           else router.push(`/trips/${trip.id}?view=${section}`);
         }}
       />
+      <SwipeableTimelineDay day={day} totalDays={trip.total_days} setDay={setDay}>
+      {(day) => {
+        const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
+        const currentIndex =
+          tripDay === day
+            ? dayItems.reduce((found, item, index) => {
+                const start = timeInMinutes(
+                  item.start_time || (item.accommodation_id ? "23:30" : null),
+                );
+                return start !== null && start <= nowMinutes ? index : found;
+              }, -1)
+            : -1;
+        return (
+      <>
       <div className="section-head timeline-heading">
         <TimelineDayPicker
           trip={trip}
           day={day}
           setDay={setDay}
-          dateLabel={activeDateLabel}
+          dateLabel={tripDayLabel(baseDate, day)}
           itemCount={dayItems.length}
           dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
           swapDay={trip.access_role === "view" ? undefined : swapDay}
@@ -4733,6 +4915,10 @@ function TimelineScreen({
           })}
         </div>
       )}
+      </>
+        );
+      }}
+      </SwipeableTimelineDay>
       {trip.total_days > 1 && (
         <TripAccommodations
           tripId={trip.id}
@@ -8285,9 +8471,13 @@ function CostSheet({
 function TripLocationInput({
   items,
   currentItem,
+  onSelectPlace,
+  onAddressChange,
 }: {
   items: Itinerary[];
   currentItem?: Itinerary;
+  onSelectPlace: (item: Itinerary) => void;
+  onAddressChange?: () => void;
 }) {
   const t = useT();
   const [value, setValue] = useState(currentItem?.address || "");
@@ -8318,6 +8508,11 @@ function TripLocationInput({
     })
     .slice(0, 6);
   const showSuggestions = open && suggestions.length > 0;
+  const selectSuggestion = (item: Itinerary) => {
+    setValue(item.address!.trim());
+    onSelectPlace(item);
+    setOpen(false);
+  };
   return (
     <div className="field trip-location-field">
       <label htmlFor="trip-location-input">{t("สถานที่ / ที่อยู่")}</label>
@@ -8328,6 +8523,7 @@ function TripLocationInput({
         onChange={(event) => {
           setValue(event.target.value);
           setOpen(true);
+          onAddressChange?.();
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
@@ -8350,11 +8546,11 @@ function TripLocationInput({
               type="button"
               role="option"
               aria-selected="false"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
-                setValue(item.address!.trim());
-                setOpen(false);
+              onPointerDown={(event) => {
+                event.preventDefault();
+                selectSuggestion(item);
               }}
+              onClick={() => selectSuggestion(item)}
             >
               <MapPin size={15} />
               <span>
@@ -8543,6 +8739,9 @@ function ModalForm({
   const [summaryImageRemoved, setSummaryImageRemoved] = useState(false);
   const [timelineImageFile, setTimelineImageFile] = useState<File | null>(null);
   const [timelineImageRemoved, setTimelineImageRemoved] = useState(false);
+  const [selectedLocationImage, setSelectedLocationImage] = useState<
+    string | null | undefined
+  >(undefined);
   const [timelineDocuments, setTimelineDocuments] = useState<TimelineDocument[]>([]);
   const [pendingTimelineDocuments, setPendingTimelineDocuments] = useState<PendingTimelineDocument[]>([]);
   const [documentTitle, setDocumentTitle] = useState("");
@@ -8739,6 +8938,7 @@ function ModalForm({
   const [outboundDate, setOutboundDate] = useState(initialOutboundDate);
   const [returnDate, setReturnDate] = useState(initialReturnDate);
   const placeSource = modal.type === "place" ? modal.item : undefined;
+  const [placeName, setPlaceName] = useState(placeSource?.place_name || "");
   const initialPlaceDay =
     modal.type === "place"
       ? placeSource?.day_number || modal.defaultDay || day
@@ -9146,14 +9346,64 @@ function ModalForm({
                 <input
                   name="placeName"
                   required
-                  defaultValue={placeSource?.place_name}
+                  value={placeName}
+                  onChange={(event) => setPlaceName(event.target.value)}
                 />
               </div>
               <TripLocationInput
                 key={`${modal.item ? "edit" : "new"}-${placeSource?.id || "location"}`}
                 items={items}
                 currentItem={placeSource}
+                onSelectPlace={(item) => {
+                  const normalizedAddress = item.address
+                    ?.trim()
+                    .toLocaleLowerCase()
+                    .replace(/\s+/g, " ");
+                  const imageSource = [item, ...items].find(
+                    (candidate) =>
+                      candidate.id !== placeSource?.id &&
+                      candidate.address
+                        ?.trim()
+                        .toLocaleLowerCase()
+                        .replace(/\s+/g, " ") === normalizedAddress &&
+                      Boolean(
+                        candidate.image_url ||
+                          candidate.location_image_url ||
+                          candidate.accommodation_image_url,
+                      ),
+                  );
+                  setPlaceName(item.place_name.trim());
+                  setSelectedLocationImage(
+                    imageSource?.image_url ||
+                      imageSource?.location_image_url ||
+                      imageSource?.accommodation_image_url ||
+                      null,
+                  );
+                  requestAnimationFrame(checkForChanges);
+                }}
+                onAddressChange={() => setSelectedLocationImage(undefined)}
               />
+              {selectedLocationImage !== undefined && (
+                <p
+                  className={`timeline-location-image-status ${
+                    selectedLocationImage ? "has-image" : "uses-default"
+                  }`}
+                  role="status"
+                >
+                  {selectedLocationImage ? (
+                    <CheckCircle2 size={15} />
+                  ) : (
+                    <ImagePlus size={15} />
+                  )}
+                  <span>
+                    {t(
+                      selectedLocationImage
+                        ? "พบรูปของโลเคชันนี้แล้ว ระบบจะนำมาใช้ให้อัตโนมัติ"
+                        : "โลเคชันนี้ยังไม่มีรูป ระบบจะใช้รูปเริ่มต้น",
+                    )}
+                  </span>
+                </p>
+              )}
               <CoverImagePicker
                 key={`timeline-image-${placeSource?.id || "new"}`}
                 existingUrl={placeSource?.image_url}
@@ -9678,6 +9928,12 @@ export function BNTripApp({
     }
     return data;
   };
+  const fetchFreshItineraries = async (id: string) => {
+    const data = await request(`/api/trips/${id}/itineraries`, {
+      cache: "no-store",
+    });
+    return Array.isArray(data) ? (data as Itinerary[]) : [];
+  };
   async function saveModal(data: Record<string, unknown>) {
     if (!modal) return;
     if (modal.type === "trip") {
@@ -9777,16 +10033,19 @@ export function BNTripApp({
           body: JSON.stringify(data),
         },
       );
+      const refreshed = await fetchFreshItineraries(selected.id).catch(
+        () => null,
+      );
       setItineraries((old) => {
-        const next: Itinerary[] = (
-          editing
+        const next: Itinerary[] = refreshed ||
+          (editing
             ? old.map((item) => (item.id === saved.id ? saved : item))
             : [...old, saved]
-        ).sort(
-          (a, b) =>
-            a.day_number - b.day_number ||
-            (a.start_time || "99:99").localeCompare(b.start_time || "99:99"),
-        );
+          ).sort(
+            (a, b) =>
+              a.day_number - b.day_number ||
+              (a.start_time || "99:99").localeCompare(b.start_time || "99:99"),
+          );
         const normalized = withoutFirstTransport(next);
         itineraryCache.set(selected.id, normalized);
         return normalized;
@@ -9802,9 +10061,12 @@ export function BNTripApp({
   }
   async function removeItinerary(item: Itinerary) {
     await request(`/api/itineraries/${item.id}`, { method: "DELETE" });
+    const refreshed = selected
+      ? await fetchFreshItineraries(selected.id).catch(() => null)
+      : null;
     setItineraries((old) => {
       const next = withoutFirstTransport(
-        old.filter((row) => row.id !== item.id),
+        refreshed || old.filter((row) => row.id !== item.id),
       );
       if (selected) itineraryCache.set(selected.id, next);
       return next;

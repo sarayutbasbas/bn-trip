@@ -203,6 +203,10 @@ function LocationSearch({
       .slice(0, 6);
   }, [options, query]);
   const visible = open && suggestions.length > 0;
+  const selectSuggestion = (option: LocationOption) => {
+    setValue(option.address);
+    setOpen(false);
+  };
   return (
     <div className="field trip-location-field">
       <label htmlFor="accommodation-location">โลเคชัน / ที่อยู่</label>
@@ -234,11 +238,11 @@ function LocationSearch({
               type="button"
               role="option"
               aria-selected="false"
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => {
-                setValue(option.address);
-                setOpen(false);
+              onPointerDown={(event) => {
+                event.preventDefault();
+                selectSuggestion(option);
               }}
+              onClick={() => selectSuggestion(option)}
             >
               <MapPin size={15} />
               <span>
@@ -871,7 +875,7 @@ export function TripAccommodations({
                         {item.includes_breakfast ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                         <span>{item.includes_breakfast ? "รวมอาหารเช้า" : "ไม่รวมอาหารเช้า"}</span>
                       </span>
-                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={44} height={18} /></span>}
+                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={44} height={44} /></span>}
                       <strong className="accommodation-total-price"><small>{isBaht ? "THB" : `${item.currency} · ≈ THB`}</small>{Number(isBaht ? item.foreign_amount : bahtAmount).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</strong>
                     </footer>
                   </div>
