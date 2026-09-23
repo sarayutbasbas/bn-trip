@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { ChecklistCategoryIcon } from "@/src/components/checklist-category-icon";
+import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import {
   MAX_SOURCE_IMAGE_BYTES,
   prepareDocumentFile,
@@ -28,7 +29,6 @@ import {
 } from "@/src/lib/client-resource-cache";
 import {
   AlertTriangle,
-  ArrowUp,
   Check,
   ChevronRight,
   Circle,
@@ -165,7 +165,6 @@ export function TripWorkspace({
   const [loading, setLoading] = useState(!initialCachedWorkspace);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [showBackTop, setShowBackTop] = useState(false);
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [assignee, setAssignee] = useState("");
@@ -838,12 +837,6 @@ export function TripWorkspace({
     [],
   );
   useEffect(() => {
-    const onScroll = () => setShowBackTop(window.scrollY > 520);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  useEffect(() => {
     if (!openChecklistActionMenu) return;
     const close = (event: PointerEvent) => {
       if (
@@ -1017,11 +1010,54 @@ export function TripWorkspace({
           </div>,
           document.body,
         )}
+      <TripSectionHeading
+        title={label(tab === "checklist" ? "Checklist" : "เอกสารของทริป")}
+        subtitle={label(
+          tab === "checklist"
+            ? "เตรียมสิ่งที่ต้องทำและของที่ต้องใช้ให้พร้อมก่อนเดินทาง"
+            : "รวมเอกสารสำคัญของทริปไว้ในที่เดียว",
+        )}
+        actions={tab === "checklist" ? (
+          <button
+            type="button"
+            className="trip-section-add"
+            disabled={loading}
+            onClick={() => {
+              setError("");
+              setMasterOpen(false);
+              setEditingItemId(null);
+              setTitle("");
+              setAssignee("");
+              setChecklistSheetOpen(true);
+            }}
+            aria-label={label("เพิ่ม Checklist")}
+            title={label("เพิ่ม Checklist")}
+          >
+            <Plus size={21} />
+            <span>{label("เพิ่ม Checklist")}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="trip-section-add"
+            onClick={() => {
+              setError("");
+              setDocumentSheetOpen(true);
+            }}
+            disabled={loading || usagePercent >= 100}
+            aria-label={label("เพิ่มไฟล์")}
+            title={label("เพิ่มไฟล์")}
+          >
+            <Plus size={21} />
+            <span>{label("เพิ่มไฟล์")}</span>
+          </button>
+        )}
+      />
       {error && <p className="workspace-error">{label(error)}</p>}
       {loading ? (
         <p className="workspace-loading">{label("กำลังโหลด…")}</p>
       ) : tab === "checklist" ? (
-        <div className="workspace-panel workspace-fab-panel">
+        <div className="workspace-panel">
           <div className="checklist-master-actions">
             <label className="document-search checklist-search">
               <Search size={18} aria-hidden="true" />
@@ -1261,25 +1297,9 @@ export function TripWorkspace({
               </p>
             )}
           </div>
-          <button
-            type="button"
-            className="directory-fab checklist-floating-add"
-            onClick={() => {
-              setError("");
-              setMasterOpen(false);
-              setEditingItemId(null);
-              setTitle("");
-              setAssignee("");
-              setChecklistSheetOpen(true);
-            }}
-            aria-label={label("เพิ่ม Checklist")}
-          >
-            <Plus size={22} />
-            <span>{label("เพิ่ม Checklist")}</span>
-          </button>
         </div>
       ) : (
-        <div className="workspace-panel workspace-fab-panel">
+        <div className="workspace-panel">
           <div className={`document-quota ${quotaLevel}`}>
             <div>
               <strong>{label("พื้นที่เอกสาร")}</strong>
@@ -1396,30 +1416,7 @@ export function TripWorkspace({
               </p>
             )}
           </div>
-          <button
-            type="button"
-            className="directory-fab document-upload-fab"
-            onClick={() => {
-              setError("");
-              setDocumentSheetOpen(true);
-            }}
-            disabled={usagePercent >= 100}
-          >
-            <Plus size={18} />
-            <span>{label("เพิ่มไฟล์")}</span>
-          </button>
         </div>
-      )}
-      {showBackTop && (
-        <button
-          type="button"
-          className="expense-back-top workspace-back-top"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          title={label("กลับด้านบน")}
-          aria-label={label("กลับด้านบน")}
-        >
-          <ArrowUp size={20} />
-        </button>
       )}
       {assigningItem && (
         <div

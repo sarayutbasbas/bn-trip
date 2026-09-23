@@ -23,6 +23,13 @@ const nextConfig: NextConfig = {
     localPatterns: [
       { pathname: "/**" },
     ],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.kiwi.com",
+        pathname: "/airlines/**",
+      },
+    ],
   },
   experimental: {
     optimizePackageImports: ["lucide-react"],

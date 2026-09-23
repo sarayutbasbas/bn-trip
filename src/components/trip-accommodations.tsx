@@ -18,6 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { BottomSheet } from "@/src/components/bottom-sheet";
+import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { compressImageFile } from "@/src/lib/client-image-compression";
 import {
   accommodationResourceKey,
@@ -844,13 +845,11 @@ export function TripAccommodations({
       className={`accommodation-panel ${overlayOnly ? "accommodation-overlay-only" : ""}`}
     >
       {!overlayOnly && (
-        <div className="accommodation-page-heading trip-section-heading">
-          <div>
-            <h2>ที่พักในทริปนี้</h2>
-            <p>จัดการข้อมูลที่พักของคุณได้ที่นี่ ครบ จบ ในที่เดียว</p>
-          </div>
-          <button className="trip-section-add" type="button" onClick={openNew} aria-label="เพิ่มที่พัก" title="เพิ่มที่พัก"><Plus size={21} /><span>เพิ่มที่พัก</span></button>
-        </div>
+        <TripSectionHeading
+          title="ที่พักในทริปนี้"
+          subtitle="จัดการข้อมูลที่พักของคุณได้ที่นี่ ครบ จบ ในที่เดียว"
+          actions={<button className="trip-section-add" type="button" onClick={openNew} aria-label="เพิ่มที่พัก" title="เพิ่มที่พัก"><Plus size={21} /><span>เพิ่มที่พัก</span></button>}
+        />
       )}
       {error && <div className="form-error">{error}</div>}
       {!overlayOnly &&

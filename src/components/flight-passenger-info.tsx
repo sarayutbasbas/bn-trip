@@ -35,9 +35,9 @@ export function FlightPassengerInfoList({ passengers }: { passengers: FlightPass
               )}
             </span>
             <span className="flight-passenger-info-details">
-              {passenger.seat_number ? <span className="flight-passenger-info-value"><Armchair size={12} /><b>{passenger.seat_number}</b></span> : null}
-              {passenger.carry_on_baggage ? <span className="flight-passenger-info-value"><Briefcase size={12} /><b>{passenger.carry_on_baggage}</b></span> : null}
-              {passenger.checked_baggage ? <span className="flight-passenger-info-value"><Luggage size={12} /><b>{passenger.checked_baggage}</b></span> : null}
+              {passenger.seat_number ? <span className="flight-passenger-info-value"><Armchair size={16} /><b>{passenger.seat_number}</b></span> : null}
+              {passenger.carry_on_baggage ? <span className="flight-passenger-info-value"><Briefcase size={16} /><b>{passenger.carry_on_baggage}</b></span> : null}
+              {passenger.checked_baggage ? <span className="flight-passenger-info-value"><Luggage size={16} /><b>{passenger.checked_baggage}</b></span> : null}
             </span>
           </span>
         );

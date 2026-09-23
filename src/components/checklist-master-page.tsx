@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getCurrentAccount } from "@/src/lib/client-account";
 import { useFormDirty } from "@/src/components/use-form-dirty";
+import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import {
   invalidateClientResourcesContaining,
   loadClientResource,
@@ -21,14 +20,13 @@ import {
 } from "react";
 import {
   AlertTriangle,
-  ArrowUp,
+  ArrowLeft,
   Check,
   ChevronRight,
   ListChecks,
   MoreHorizontal,
   Pencil,
   Plus,
-  RefreshCw,
   Search,
   Trash2,
   X,
@@ -36,7 +34,6 @@ import {
 import { ChecklistCategoryIcon, ChecklistCategoryIconPicker } from "@/src/components/checklist-category-icon";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { normalizeChecklistCategoryIcon, type ChecklistCategoryIconKey } from "@/src/lib/checklist-category-icons";
-import { InvitationNotifications } from "@/src/components/invitation-notifications";
 
 type Category = { id: string; name: string; icon_key: string | null; sort_order: number };
 type Item = {
@@ -53,9 +50,13 @@ type DeleteTarget = {
 
 const NEW_CATEGORY = "__new_category__";
 type MasterPayload = { categories: Category[]; items: Item[] };
-type MasterAccount = { email: string; display_name: string; avatar_url: string | null };
-
-export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
+export function ChecklistMasterPage({
+  demo = false,
+  returnTo = "/settings",
+}: {
+  demo?: boolean;
+  returnTo?: string;
+}) {
   const router = useRouter();
   const cachedMaster = peekClientResource<MasterPayload>(
     MASTER_CHECKLIST_RESOURCE_KEY,
@@ -86,9 +87,6 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [showBackTop, setShowBackTop] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [profile, setProfile] = useState<MasterAccount | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     formRef: itemFormRef,
@@ -123,14 +121,6 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
     const categoryIds = new Set(nextCategories.map(({ id }) => id));
     setOpen((current) => current.filter((id) => categoryIds.has(id)));
   }
-
-  useEffect(() => {
-    let active = true;
-    void getCurrentAccount().then((account) => {
-      if (active) setProfile(account);
-    }).catch(() => {});
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -171,13 +161,6 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   );
 
   useEffect(() => {
-    const onScroll = () => setShowBackTop(window.scrollY > 520);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
     if (!openActionMenu) return;
     const close = (event: PointerEvent) => {
       if (
@@ -200,20 +183,6 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
       setToast("");
       toastTimer.current = null;
     }, 2200);
-  }
-
-  async function refreshMaster() {
-    if (refreshing) return;
-    setRefreshing(true);
-    setError("");
-    try {
-      await load(true);
-      notify("อัปเดต Master Checklist แล้ว");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "โหลดข้อมูลไม่สำเร็จ");
-    } finally {
-      setRefreshing(false);
-    }
   }
 
   function closeItemSheet() {
@@ -392,27 +361,21 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
         </div>
       )}
       <main>
-        <header className="mobile-head flow-header">
-          <Link className="brand" href="/" aria-label="RouteRao · หน้าแรก">
-            <Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized />
-            <div>RouteRao<small>travel smarter together</small></div>
-          </Link>
-          <nav className="mobile-actions" aria-label="เมนูหลัก">
-            <button className="icon-btn home-refresh-btn" type="button" onClick={() => void refreshMaster()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช">
-              <RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={24} />
-            </button>
-            <InvitationNotifications onChanged={()=>router.refresh()}/>
-            <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์">
-              <span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url ? { backgroundImage: `url("${profile.avatar_url}")` } : undefined}>{!profile?.avatar_url && (profile?.display_name || profile?.email || "P").charAt(0).toUpperCase()}</span></span>
-            </button>
-          </nav>
-        </header>
         <div className="screen master-screen">
-          <span className="mini-kicker">PERSONAL PACKING LIBRARY</span>
-          <h1 className="page-title">Master Checklist</h1>
-          <p className="page-sub">
-            รายการส่วนตัวของคุณ สำหรับเลือกใช้ซ้ำในทุกทริป
-          </p>
+          <Link className="master-detail-back" href={returnTo} aria-label="กลับหน้าก่อนหน้า" title="กลับหน้าก่อนหน้า">
+            <ArrowLeft size={21} />
+          </Link>
+          <TripSectionHeading
+            className="master-detail-heading"
+            title="Checklist"
+            subtitle="เตรียมสิ่งที่ต้องทำและของที่ต้องใช้ให้พร้อมก่อนเดินทาง"
+            actions={
+              <button type="button" className="trip-section-add" onClick={openNewItem} aria-label="เพิ่ม Checklist" title="เพิ่ม Checklist">
+                <Plus size={21} />
+                <span>เพิ่ม Checklist</span>
+              </button>
+            }
+          />
           {error && !itemSheetOpen && (
             <p className="workspace-error">{error}</p>
           )}
@@ -556,25 +519,6 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
             )}
           </div>
         </div>
-        <button
-          type="button"
-          className="directory-fab master-checklist-fab"
-          onClick={openNewItem}
-        >
-          <Plus size={22} />
-          เพิ่ม Checklist
-        </button>
-        {showBackTop && (
-          <button
-            type="button"
-            className="expense-back-top workspace-back-top"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            title="กลับด้านบน"
-            aria-label="กลับด้านบน"
-          >
-            <ArrowUp size={20} />
-          </button>
-        )}
       </main>
 
       {itemSheetOpen && (
@@ -666,6 +610,10 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                       maxLength={120}
                       required
                     />
+                  </div>
+                )}
+                {itemCategoryId === NEW_CATEGORY && (
+                  <div className="field master-new-category-icon-field">
                     <span className="checklist-icon-picker-label">เลือกไอคอน</span>
                     <ChecklistCategoryIconPicker value={newCategoryIcon} onChange={setNewCategoryIcon} />
                   </div>

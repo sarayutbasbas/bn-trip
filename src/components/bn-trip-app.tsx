@@ -15,11 +15,13 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal, flushSync } from "react-dom";
+import { LiquiGlass } from "@liqui-design/glass";
 import Image, { type ImageLoaderProps } from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { PageIntro } from "@/src/components/page-intro";
+import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications } from "@/src/components/invitation-notifications";
@@ -59,6 +61,8 @@ import {
 } from "@/src/lib/travel-badges";
 import { bookingPlatformByValue } from "@/src/lib/booking-platforms";
 import { FlightPassengerInfoList } from "@/src/components/flight-passenger-info";
+import { AirlineLogo } from "@/src/components/airline-logo";
+import { flightDurationLabel } from "@/src/lib/flight-display";
 import {
   AlertTriangle,
   ArrowRight,
@@ -97,7 +101,6 @@ import {
   Map as MapIcon,
   MapPin,
   Menu,
-  Ellipsis,
   Minus,
   Moon,
   Navigation,
@@ -967,6 +970,11 @@ Object.assign(EN_TEXT, {
   เตรียมทริป: "Trip prep",
   Checklist: "Checklist",
   เอกสาร: "Documents",
+  "เอกสารของทริป": "Trip documents",
+  "เตรียมสิ่งที่ต้องทำและของที่ต้องใช้ให้พร้อมก่อนเดินทาง":
+    "Prepare every task and essential before departure",
+  "รวมเอกสารสำคัญของทริปไว้ในที่เดียว":
+    "Keep all important trip documents in one place",
   ประวัติ: "History",
   เขตเวลาของทริป: "Trip timezone",
   "ใช้คำนวณวันปัจจุบัน เวลา Timeline และสถานะทริป":
@@ -2559,14 +2567,114 @@ function TripInvitations({
   );
 }
 
+function FlightSnapshotCard({
+  flight,
+  now,
+  openFlightTrip,
+  onSync,
+  syncing = false,
+  syncDisabled = false,
+  featured = false,
+}: {
+  flight: NearbyFlight;
+  now: number;
+  openFlightTrip: (tripId: string) => void;
+  onSync?: (flight: NearbyFlight) => void;
+  syncing?: boolean;
+  syncDisabled?: boolean;
+  featured?: boolean;
+}) {
+  const t = useT();
+  const departure = new Date(flight.latest_departure_at || flight.scheduled_departure_at);
+  const arrival = new Date(flight.latest_arrival_at || flight.scheduled_arrival_at);
+  const isActive = departure.getTime() <= now && now <= arrival.getTime();
+  const hasEnded = arrival.getTime() < now;
+  const hours = Math.max(0, Math.ceil((departure.getTime() - now) / 3600000));
+  const departureTime = flight.entered_departure_local_text?.slice(11, 16)
+    || departure.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  const arrivalTime = flight.entered_arrival_local_text?.slice(11, 16)
+    || arrival.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  const departureDay = flight.entered_departure_local_text?.slice(0, 10)
+    ? new Date(`${flight.entered_departure_local_text.slice(0, 10)}T00:00:00`)
+    : departure;
+  const arrivalDay = flight.entered_arrival_local_text?.slice(0, 10)
+    ? new Date(`${flight.entered_arrival_local_text.slice(0, 10)}T00:00:00`)
+    : arrival;
+  const airportName = (value: string) => value
+    .replace(/\s+(?:International(?:\s+Airport)?|Intl\.?|Int['’]l\.?)$/i, "")
+    .trim();
+  const duration = flightDurationLabel({
+    scheduledDepartureAt: flight.scheduled_departure_at,
+    scheduledArrivalAt: flight.scheduled_arrival_at,
+    enteredDepartureLocalText: flight.entered_departure_local_text,
+    enteredArrivalLocalText: flight.entered_arrival_local_text,
+    latestDepartureAt: flight.latest_departure_at,
+    latestArrivalAt: flight.latest_arrival_at,
+  });
+  return (
+    <article
+      className={`flight-card flight-card-compact nearby-flight-card nearby-flight-card-full${featured ? " is-featured-flight" : ""}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => openFlightTrip(flight.trip_id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openFlightTrip(flight.trip_id);
+        }
+      }}
+      aria-label={`${flight.airline_code} ${flight.flight_number} ${flight.departure_airport_code} ไป ${flight.arrival_airport_code}`}
+    >
+      <div className="flight-card-top nearby-flight-card-top">
+        <div className="flight-card-identity">
+          <AirlineLogo code={flight.airline_code} name={flight.airline_name} />
+          <div className="flight-number">
+            <span>{flight.airline_name || flight.airline_code}</span>
+            <strong>{flight.airline_code} {flight.flight_number}</strong>
+          </div>
+        </div>
+        <div className="nearby-flight-head-badges">
+          <div className="nearby-flight-status-stack">
+            <span className={`flight-status status-${flight.status.toLowerCase().replace(/\s/g, "-")}`}>{isActive ? t("กำลังบิน") : flight.status || "scheduled"}</span>
+            <b>{isActive ? t("กำลังเดินทาง") : hasEnded ? t("เดินทางแล้ว") : hours < 24 ? t(`อีก ${hours} ชม.`) : t(`อีก ${Math.ceil(hours / 24)} วัน`)}</b>
+          </div>
+          {onSync && !hasEnded && <button type="button" className={`icon-btn nearby-flight-sync ${syncing ? "is-syncing" : ""}`} disabled={syncDisabled} onClick={(event) => { event.stopPropagation(); onSync(flight); }} aria-label={t("อัปเดตข้อมูลเที่ยวบินทันที")}><RefreshCw size={15} /></button>}
+        </div>
+      </div>
+      <div className="flight-route-compact">
+        <div className="flight-airport-block">
+          <span className="flight-route-label">{t("ต้นทาง")}</span>
+          <strong>{flight.departure_airport_code}</strong>
+          <em>{flight.departure_airport_name ? airportName(flight.departure_airport_name) : t("รอข้อมูลสนามบิน")}</em>
+          <b>{departureTime}</b>
+        </div>
+        <div className="flight-route-path"><small className="flight-route-date"><CalendarDays size={10}/><span>{departureDay.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span><i>→</i><span>{arrivalDay.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span></small><div className="flight-route-track"><span /><Plane size={23} /><span /></div><small className="flight-duration-label">{duration}</small></div>
+        <div className="flight-airport-block is-arrival">
+          <span className="flight-route-label">{t("ปลายทาง")}</span>
+          <strong>{flight.arrival_airport_code}</strong>
+          <em>{flight.arrival_airport_name ? airportName(flight.arrival_airport_name) : t("รอข้อมูลสนามบิน")}</em>
+          <b>{arrivalTime}</b>
+        </div>
+      </div>
+      <div className="flight-terminal-grid">
+        <span>Terminal <b>{flight.departure_terminal || t("รออัปเดต")}</b> · Gate <b>{flight.departure_gate || t("รออัปเดต")}</b></span>
+        <span>Terminal <b>{flight.arrival_terminal || t("รออัปเดต")}</b> · Gate <b>{flight.arrival_gate || t("รออัปเดต")}</b></span>
+      </div>
+      <FlightPassengerInfoList passengers={flight.passengers} />
+    </article>
+  );
+}
+
 function NearbyFlights({
   openFlightTrip,
   notify,
   revision,
+  onActiveFlightChange,
 }: {
   openFlightTrip: (tripId: string) => void;
   notify: (message: string) => void;
   revision: number;
+  onActiveFlightChange: (flight: NearbyFlight | null) => void;
 }) {
   const t = useT();
   const [flights, setFlights] = useState<NearbyFlight[]>(
@@ -2578,6 +2686,18 @@ function NearbyFlights({
   );
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const now = useMinuteClock().getTime();
+  const activeFlight = useMemo(() => flights.find((flight) => {
+    const departure = new Date(flight.latest_departure_at || flight.scheduled_departure_at).getTime();
+    const arrival = new Date(flight.latest_arrival_at || flight.scheduled_arrival_at).getTime();
+    return departure <= now && now <= arrival;
+  }) || null, [flights, now]);
+  const visibleFlights = useMemo(
+    () => flights.filter((flight) => flight.id !== activeFlight?.id),
+    [activeFlight?.id, flights],
+  );
+  useEffect(() => {
+    onActiveFlightChange(activeFlight);
+  }, [activeFlight, onActiveFlightChange]);
   useEffect(() => {
     let active = true;
     const apply = (body: { flights?: NearbyFlight[]; syncConfigured?: boolean }) => {
@@ -2644,7 +2764,7 @@ function NearbyFlights({
       setSyncingId(null);
     }
   }
-  if (!loading && !flights.length) return null;
+  if (!loading && !visibleFlights.length) return null;
   return (
     <section className="nearby-flight-section">
       <div className="section-head nearby-flight-heading">
@@ -2660,74 +2780,17 @@ function NearbyFlights({
       <div className="nearby-flight-list">
         {loading && !flights.length ? (
           <article className="nearby-flight-card is-loading">{t("กำลังตรวจเที่ยวบินล่าสุด…")}</article>
-        ) : flights.map((flight) => {
-          const departure = new Date(flight.latest_departure_at || flight.scheduled_departure_at);
-          const arrival = new Date(flight.latest_arrival_at || flight.scheduled_arrival_at);
-          const hasEnded = arrival.getTime() < now;
-          const hours = Math.max(0, Math.ceil((departure.getTime() - now) / 3600000));
-          const departureTime = flight.entered_departure_local_text?.slice(11, 16)
-            || departure.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-          const arrivalTime = flight.entered_arrival_local_text?.slice(11, 16)
-            || arrival.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-          const departureDay = flight.entered_departure_local_text?.slice(0, 10)
-            ? new Date(`${flight.entered_departure_local_text.slice(0, 10)}T00:00:00`)
-            : departure;
-          const arrivalDay = flight.entered_arrival_local_text?.slice(0, 10)
-            ? new Date(`${flight.entered_arrival_local_text.slice(0, 10)}T00:00:00`)
-            : arrival;
-          const airportName = (value: string) => value
-            .replace(/\s+(?:International(?:\s+Airport)?|Intl\.?|Int['’]l\.?)$/i, "")
-            .trim();
-          return (
-            <article
-              className="flight-card flight-card-compact nearby-flight-card nearby-flight-card-full"
-              key={flight.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => openFlightTrip(flight.trip_id)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  openFlightTrip(flight.trip_id);
-                }
-              }}
-              aria-label={`${flight.airline_code} ${flight.flight_number} ${flight.departure_airport_code} ไป ${flight.arrival_airport_code}`}
-            >
-              <div className="flight-card-top nearby-flight-card-top">
-                <div className="flight-card-identity">
-                  <div className="flight-number">
-                    <span><Plane className="flight-airline-icon" size={11} />{flight.airline_name || flight.airline_code}</span>
-                    <strong>{flight.airline_code} {flight.flight_number}</strong>
-                  </div>
-                </div>
-                <div className="nearby-flight-head-badges">
-                  <div className="nearby-flight-status-stack"><span className={`flight-status status-${flight.status.toLowerCase().replace(/\s/g, "-")}`}>{flight.status || "scheduled"}</span><b>{hasEnded?t("เดินทางแล้ว"):hours < 24 ? t(`อีก ${hours} ชม.`) : t(`อีก ${Math.ceil(hours / 24)} วัน`)}</b></div>
-                  {!hasEnded&&<button type="button" className={`icon-btn nearby-flight-sync ${syncingId === flight.id ? "is-syncing" : ""}`} disabled={!syncConfigured || Boolean(syncingId)} onClick={(event) => { event.stopPropagation(); void syncFlight(flight); }} aria-label={t("อัปเดตข้อมูลเที่ยวบินทันที")}><RefreshCw size={15} /></button>}
-                </div>
-              </div>
-              <div className="flight-route-compact">
-                <div className="flight-airport-block">
-                  <span className="flight-route-label">{t("ต้นทาง")}</span>
-                  <strong>{flight.departure_airport_code}</strong>
-                  <em>{flight.departure_airport_name ? airportName(flight.departure_airport_name) : t("รอข้อมูลสนามบิน")}</em>
-                  <b>{departureTime}</b>
-                </div>
-                <div className="flight-route-path"><small className="flight-route-date"><CalendarDays size={10}/><span>{departureDay.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span><i>→</i><span>{arrivalDay.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })}</span></small><div className="flight-route-track"><span /><Plane size={23} /><span /></div></div>
-                <div className="flight-airport-block is-arrival">
-                  <span className="flight-route-label">{t("ปลายทาง")}</span>
-                  <strong>{flight.arrival_airport_code}</strong>
-                  <em>{flight.arrival_airport_name ? airportName(flight.arrival_airport_name) : t("รอข้อมูลสนามบิน")}</em>
-                  <b>{arrivalTime}</b>
-                </div>
-              </div>
-              <div className="flight-terminal-grid">
-                <span>Terminal <b>{flight.departure_terminal || t("รออัปเดต")}</b> · Gate <b>{flight.departure_gate || t("รออัปเดต")}</b></span>
-                <span>Terminal <b>{flight.arrival_terminal || t("รออัปเดต")}</b> · Gate <b>{flight.arrival_gate || t("รออัปเดต")}</b></span>
-              </div>
-              <FlightPassengerInfoList passengers={flight.passengers} />
-            </article>
-          );
-        })}
+        ) : visibleFlights.map((flight) => (
+          <FlightSnapshotCard
+            key={flight.id}
+            flight={flight}
+            now={now}
+            openFlightTrip={openFlightTrip}
+            onSync={(item) => void syncFlight(item)}
+            syncing={syncingId === flight.id}
+            syncDisabled={!syncConfigured || Boolean(syncingId)}
+          />
+        ))}
       </div>
     </section>
   );
@@ -2766,8 +2829,12 @@ function Dashboard({
 }) {
   const t = useT();
   const router = useRouter();
-  const [now] = useState(() => Date.now());
+  const now = useMinuteClock().getTime();
   const [profile, setProfile] = useState<AccountProfile | null>(null);
+  const [activeFlight, setActiveFlight] = useState<NearbyFlight | null>(null);
+  const handleActiveFlightChange = useCallback((flight: NearbyFlight | null) => {
+    setActiveFlight((current) => current?.id === flight?.id ? current : flight);
+  }, []);
   useEffect(() => {
     let active = true;
     getCurrentAccount()
@@ -2868,7 +2935,16 @@ function Dashboard({
         subtitleIcon={<Heart size={20} fill="currentColor" />}
       />
 
-      {featuredTrip && (
+      {activeFlight ? (
+        <section className="dashboard-featured-trip dashboard-featured-flight" aria-label={t("เที่ยวบินที่กำลังเดินทาง")}>
+          <FlightSnapshotCard
+            flight={activeFlight}
+            now={now}
+            openFlightTrip={openFlightTrip}
+            featured
+          />
+        </section>
+      ) : featuredTrip && (
         <section className="dashboard-featured-trip" aria-label={t("ทริปถัดไปของเรา")}>
           <TripCard
             trip={featuredTrip}
@@ -2930,6 +3006,7 @@ function Dashboard({
         openFlightTrip={openFlightTrip}
         notify={notify}
         revision={revision}
+        onActiveFlightChange={handleActiveFlightChange}
       />
       {(upcomingForGrid.length > 0 || !featuredTrip) && (
         <>
@@ -4008,66 +4085,55 @@ function TimelineExpenseMenu({
   const t = useT();
   const costs = item.cost_items || [];
   const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const closeOutside = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [open]);
   return (
-    <div className="timeline-expense-menu" ref={menuRef}>
+    <div className="timeline-expense-menu">
       <button
         type="button"
         className="timeline-expense-trigger"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(true)}
         aria-label={t("รายการค่าใช้จ่าย")}
         aria-expanded={open}
       >
-        <Ellipsis size={18} />
+        <WalletCards size={17} />
       </button>
-      {open && (
-        <div className="timeline-expense-popover" role="menu">
-          <strong>{t("รายการค่าใช้จ่าย")}</strong>
+      {open && typeof document !== "undefined" && createPortal(
+        <BottomSheet
+          title={t("รายการค่าใช้จ่าย")}
+          subtitle={item.place_name}
+          closeLabel={t("ปิด")}
+          onClose={() => setOpen(false)}
+          className="timeline-expense-sheet"
+          bodyClassName="bottom-sheet-body timeline-expense-sheet-body"
+        >
           <div className="timeline-expense-list">
             {costs.length ? costs.map((cost, index) => (
               <button
                 type="button"
-                role="menuitem"
                 key={cost.id || `${cost.key}-${index}`}
                 onClick={() => {
                   setOpen(false);
                   openCost(item, index);
                 }}
               >
-                <i><ReceiptText size={14} /></i>
+                <i><ReceiptText size={16} /></i>
                 <span><b>{cost.key}</b><small>{costSourceLabel(cost)}</small></span>
                 <em>฿{bahtFormat(cost.value)}</em>
               </button>
-            )) : <small className="timeline-expense-empty">{t("ยังไม่มีค่าใช้จ่าย")}</small>}
+            )) : <div className="timeline-expense-empty"><WalletCards size={24} /><strong>{t("ยังไม่มีค่าใช้จ่าย")}</strong><small>{t("เพิ่มค่าใช้จ่ายของสถานที่นี้ได้เลย")}</small></div>}
           </div>
           <button
             type="button"
             className="timeline-expense-add"
-            role="menuitem"
             onClick={() => {
               setOpen(false);
               openCost(item);
             }}
           >
-            <Plus size={15} />
+            <Plus size={17} />
             {t("เพิ่มค่าใช้จ่าย")}
           </button>
-        </div>
+        </BottomSheet>,
+        document.body,
       )}
     </div>
   );
@@ -4342,18 +4408,21 @@ function TimelineDayPicker({
   );
   return (
     <div className="timeline-day-picker">
-      <div className="timeline-day-picker-actions">
-        {trip.total_days > 1 ? (
+      <TripSectionHeading
+        className="timeline-day-heading"
+        title={trip.total_days > 1 ? (
           <button type="button" className="timeline-day-picker-trigger" onClick={() => { setPickerError(""); setPickerMode("select"); }} aria-haspopup="dialog">
             <strong>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</strong><ChevronDown size={20} aria-hidden="true" />
           </button>
         ) : (
-          <div className="timeline-day-picker-static"><strong>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</strong></div>
+          <span className="timeline-day-picker-static"><strong>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</strong></span>
         )}
-        <button type="button" className="timeline-add-place trip-section-add" onClick={addPlace} aria-label={t(`เพิ่มรายการวันที่ ${displayTripDay(trip, day)}`)} title={t("เพิ่มสถานที่")}><Plus size={21} /><span>{t("เพิ่มสถานที่")}</span></button>
-        {swapDay && trip.total_days > 1 && <button type="button" className="timeline-swap-days" onClick={() => { setPendingSwapDay(null); setPickerError(""); setPickerMode("swap"); }} aria-label={t("สลับวัน")} title={t("สลับวัน")}><ArrowUpDown size={17} /><span>{t("สลับวัน")}</span></button>}
-      </div>
-      <p>{dateLabel} · {t(`${itemCount} สถานที่`)}</p>
+        subtitle={`${dateLabel} · ${t(`${itemCount} สถานที่`)}`}
+        actions={<>
+          <button type="button" className="timeline-add-place trip-section-add" onClick={addPlace} aria-label={t(`เพิ่มรายการวันที่ ${displayTripDay(trip, day)}`)} title={t("เพิ่มสถานที่")}><Plus size={21} /><span>{t("เพิ่มสถานที่")}</span></button>
+          {swapDay && trip.total_days > 1 ? <button type="button" className="timeline-swap-days" onClick={() => { setPendingSwapDay(null); setPickerError(""); setPickerMode("swap"); }} aria-label={t("สลับวัน")} title={t("สลับวัน")}><ArrowUpDown size={17} /><span>{t("สลับวัน")}</span></button> : null}
+        </>}
+      />
       {trip.total_days > 1 && pickerMode && typeof document !== "undefined" && createPortal(
         pickerMode === "swap" ? (
           <BottomSheet
@@ -5547,10 +5616,6 @@ function ExpenseSplitSummary({
   const boundedPercent = Math.min(Math.max(totalPercent, 0), 100);
   return (
     <section className={`expense-overview ${remaining < 0 ? "is-over-budget" : ""}`}>
-      <div className="expense-overview-title">
-        <span><ChartNoAxesColumnIncreasing size={20} /></span>
-        <h2>{t("ภาพรวมค่าใช้จ่าย")}</h2>
-      </div>
       <div className="expense-overview-stats">
         <article className="is-budget">
           <WalletCards size={18} />
@@ -5840,12 +5905,11 @@ function PlanExpensesContent({
     });
   return (
     <div className="plan-expenses redesigned-plan-expenses">
-      <div className="trip-section-heading expense-page-heading">
-        <div>
-          <h2>{t("ค่าใช้จ่าย")}</h2>
-          <p>{t("สรุปค่าใช้จ่ายทั้งหมดของทริป")}</p>
-        </div>
-        <button
+      <TripSectionHeading
+        className="expense-page-heading"
+        title={t("ค่าใช้จ่าย")}
+        subtitle={t("สรุปค่าใช้จ่ายทั้งหมดของทริป")}
+        actions={<button
           type="button"
           className="trip-section-add"
           disabled={!firstAvailableDay}
@@ -5855,8 +5919,8 @@ function PlanExpensesContent({
         >
           <Plus size={21} />
           <span>{t("เพิ่มค่าใช้จ่าย")}</span>
-        </button>
-      </div>
+        </button>}
+      />
       <ExpenseSplitSummary
         trip={trip}
         tripTotal={tripTotal}
@@ -6290,6 +6354,21 @@ function CardSheet({
   );
 }
 
+function SettingsGlass({ children }: { children: ReactNode }) {
+  return (
+    <LiquiGlass
+      className="settings-liquid-glass"
+      contentClassName="settings-liquid-glass-content"
+      radius={20}
+      blur={1.5}
+      refraction={58}
+      bezel={14}
+    >
+      {children}
+    </LiquiGlass>
+  );
+}
+
 function ProfileSettingsCard({
   profile,
   save,
@@ -6335,6 +6414,7 @@ function ProfileSettingsCard({
     setEditing(false);
   }
   return (
+    <SettingsGlass>
     <article className="card account-settings-card">
       <AccountAvatar profile={profile} size="large" />
       <div className="account-settings-copy">
@@ -6398,6 +6478,7 @@ function ProfileSettingsCard({
         {error && <p className="login-error">{error}</p>}
       </div>
     </article>
+    </SettingsGlass>
   );
 }
 
@@ -6472,6 +6553,7 @@ function StorageUsagePanel({ lang }: { lang: Lang }) {
   const icon = (id: StorageMetric["id"]) =>
     id === "neon" ? <Database size={17} /> : <Cloud size={17} />;
   return (
+    <SettingsGlass>
     <section className="card storage-admin-card">
       <div className="storage-admin-head">
         <div>
@@ -6551,6 +6633,7 @@ function StorageUsagePanel({ lang }: { lang: Lang }) {
         </small>
       )}
     </section>
+    </SettingsGlass>
   );
 }
 
@@ -6685,6 +6768,7 @@ function SettingsContent({
       <h1 className="page-title">{t("ตั้งค่า")}</h1>
       <p className="page-sub">{t("ค่าของบัญชีและอุปกรณ์นี้")}</p>
       <div className="settings-list">
+        <SettingsGlass>
         <article className="card">
           <div className="setting-row">
             <div className="setting-label">
@@ -6724,7 +6808,9 @@ function SettingsContent({
             </div>
           </div>
         </article>
-        <a className="card master-settings-link" href="/settings/checklists">
+        </SettingsGlass>
+        <SettingsGlass>
+        <a className="card master-settings-link" href="/settings/checklists?returnTo=%2Fsettings">
           <div className="setting-label">
             <span className="stat-icon">
               <ClipboardList size={17} />
@@ -6736,6 +6822,8 @@ function SettingsContent({
           </div>
           <ChevronRight size={18} />
         </a>
+        </SettingsGlass>
+        <SettingsGlass>
         <article className="card payment-settings-card">
           <div className="section-head">
             <div>
@@ -6856,6 +6944,8 @@ function SettingsContent({
             </div>
           )}
         </article>
+        </SettingsGlass>
+        <SettingsGlass>
         <article className="card offline-documents-setting">
           <div className="setting-row">
             <div className="setting-label">
@@ -6878,6 +6968,8 @@ function SettingsContent({
             </button>
           </div>
         </article>
+        </SettingsGlass>
+        <SettingsGlass>
         <article className="card logout-setting">
           <div className="setting-row">
             <div className="setting-label">
@@ -6898,6 +6990,7 @@ function SettingsContent({
             </button>
           </div>
         </article>
+        </SettingsGlass>
       </div>
       {cardSheet && (
         <CardSheet
