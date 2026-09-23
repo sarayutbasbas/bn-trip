@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback,useEffect,useRef,useState } from "react";
-import { Bell,Check,MapPin,Plane,Trash2,Users,X } from "lucide-react";
+import { Bell,Check,MapPin,Plane,Trash2,Users } from "lucide-react";
 
 export type InvitationNotification = {
   id:string;
@@ -42,13 +42,14 @@ export function InvitationNotifications({onChanged}:{onChanged?:(result:Invitati
     }
   },[]);
   useEffect(()=>{
-    void load();
+    const initialLoad=window.setTimeout(()=>void load(),0);
     const refresh=()=>void load();
     const visibility=()=>{if(document.visibilityState==="visible")void load()};
     window.addEventListener("focus",refresh);
     window.addEventListener("invitation-notifications:refresh",refresh);
     document.addEventListener("visibilitychange",visibility);
     return()=>{
+      window.clearTimeout(initialLoad);
       window.removeEventListener("focus",refresh);
       window.removeEventListener("invitation-notifications:refresh",refresh);
       document.removeEventListener("visibilitychange",visibility);
@@ -79,7 +80,6 @@ export function InvitationNotifications({onChanged}:{onChanged?:(result:Invitati
       <Bell size={24}/>{hasItems?<i className="notification-dot"/>:null}
     </button>
     {open&&hasItems?<section className="invitation-popover" role="dialog" aria-label="คำเชิญใหม่">
-      <header><span><b>คำเชิญใหม่</b><small>{items.length} รายการ</small></span><button type="button" onClick={()=>setOpen(false)} aria-label="ปิด"><X size={17}/></button></header>
       <div className="invitation-popover-list">
         {items.map(invitation=><article className="invitation-popover-card" key={invitation.id}>
           <Image src={invitation.cover_image_url||"/travel-postcard-fallback.jpg"} alt="" width={62} height={62} unoptimized/>

@@ -28,7 +28,12 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
 export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
   if(session.isDemo)return NextResponse.json({error:"โหมดทดลองไม่สามารถแก้ไขข้อมูลได้",loginRequired:true},{status:403});
-  await ensureLatestDatabaseSchema();const {id}=await params;if(await getTripIdeaRole(session,id)!=="owner")return NextResponse.json({error:"เฉพาะผู้สร้างรายการเท่านั้นที่ลบได้"},{status:403});
+  await ensureLatestDatabaseSchema();const {id}=await params;const role=await getTripIdeaRole(session,id);
+  if(!role)return NextResponse.json({error:"ไม่พบรายการ"},{status:404});
+  if(role==="collaborator"){
+    const membership=await query("DELETE FROM trip_idea_collaborators WHERE trip_idea_id=$1 AND user_id=$2 RETURNING id",[id,session.userId]);
+    return membership.rows[0]?NextResponse.json({ok:true,left:true}):NextResponse.json({error:"ไม่พบรายการ"},{status:404});
+  }
   const result=await query("DELETE FROM trip_ideas WHERE id=$1 AND user_id=$2 RETURNING id",[id,session.userId]);
   return result.rows[0]?NextResponse.json({ok:true}):NextResponse.json({error:"ไม่พบรายการ"},{status:404});
 }

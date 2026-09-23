@@ -234,6 +234,12 @@ export type Trip = {
   google_photos_url: string | null;
   timezone?: string;
   has_flights?: boolean;
+  flight_summaries?: Array<{
+    journey_type: "outbound" | "return" | "internal";
+    segment_order: number;
+    airline_code: string;
+    flight_number: string;
+  }>;
   has_day_zero?: boolean;
   access_role?: "owner" | "view" | "admin";
   members?: TripMember[];
@@ -1293,6 +1299,19 @@ export function CountryPicker({
   const [query, setQuery] = useState(selectedLabel);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const selectedCodeRef = useRef(selected.code);
+  const blurTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    selectedCodeRef.current = selected.code;
+  }, [selected.code]);
+  useEffect(
+    () => () => {
+      if (blurTimerRef.current !== null) {
+        window.clearTimeout(blurTimerRef.current);
+      }
+    },
+    [],
+  );
   const options = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     const filtered = TRIP_COUNTRIES.filter((country) => {
@@ -1308,6 +1327,11 @@ export function CountryPicker({
   function selectCountry(code: string) {
     const country = countryByCode(code);
     if (!country) return;
+    if (blurTimerRef.current !== null) {
+      window.clearTimeout(blurTimerRef.current);
+      blurTimerRef.current = null;
+    }
+    selectedCodeRef.current = country.code;
     onChange(country.code);
     setQuery(lang === "EN" ? country.nameEn : country.nameTh);
     setActiveIndex(0);
@@ -1335,6 +1359,10 @@ export function CountryPicker({
           aria-expanded={open}
           aria-controls={listboxId}
           onFocus={(event) => {
+            if (blurTimerRef.current !== null) {
+              window.clearTimeout(blurTimerRef.current);
+              blurTimerRef.current = null;
+            }
             setOpen(true);
             setActiveIndex(0);
             if (query === selectedLabel) {
@@ -1342,11 +1370,18 @@ export function CountryPicker({
               window.setTimeout(() => event.currentTarget.select(), 0);
             }
           }}
-          onBlur={() => window.setTimeout(() => {
-            setOpen(false);
-            setQuery(selectedLabel);
-            setActiveIndex(0);
-          }, 120)}
+          onBlur={() => {
+            blurTimerRef.current = window.setTimeout(() => {
+              const latestCountry =
+                countryByCode(selectedCodeRef.current) || TRIP_COUNTRIES[0];
+              setOpen(false);
+              setQuery(
+                lang === "EN" ? latestCountry.nameEn : latestCountry.nameTh,
+              );
+              setActiveIndex(0);
+              blurTimerRef.current = null;
+            }, 120);
+          }}
           onChange={(event) => {
             setQuery(event.target.value);
             setActiveIndex(0);
@@ -2204,12 +2239,14 @@ function TripCard({
   past,
   now,
   selectTrip,
+  manageCollaborators,
   priority = false,
 }: {
   trip: Trip;
   past?: boolean;
   now: number;
   selectTrip: (t: Trip) => void;
+  manageCollaborators: (trip: Trip) => void;
   priority?: boolean;
 }) {
   const t = useT();
@@ -2226,6 +2263,35 @@ function TripCard({
   );
   const dateRangeLabel = tripDateRangeLabel(trip);
   const hasDuration = Number(trip.total_days || 0) > 0;
+  const flightSummaries = (trip.flight_summaries || []).filter(
+    (flight) => flight.airline_code && flight.flight_number,
+  );
+  const flightTypeCounts = flightSummaries.reduce((counts, flight) => {
+    counts.set(flight.journey_type, (counts.get(flight.journey_type) || 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const flightTypeIndexes = new Map<string, number>();
+  const flightLabels = flightSummaries.map((flight) => {
+    const index = flightTypeIndexes.get(flight.journey_type) || 0;
+    flightTypeIndexes.set(flight.journey_type, index + 1);
+    const baseLabel =
+      flight.journey_type === "outbound"
+        ? "ขาไป"
+        : flight.journey_type === "return"
+          ? "ขากลับ"
+          : "ระหว่างทริป";
+    return {
+      key: `${flight.journey_type}-${flight.segment_order}-${flight.airline_code}-${flight.flight_number}`,
+      label:
+        (flightTypeCounts.get(flight.journey_type) || 0) > 1
+          ? `${baseLabel} ${index + 1}`
+          : baseLabel,
+      number: `${flight.airline_code} ${flight.flight_number}`,
+      showIcon: index === 0,
+      direction:
+        flight.journey_type === "return" ? "return" : "outbound",
+    };
+  });
   const hasBudget = budget > 0 || actualSpent > 0;
   const countdownLabel = !trip.outbound_departure_at
     ? t("ยังไม่กำหนดวัน")
@@ -2265,7 +2331,12 @@ function TripCard({
           </b>
         )}
         {past && <TripRatingBadge trip={trip} variant="cover" />}
-        <SharedTripAvatars members={trip.members} limit={3} />
+        <SharedTripAvatars
+          members={trip.members}
+          limit={3}
+          onClick={() => manageCollaborators(trip)}
+          actionLabel={t("ผู้ร่วมทริป")}
+        />
       </div>
       <div className="trip-body">
         <h3>{trip.name}</h3>
@@ -2283,12 +2354,37 @@ function TripCard({
                 {dateRangeLabel}
               </span>
             )}
+            {dateRangeLabel && hasDuration && (
+              <i className="trip-card-facts-separator" aria-hidden="true">
+                •••
+              </i>
+            )}
             {hasDuration && (
               <span>
                 <Moon size={11} fill="currentColor" />
                 {t(`${trip.total_days} วัน`)}
               </span>
             )}
+          </div>
+        )}
+        {flightLabels.length > 0 && (
+          <div className="trip-card-flights">
+            {flightLabels.map((flight) => (
+              <span className="trip-card-flight" key={flight.key}>
+                <i aria-hidden="true">
+                  {flight.showIcon && (
+                    <Plane
+                      className={`trip-card-flight-plane is-${flight.direction}`}
+                      size={12}
+                      fill="currentColor"
+                    />
+                  )}
+                </i>
+                <span>
+                  <b>{t(flight.label)} :</b> {flight.number}
+                </span>
+              </span>
+            ))}
           </div>
         )}
         {hasBudget && (
@@ -2644,6 +2740,7 @@ function Dashboard({
   countryHighlights,
   revision,
   selectTrip,
+  manageCollaborators,
   openFlightTrip,
   createTrip,
   viewAll,
@@ -2658,6 +2755,7 @@ function Dashboard({
   countryHighlights: CountryHighlight[];
   revision: number;
   selectTrip: (t: Trip) => void;
+  manageCollaborators: (trip: Trip) => void;
   openFlightTrip: (tripId: string) => void;
   createTrip: () => void;
   viewAll: (status: TripStatus) => void;
@@ -2704,6 +2802,7 @@ function Dashboard({
           past={isPast}
           now={now}
           selectTrip={selectTrip}
+          manageCollaborators={manageCollaborators}
           priority={prioritizeFirst && index === 0}
         />
     );
@@ -2775,6 +2874,7 @@ function Dashboard({
             trip={featuredTrip}
             now={now}
             selectTrip={selectTrip}
+            manageCollaborators={manageCollaborators}
             priority
           />
         </section>
@@ -3257,11 +3357,13 @@ function CompactTripCard({
   trip,
   now,
   selectTrip,
+  manageCollaborators,
   priority = false,
 }: {
   trip: Trip;
   now: number;
   selectTrip: (trip: Trip) => void;
+  manageCollaborators: (trip: Trip) => void;
   priority?: boolean;
 }) {
   const t = useT();
@@ -3336,7 +3438,13 @@ function CompactTripCard({
           </span>
         </div>
       </div>
-      <SharedTripAvatars members={trip.members} variant="compact" limit={3} />
+      <SharedTripAvatars
+        members={trip.members}
+        variant="compact"
+        limit={3}
+        onClick={() => manageCollaborators(trip)}
+        actionLabel={t("ผู้ร่วมทริป")}
+      />
     </article>
   );
 }
@@ -3346,6 +3454,7 @@ function TripsDirectory({
   initialData,
   revision,
   selectTrip,
+  manageCollaborators,
   createTrip,
   onRefreshComplete,
 }: {
@@ -3353,6 +3462,7 @@ function TripsDirectory({
   initialData?: { items: Trip[]; total: number; years: number[]; hasMore: boolean; statusCounts?: Record<TripStatus,number> };
   revision: number;
   selectTrip: (trip: Trip, origin: string) => void;
+  manageCollaborators: (trip: Trip) => void;
   createTrip: () => void;
   onRefreshComplete?: () => void;
 }) {
@@ -3661,7 +3771,7 @@ function TripsDirectory({
                     <span />
                   </div>
                 ) : null}
-                <CompactTripCard trip={trip} now={now} priority={index<3} selectTrip={openTrip}/>
+                <CompactTripCard trip={trip} now={now} priority={index<3} selectTrip={openTrip} manageCollaborators={manageCollaborators}/>
               </Fragment>
             ))}
           </div>
@@ -3791,11 +3901,13 @@ type TripSectionView = "plan" | "expenses" | "flights" | "insurance" | "stays" |
 
 function TripSectionNav({
   trip,
+  hasAccommodations,
   active,
   select,
   workspaceTab,
 }: {
   trip: Trip;
+  hasAccommodations: boolean;
   active: TripSectionView;
   select: (view: TripSectionView, workspaceTab?: WorkspaceTab) => void;
   workspaceTab?: WorkspaceTab;
@@ -3830,6 +3942,7 @@ function TripSectionNav({
     disabled?: boolean;
     action: () => void;
     active?: boolean;
+    availableInTrip?: boolean;
   };
   const closeAndRun = (action: () => void) => {
     setMoreOpen(false);
@@ -3838,15 +3951,21 @@ function TripSectionNav({
   const sections: TripMenuItem[] = [
     { id: "plan", label: "แผน", Icon: MapIcon, active: active === "plan", action: () => select("plan") },
     { id: "expenses", label: "ค่าใช้จ่าย", Icon: WalletCards, active: active === "expenses", action: () => select("expenses") },
-    { id: "flights", label: "เที่ยวบิน", Icon: Plane, disabled: !trip.has_flights, active: active === "flights", action: () => select("flights") },
-    { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", active: active === "insurance", action: () => select("insurance") },
-    { id: "stays", label: "ที่พัก", Icon: BedDouble, disabled: trip.total_days <= 1, active: active === "stays", action: () => select("stays") },
-    { id: "photos", label: "รูปภาพ / Link", Icon: Images, disabled: !trip.google_photos_url, action: () => trip.google_photos_url && window.open(trip.google_photos_url, "_blank", "noopener,noreferrer") },
-    { id: "export", label: "Download", Icon: Download, action: () => { window.open(`/api/trips/${trip.id}/export-plan`, "_self"); } },
-    { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
+    { id: "flights", label: "เที่ยวบิน", Icon: Plane, disabled: !trip.has_flights, availableInTrip: Boolean(trip.has_flights), active: active === "flights", action: () => select("flights") },
+    { id: "stays", label: "ที่พัก", Icon: BedDouble, disabled: trip.total_days <= 1, availableInTrip: hasAccommodations, active: active === "stays", action: () => select("stays") },
     { id: "checklist", label: "Checklist", Icon: ClipboardList, active: active === "workspace" && workspaceTab === "checklist", action: () => select("workspace", "checklist") },
+    { id: "photos", label: "รูปภาพ / Link", Icon: Images, disabled: !trip.google_photos_url, availableInTrip: Boolean(trip.google_photos_url), action: () => trip.google_photos_url && window.open(trip.google_photos_url, "_blank", "noopener,noreferrer") },
+    { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", availableInTrip: trip.country_code !== "TH", active: active === "insurance", action: () => select("insurance") },
+    { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
+    { id: "export", label: "Download", Icon: Download, action: () => { window.open(`/api/trips/${trip.id}/export-plan`, "_self"); } },
   ];
-  const primary = sections.filter(({ id }) => id !== "insurance").slice(0, 4);
+  const primary = sections
+    .filter(({ availableInTrip }) => availableInTrip !== false)
+    .slice(0, 4);
+  const primaryIds = new Set(primary.map(({ id }) => id));
+  const overflowIsActive = sections.some(
+    ({ id, active: isActive }) => isActive && !primaryIds.has(id),
+  );
   return (
     <>
       <nav className="trip-section-nav has-5-items" aria-label={t("เลือกข้อมูลทริป")}>
@@ -3856,7 +3975,7 @@ function TripSectionNav({
             <span>{t(label)}</span>
           </button>
         ))}
-        <button type="button" className={`trip-menu-more${active === "workspace" || active === "insurance" ? " active" : ""}`} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen}>
+        <button type="button" className={`trip-menu-more${overflowIsActive ? " active" : ""}`} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen}>
           <i className="trip-section-icon"><Menu className="trip-menu-fill-icon" size={26} aria-hidden="true" /></i>
           <span>{t("อื่นๆ")}</span>
         </button>
@@ -4436,6 +4555,7 @@ function TripHub({
       </div>
       <TripSectionNav
         trip={trip}
+        hasAccommodations={items.some((item) => Boolean(item.accommodation_id))}
         active={view}
         workspaceTab={activeWorkspaceTab}
         select={(nextView, nextWorkspaceTab) => selectView(nextView, nextWorkspaceTab)}
@@ -4558,23 +4678,20 @@ function TripHub({
                                 sizes="108px"
                                 unoptimized
                               />
-                              {!item.accommodation_id && (
-                                <span className="event-time-badge">
-                                  {item.start_time?.slice(0, 5) ||
-                                    t("ไม่ระบุเวลา")}
-                                </span>
-                              )}
+                              <span className="event-time-badge">
+                                {item.start_time?.slice(0, 5) ||
+                                  (item.accommodation_id
+                                    ? "23:30"
+                                    : t("ไม่ระบุเวลา"))}
+                                {item.accommodation_id && (
+                                  <>
+                                    {" "}({item.accommodation_night}/
+                                    {item.accommodation_nights})
+                                  </>
+                                )}
+                              </span>
                             </span>
                             <div className="event-copy">
-                              {item.accommodation_id && (
-                                <span className="accommodation-night-badge">
-                                  <BedDouble size={11} aria-hidden="true" />
-                                  {item.start_time?.slice(0, 5) || "23:30"}
-                                  <i aria-hidden="true">·</i>
-                                  นอนที่นี่ คืนที่ {item.accommodation_night}/
-                                  {item.accommodation_nights}
-                                </span>
-                              )}
                               <div className="timeline-title-row">
                                 <h3>{item.place_name}</h3>
                               </div>
@@ -4803,6 +4920,7 @@ function TimelineScreen({
       </div>
       <TripSectionNav
         trip={trip}
+        hasAccommodations={items.some((item) => Boolean(item.accommodation_id))}
         active="plan"
         select={(section, workspaceTab) => {
           if (section === "plan") return;
@@ -4885,25 +5003,15 @@ function TimelineScreen({
                     }}
                   >
                     <div className="event-copy">
-                      <span
-                        className={
-                          item.accommodation_id
-                            ? "event-time accommodation-night-badge"
-                            : "event-time"
-                        }
-                      >
-                        {item.accommodation_id && (
-                          <BedDouble size={11} aria-hidden="true" />
-                        )}
+                      <span className="event-time">
                         {item.start_time?.slice(0, 5) ||
                           (item.accommodation_id
                             ? "23:30"
                             : t("ไม่ระบุเวลา"))}
                         {item.accommodation_id && (
                           <>
-                            {" "}
-                            · นอนที่นี่ คืนที่ {item.accommodation_night}/
-                            {item.accommodation_nights}
+                            {" "}({item.accommodation_night}/
+                            {item.accommodation_nights})
                           </>
                         )}
                       </span>
@@ -5688,7 +5796,6 @@ function PlanExpensesContent({
 }) {
   const t = useT();
   const { guests: expenseGuests } = useExpenseGuests(trip.id);
-  const [showBackTop, setShowBackTop] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [collapsedDays, setCollapsedDays] = useState<Set<number>>(
     () => new Set(),
@@ -5698,11 +5805,6 @@ function PlanExpensesContent({
     (cost.category || "").toLowerCase() === "shopping";
   const tripCosts = allCosts.filter((cost) => !isShopping(cost));
   const shoppingCosts = allCosts.filter(isShopping);
-  useEffect(() => {
-    const onScroll = () => setShowBackTop(window.scrollY > 520);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
   const tripTotal = tripCosts.reduce(
     (sum, cost) => sum + Number(cost.value || 0),
     0,
@@ -5961,17 +6063,6 @@ function PlanExpensesContent({
         </button>,
         document.body,
       )}
-      {showBackTop && (
-        <button
-          type="button"
-          className="expense-back-top"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          title={t("กลับด้านบน")}
-          aria-label={t("กลับด้านบน")}
-        >
-          <ArrowUp size={20} />
-        </button>
-      )}
     </div>
   );
 }
@@ -5998,6 +6089,7 @@ function ExpensesScreen({
         </div>
         <TripSectionNav
           trip={trip}
+          hasAccommodations={items.some((item) => Boolean(item.accommodation_id))}
           active="expenses"
           select={(section, workspaceTab) => {
             if (section === "expenses") return;
@@ -9986,7 +10078,11 @@ export function BNTripApp({
         {
           method: modal.trip ? "PATCH" : "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(data),
+          body: JSON.stringify(
+            !modal.trip && modal.preset?.sourceIdeaId
+              ? { ...data, sourceIdeaId: modal.preset.sourceIdeaId }
+              : data,
+          ),
         },
       );
       // Use the URL returned by the upload immediately. Apart from making the
@@ -10028,10 +10124,7 @@ export function BNTripApp({
       });
       setTripRevision((value) => value + 1);
       if (!modal.trip) itineraryCache.set(saved.id, []);
-      if (!modal.trip && modal.preset?.sourceIdeaId) {
-        await fetch(`/api/trip-ideas/${modal.preset.sourceIdeaId}`, { method: "DELETE" }).catch(() => null);
-      }
-      else if (data.hasFlights === false) {
+      if (modal.trip && data.hasFlights === false) {
         itineraryCache.delete(saved.id);
         invalidateClientResourcesContaining(`trip:${saved.id}:`);
         window.dispatchEvent(
@@ -10363,6 +10456,9 @@ export function BNTripApp({
       countryHighlights={dashboardCountryHighlights}
       revision={tripRevision + dashboardRefreshToken}
       selectTrip={selectTrip}
+      manageCollaborators={protect((trip) =>
+        setModal({ type: "collaborators", trip }),
+      )}
       openFlightTrip={(id) => router.push(`/trips/${id}?view=flights`)}
       createTrip={protect(() => setModal({ type: "trip" }))}
       viewAll={(status) =>
@@ -10400,6 +10496,9 @@ export function BNTripApp({
       }}
       revision={tripRevision}
       selectTrip={selectTrip}
+      manageCollaborators={protect((trip) =>
+        setModal({ type: "collaborators", trip }),
+      )}
       createTrip={protect(() => setModal({ type: "trip" }))}
     />
   ) : page === "trips" ? (
@@ -10408,6 +10507,9 @@ export function BNTripApp({
       initialData={initialTripDirectory}
       revision={tripRevision + tripDirectoryRefreshToken}
       selectTrip={selectTrip}
+      manageCollaborators={protect((trip) =>
+        setModal({ type: "collaborators", trip }),
+      )}
       createTrip={protect(() => setModal({ type: "trip" }))}
       onRefreshComplete={finishTripDirectoryRefresh}
     />
@@ -10522,7 +10624,11 @@ export function BNTripApp({
     <CollaboratorsSheet
       trip={modal.trip}
       close={() => setModal(null)}
-      onChanged={() => void refreshTripMembers(modal.trip.id)}
+      onChanged={() =>
+        void refreshTripMembers(modal.trip.id).then(() =>
+          setTripRevision((value) => value + 1),
+        )
+      }
       confirmRemove={setConfirmation}
       notify={flash}
       requestLeave={() => {

@@ -3239,8 +3239,8 @@ button:disabled {
   width: 44px;
   height: 44px;
   flex: 0 0 44px;
-  border: .5px solid var(--line);
-  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
   display: grid;
   place-items: center;
   color: var(--muted);
@@ -3264,7 +3264,7 @@ button:disabled {
   width:44px;
   height:44px;
   flex:0 0 44px;
-  border-radius:14px;
+  border-radius:50%;
   display:grid;
   place-items:center;
   color:#fff;
@@ -3499,6 +3499,11 @@ button:disabled {
   background: transparent;
   font-size: 16px;
   font-weight: 400;
+}
+.trip-search > svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
 }
 .trip-search input::-webkit-search-cancel-button {
   display: none;
@@ -4811,7 +4816,7 @@ html.dark .trip-section-nav button.active {
   min-height: 44px;
   margin-left: 0;
   padding: 0;
-  border: .5px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
   justify-content: center;
   color: var(--orange);
@@ -4876,7 +4881,7 @@ html.dark .trip-section-nav button.active {
   margin-left: auto;
   padding: 0;
   border: 1px solid rgba(255,255,255,.48);
-  border-radius: 14px;
+  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5039,7 +5044,7 @@ html.dark .trip-section-nav button.active {
 .trip-menu-sheet header strong { margin:0;font-size:20px;line-height:1.2; }
 .trip-menu-sheet header small { margin:0;color:var(--muted);font-size:12px;line-height:1.25; }
 .trip-menu-sheet header button { width:36px;height:36px;border:.5px solid var(--line);border-radius:50%;display:grid;place-items:center;color:var(--ink);background:var(--surface-2); }
-.trip-menu-sheet-grid { margin-top:14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:72px;align-content:start;gap:2px; }
+.trip-menu-sheet-grid { margin-top:14px;margin-bottom:40px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:72px;align-content:start;gap:2px; }
 .trip-menu-sheet-grid > button { min-width:0;min-height:64px;padding:6px 4px;border:1px solid transparent;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--ink);background:transparent;font-size:12px;box-shadow:none;text-align:center;overflow:visible; }
 .trip-menu-sheet-grid > button.active { min-height:72px;border-color:var(--orange);color:#fff;background:var(--brand-gradient);box-shadow:0 5px 14px rgba(255,103,18,.18); }
 .trip-menu-sheet-grid > button i { width:26px;height:26px;display:grid;place-items:center;color:#f05b12;background:transparent;font-style:normal; }
@@ -5538,39 +5543,6 @@ html.dark .trip-section-nav button.active {
 }
 .dark .event-time {
   color: #ffc39f;
-}
-.accommodation-night-badge {
-  width: fit-content;
-  max-width: 100%;
-  min-height: 23px;
-  margin: 0 0 5px;
-  padding: 0 8px;
-  border: 0.5px solid color-mix(in srgb, var(--orange) 32%, var(--line));
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  overflow: hidden;
-  color: var(--orange);
-  background: var(--brand-soft);
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 750;
-  line-height: 1;
-  letter-spacing: 0;
-  text-transform: none;
-  white-space: nowrap;
-}
-.accommodation-night-badge svg {
-  flex: 0 0 auto;
-}
-.accommodation-night-badge i {
-  font-style: normal;
-  opacity: 0.65;
-}
-.dark .accommodation-night-badge {
-  color: #ffc39f;
-  background: color-mix(in srgb, var(--orange) 18%, var(--surface-solid));
 }
 .accommodation-booking-text {
   width: fit-content;
@@ -7411,6 +7383,10 @@ html.dark .expense-overview.is-over-budget .expense-overview-stats .is-remaining
   display: grid;
   background: var(--surface-solid);
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.2);
+}
+.checklist-action-popover-portal {
+  position: fixed;
+  z-index: 1200;
 }
 .checklist-groups > section:has(.checklist-action-popover),
 .checklist-list article:has(.checklist-action-popover),
@@ -11312,26 +11288,7 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
 .trip-idea-submit-actions { position: sticky; z-index: 8; bottom: 0; margin: 6px calc(var(--sheet-inline-padding) * -1) 0; padding: 10px var(--sheet-inline-padding) max(14px,calc(10px + env(safe-area-inset-bottom))); border-top: .5px solid var(--line); display: flex; gap: 10px; background: var(--surface-solid); box-shadow: 0 -12px 28px color-mix(in srgb,var(--ink) 7%,transparent); }
 .trip-idea-submit-actions .primary-btn { min-width: 0; flex: 1 1 auto; }
 .trip-idea-submit-actions > .delete-record-btn { width: 48px; height: 48px; border-radius: 50%; }
-.modal-backdrop > .modal.bottom-sheet.trip-idea-sheet {
-  height: min(92dvh, calc(100dvh - env(safe-area-inset-top) - 8px));
-  max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top) - 8px));
-}
-.trip-idea-sheet > .trip-idea-sheet-body {
-  min-height: 0;
-  flex: 1 1 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 2px 2px 24px;
-  display: grid;
-  align-content: start;
-  grid-auto-rows: max-content;
-  gap: 14px;
-  touch-action: pan-y;
-  scroll-padding-block: 8px 28px;
-  scrollbar-gutter: stable;
-  overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
-}
+.trip-idea-form-grid { padding:2px 2px 4px; }
 .collaborator-row.idea-collaborator-row:not(.is-readonly) { grid-template-columns: 40px minmax(0,1fr) 42px; }
 .collaborator-row.idea-collaborator-row .delete-record-btn { justify-self: end; }
 .trip-idea-card.compact-trip-card { min-height: 142px; padding: 0; grid-template-columns: minmax(120px,36%) minmax(0,1fr); align-items: stretch; gap: 0; overflow: hidden; }
@@ -11495,7 +11452,7 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
   height: 44px;
   padding:0;
   flex:0 0 44px;
-  border-radius:14px;
+  border-radius:50%;
   display:grid;
   place-items:center;
   color: #fff;
@@ -13055,15 +13012,23 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
   background: var(--surface-solid);
   outline: 3px solid var(--brand-soft);
 }
-.booking-platform-trigger img,
-.booking-platform-menu img {
-  width: 38px;
-  height: 24px;
-  padding: 3px;
-  border-radius: 6px;
-  display: block;
-  object-fit: contain;
+.booking-platform-logo {
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
   background: #fff;
+  box-shadow: 0 4px 11px rgba(20, 30, 50, 0.16);
+}
+.booking-platform-logo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.25);
 }
 .booking-platform-trigger strong {
   overflow: hidden;
@@ -13093,9 +13058,9 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
   margin: 0;
   color: var(--ink);
 }
-.booking-platform-menu img {
-  width: 42px;
-  height: 25px;
+.booking-platform-menu .booking-platform-logo {
+  width: 36px;
+  height: 36px;
 }
 .accommodation-breakfast-toggle {
   padding: 8px 13px !important;
@@ -13186,28 +13151,14 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 }
 .accommodation-price-heading { display: none; }
 .accommodation-night-details {
-  padding: 12px;
-  border: 0.5px solid var(--line);
-  border-radius: 18px;
+  padding: 0;
+  border: 0;
   display: grid;
   gap: 10px;
-  background: var(--surface-2);
-}
-.accommodation-night-details > div:first-child {
-  display: grid;
-  gap: 2px;
-}
-.accommodation-night-details > div:first-child strong {
-  font-size: 13px;
-  font-weight: 600;
-}
-.accommodation-night-details > div:first-child small {
-  color: var(--muted);
-  font-size: 9px;
+  background: transparent;
 }
 .accommodation-night-details textarea {
   min-height: 76px;
-  background: var(--surface-solid);
 }
 .accommodation-night-entry {
   padding: 11px;
@@ -13218,19 +13169,16 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
   background: var(--surface-solid);
 }
 .accommodation-night-entry > header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  display: block;
 }
 .accommodation-night-entry > header strong {
   font-size: 12px;
   font-weight: 650;
 }
-.accommodation-night-entry > header small {
+.accommodation-night-entry > header strong span {
   color: var(--muted);
-  font-size: 9px;
-  text-align: right;
+  font-size: 10px;
+  font-weight: 500;
 }
 .accommodation-night-bedtime {
   max-width: 180px;
@@ -13365,8 +13313,8 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-breakfast-status.is-excluded { color:#a45a52; }
 .accommodation-breakfast-status > span { overflow:hidden;text-overflow:ellipsis; }
 .accommodation-booking-badge,.accommodation-payment-badge { min-width:0;display:inline-flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.accommodation-booking-badge { grid-column:1;width:40px;height:40px;border-radius:10px;align-self:center;justify-self:start;font-size:7px; }
-.accommodation-booking-badge img { width:40px;height:40px;border-radius:10px;object-fit:contain;object-position:left center; }
+.accommodation-booking-badge { grid-column:1;width:36px;height:36px;border-radius:9px;align-self:center;justify-self:start;font-size:7px;box-shadow:0 4px 11px rgba(20,30,50,.18); }
+.accommodation-booking-badge img { width:36px;height:36px;border-radius:9px;object-fit:contain;object-position:left center; }
 .accommodation-booking-badge svg { color:#ff6718; }
 .accommodation-payment-badge { width:fit-content;max-width:100%;padding:3px 6px;border-radius:999px;color:#188568;background:#e7f8f1;font-size:6px; }
 .accommodation-total-price { grid-column:2;grid-row:1 / span 2;align-self:center;margin:0;text-align:right;color:var(--ink);font-size:20px;line-height:1;white-space:nowrap; }
@@ -13379,14 +13327,12 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-more-card strong { font-size:10px; }
 .accommodation-more-card small { margin-top:2px;color:var(--muted);font-size:8px; }
 .accommodation-more-card > svg { color:var(--muted); }
-.accommodation-image-field { padding:11px;border:.5px solid var(--line);border-radius:17px;display:grid;gap:9px;background:var(--surface-2); }
+.accommodation-image-field { padding:0;border:0;display:grid;gap:7px;background:transparent; }
 .accommodation-image-field > div:first-child strong,.accommodation-image-field > div:first-child small { display:block; }
 .accommodation-image-field > div:first-child strong { font-size:12px; }
 .accommodation-image-field > div:first-child small { margin-top:2px;color:var(--muted);font-size:8px; }
-.accommodation-image-preview { position:relative;width:100%;aspect-ratio:16/8;overflow:hidden;border-radius:13px;background:var(--surface-3); }
-.accommodation-image-preview img { object-fit:cover; }
-.accommodation-image-preview button { position:absolute;z-index:2;top:8px;right:8px;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:#e0473c;background:rgba(255,255,255,.92);box-shadow:0 4px 12px rgba(0,0,0,.15); }
-.accommodation-image-field .document-file-picker { min-height:74px; }
+.accommodation-cover-picker { position:relative;overflow:visible; }
+.accommodation-cover-picker.has-image .cover-upload { padding-right:42px; }
 .dark .accommodation-payment-badge { color:#7ee3c5;background:rgba(27,142,107,.2); }
 @media(max-width:380px){
   .accommodation-card { grid-template-columns:126px minmax(0,1fr); }
@@ -13765,15 +13711,76 @@ body:has(.login-page) .app-bottom-navigation {
 .trip-card-facts svg {
   flex: 0 0 auto;
 }
+.trip-card-facts-separator {
+  flex: 0 0 auto;
+  color: currentColor;
+  font-size: .72em;
+  font-style: normal;
+  letter-spacing: 1px;
+  opacity: .72;
+}
+.trip-card-flights {
+  margin-top: 6px;
+  display: grid;
+  gap: 2px;
+  color: rgba(255,255,255,.82);
+  font-size: 9px;
+  line-height: 1.4;
+}
+.trip-card-flight {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 12px minmax(0,1fr);
+  align-items: center;
+  gap: 5px;
+}
+.trip-card-flight > i {
+  width: 12px;
+  height: 12px;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+.trip-card-flight > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trip-card-flight-plane {
+  transform-origin: center;
+}
+.trip-card-flight-plane.is-outbound {
+  transform: rotate(45deg);
+}
+.trip-card-flight-plane.is-return {
+  transform: rotate(-135deg);
+}
+.trip-card-flights b {
+  font-weight: 700;
+}
 .home-upcoming-grid .trip-card-facts {
   color: var(--muted-2);
   font-size: 10px;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 4px 7px;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
 }
 .home-upcoming-grid .trip-card-facts span:first-child {
-  flex-basis: 100%;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-upcoming-grid .trip-card-facts span:last-child {
+  flex: 0 0 auto;
+}
+.home-upcoming-grid .trip-card-flights {
+  color: var(--muted-2);
+  font-size: 10px;
+}
+.home-upcoming-grid .trip-card-flight {
+  width: 100%;
 }
 .home-upcoming-grid .trip-meta {
   display: none;
@@ -13831,7 +13838,8 @@ html.dark .home-upcoming-grid .trip-body h3 {
   color: #f5f5f7;
 }
 html.dark .home-upcoming-grid .trip-body p,
-html.dark .home-upcoming-grid .trip-card-facts {
+html.dark .home-upcoming-grid .trip-card-facts,
+html.dark .home-upcoming-grid .trip-card-flights {
   color: #a1a1a6;
 }
 
@@ -13918,6 +13926,9 @@ html.dark .home-upcoming-grid .trip-card-facts {
   font-size: 13px;
 }
 .dashboard-featured-trip .trip-card-facts {
+  font-size: 11px;
+}
+.dashboard-featured-trip .trip-card-flights {
   font-size: 11px;
 }
 .dashboard-featured-trip .countdown-badge {
@@ -14667,13 +14678,9 @@ html.dark .dashboard-quick-actions > button:nth-child(3) {
   box-shadow:0 18px 46px rgba(20,24,32,.22);
 }
 .invitation-popover::before { content:"";position:absolute;top:-6px;right:17px;width:12px;height:12px;border-top:1px solid var(--line);border-left:1px solid var(--line);background:var(--surface-solid);transform:rotate(45deg); }
-.invitation-popover > header { position:relative;z-index:1;min-height:58px;padding:11px 12px 9px 15px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;background:var(--surface-solid); }
-.invitation-popover > header span { display:grid;gap:1px; }
-.invitation-popover > header b { font-size:14px; }
-.invitation-popover > header small { color:var(--muted);font-size:9px; }
-.invitation-popover > header button { width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--muted);background:var(--surface-2); }
-.invitation-popover-list { max-height:min(390px,58dvh);padding:8px;display:grid;gap:7px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch; }
-.invitation-popover-card { min-width:0;min-height:80px;padding:8px;border:1px solid var(--line);border-radius:15px;display:grid;grid-template-columns:62px minmax(0,1fr) 95px;align-items:center;gap:9px;background:var(--surface-2); }
+.invitation-popover-list { max-height:min(390px,58dvh);padding:5px 10px;display:grid;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch; }
+.invitation-popover-card { min-width:0;min-height:80px;padding:10px 4px;border:0;border-radius:0;display:grid;grid-template-columns:62px minmax(0,1fr) 95px;align-items:center;gap:9px;background:transparent; }
+.invitation-popover-card + .invitation-popover-card { border-top:1px solid var(--line); }
 .invitation-popover-card > img { width:62px;height:62px;border-radius:11px;object-fit:cover; }
 .invitation-popover-copy { min-width:0;align-self:center;display:grid;gap:2px; }
 .invitation-popover-copy .invitation-kind { width:max-content;max-width:100%;display:flex;align-items:center;gap:3px;color:var(--orange);font-size:8px;font-weight:700; }
@@ -14683,7 +14690,7 @@ html.dark .dashboard-quick-actions > button:nth-child(3) {
 .invitation-popover-copy small { display:flex;align-items:center;gap:3px;color:var(--muted);font-size:8px; }
 .invitation-popover-copy p { margin:1px 0 0;color:var(--muted);font-size:8px; }
 .invitation-popover-actions { width:95px;align-self:center;display:grid;grid-template-columns:repeat(2,44px);gap:7px; }
-.invitation-popover-actions button { width:44px;height:44px;padding:0;border-radius:14px;display:grid;place-items:center;transition:transform 160ms var(--ease-ios),opacity 160ms ease; }
+.invitation-popover-actions button { width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center;transition:transform 160ms var(--ease-ios),opacity 160ms ease; }
 .invitation-popover-actions button:active { transform:scale(.96); }
 .invitation-popover-actions button:disabled { opacity:.48;transform:none; }
 .invitation-popover-accept { color:#fff;background:var(--brand-gradient);box-shadow:0 7px 18px rgba(255,96,12,.24); }

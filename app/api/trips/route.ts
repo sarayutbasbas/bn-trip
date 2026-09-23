@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/src/lib/auth";
-import { query } from "@/src/lib/db";
+import { query,transaction } from "@/src/lib/db";
 import { tripAccessSql,tripActualExpenseSql,tripIncompleteSetupSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { getDemoTrips } from "@/src/lib/demo-data";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
@@ -11,7 +11,7 @@ import { resolveTripDestinations } from "@/src/lib/travel-badges";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const countryCodeSchema=z.string().length(2).transform(value=>value.toUpperCase()).refine(value=>Boolean(countryByCode(value)),{message:"Invalid country"});
-const tripSchema = z.object({ name:z.string().min(2), locationIds:z.array(z.string().min(3).max(800)).min(1).max(20), countryCode:countryCodeSchema, outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), summaryImageUrl:z.string().max(500).nullable().optional(), googlePhotosUrl:googlePhotosUrlSchema.optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
+const tripSchema = z.object({ name:z.string().min(2), locationIds:z.array(z.string().min(3).max(800)).min(1).max(20), countryCode:countryCodeSchema, outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), summaryImageUrl:z.string().max(500).nullable().optional(), googlePhotosUrl:googlePhotosUrlSchema.optional(), sourceIdeaId:z.string().uuid().optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
 const selectedYears=(params:URLSearchParams)=>[...new Set(params.getAll("year").flatMap(value=>value.split(",")).map(Number).filter(year=>Number.isInteger(year)&&year>=2000&&year<=2200))].slice(0,50);
 
 export async function GET(request:Request) {
@@ -75,18 +75,47 @@ export async function POST(request:Request) {
     if(tripDestinations.length!==new Set(input.locationIds).size)return NextResponse.json({error:"กรุณาเลือกเมืองจากรายการ"},{status:400});
     const destination=formatTripDestination(tripDestinations.map(item=>item.nameTh).join(" · "),country.code,country.nameTh,tripDestinations);
     const totalDays=Math.floor((new Date(`${input.returnDate}T00:00:00`).getTime()-new Date(`${input.outboundDate}T00:00:00`).getTime())/86400000)+1;
-    const result = await query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,trip_destinations,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,summary_image_url,google_photos_url,timezone,has_flights) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *",[session.userId,input.name,destination,country.code,country.nameTh,JSON.stringify(tripDestinations),input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.summaryImageUrl||null,input.googlePhotosUrl||null,country.timezone,input.hasFlights]);
-    const trip = {
-      ...result.rows[0],
-      access_role:"owner",
-      members:[{
-        id:session.userId,
-        email:session.email,
-        display_name:session.displayName,
-        avatar_url:session.avatarUrl,
-        role:"owner",
-      }],
-    };
+    const trip = await transaction(async client=>{
+      if(input.sourceIdeaId){
+        const source=await client.query(`SELECT idea.id FROM trip_ideas idea
+          WHERE idea.id=$1 AND (idea.user_id=$2 OR EXISTS(
+            SELECT 1 FROM trip_idea_collaborators member
+            WHERE member.trip_idea_id=idea.id AND member.user_id=$2
+          )) FOR UPDATE`,[input.sourceIdeaId,session.userId]);
+        if(!source.rows[0])throw new Error("source_idea_not_found");
+      }
+      const result=await client.query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,trip_destinations,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,summary_image_url,google_photos_url,timezone,has_flights) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *",[session.userId,input.name,destination,country.code,country.nameTh,JSON.stringify(tripDestinations),input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.summaryImageUrl||null,input.googlePhotosUrl||null,country.timezone,input.hasFlights]);
+      const created=result.rows[0];
+      if(input.sourceIdeaId){
+        await client.query(`INSERT INTO trip_collaborators(trip_id,email,user_id,invited_by,access_level)
+          SELECT $1,source.email,source.user_id,$2,'admin'
+          FROM (
+            SELECT owner.email,owner.id AS user_id
+            FROM trip_ideas idea JOIN users owner ON owner.id=idea.user_id
+            WHERE idea.id=$3
+            UNION
+            SELECT member.email,member.user_id
+            FROM trip_idea_collaborators member
+            WHERE member.trip_idea_id=$3
+          ) source
+          WHERE source.email IS NOT NULL AND lower(source.email)<>lower($4)
+          ON CONFLICT(trip_id,email) DO UPDATE SET
+            user_id=EXCLUDED.user_id,access_level='admin'`,[created.id,session.userId,input.sourceIdeaId,session.email]);
+        await client.query("DELETE FROM trip_ideas WHERE id=$1",[input.sourceIdeaId]);
+      }
+      const members=await client.query(`SELECT account.id,COALESCE(account.email,'') AS email,account.display_name,account.avatar_url,
+          CASE WHEN account.id=$2 THEN 'owner' ELSE 'collaborator' END AS role,
+          CASE WHEN account.id=$2 THEN 'owner' ELSE collaborator.access_level END AS access_level
+        FROM users account
+        LEFT JOIN trip_collaborators collaborator ON collaborator.trip_id=$1 AND collaborator.user_id=account.id
+        WHERE account.id=$2 OR collaborator.id IS NOT NULL
+        ORDER BY CASE WHEN account.id=$2 THEN 1 ELSE 0 END,collaborator.created_at`,[created.id,session.userId]);
+      return {...created,access_role:"owner",members:members.rows};
+    });
     return NextResponse.json(trip,{status:201});
-  } catch { return NextResponse.json({error:"Invalid trip data"},{status:400}); }
+  } catch(error) {
+    if(error instanceof z.ZodError)return NextResponse.json({error:"Invalid trip data"},{status:400});
+    if(error instanceof Error&&error.message==="source_idea_not_found")return NextResponse.json({error:"ไม่พบทริปที่เล็งไว้ หรือคุณไม่มีสิทธิ์เข้าถึง"},{status:404});
+    console.error(error);return NextResponse.json({error:"สร้างทริปไม่สำเร็จ"},{status:500});
+  }
 }

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useFormDirty } from "@/src/components/use-form-dirty";
+import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { ChecklistCategoryIcon } from "@/src/components/checklist-category-icon";
 import {
   MAX_SOURCE_IMAGE_BYTES,
@@ -187,6 +188,8 @@ export function TripWorkspace({
   const [openChecklistActionMenu, setOpenChecklistActionMenu] = useState<
     string | null
   >(null);
+  const [checklistActionAnchor, setChecklistActionAnchor] =
+    useState<HTMLElement | null>(null);
   const [deleteTarget, setDeleteTarget] =
     useState<WorkspaceDeleteTarget | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(
@@ -843,8 +846,14 @@ export function TripWorkspace({
   useEffect(() => {
     if (!openChecklistActionMenu) return;
     const close = (event: PointerEvent) => {
-      if (!(event.target as HTMLElement).closest(".checklist-action-menu-wrap"))
+      if (
+        !(event.target as HTMLElement).closest(
+          ".checklist-action-menu-wrap, .checklist-action-popover",
+        )
+      ) {
         setOpenChecklistActionMenu(null);
+        setChecklistActionAnchor(null);
+      }
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
@@ -1176,20 +1185,25 @@ export function TripWorkspace({
                             <button
                               type="button"
                               className="checklist-more"
-                              onClick={() =>
+                              onClick={(event) => {
+                                const isClosing =
+                                  openChecklistActionMenu === item.id;
                                 setOpenChecklistActionMenu(
-                                  openChecklistActionMenu === item.id
-                                    ? null
-                                    : item.id,
-                                )
-                              }
+                                  isClosing ? null : item.id,
+                                );
+                                setChecklistActionAnchor(
+                                  isClosing ? null : event.currentTarget,
+                                );
+                              }}
                               aria-label={label(`เมนู ${item.title}`)}
                               aria-expanded={openChecklistActionMenu === item.id}
                             >
                               <MoreHorizontal size={19} />
                             </button>
                             {openChecklistActionMenu === item.id && (
-                              <div className="checklist-action-popover">
+                              <ChecklistActionPopover
+                                anchor={checklistActionAnchor}
+                              >
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1209,6 +1223,7 @@ export function TripWorkspace({
                                     setEditingItemId(item.id);
                                     setChecklistSheetOpen(true);
                                     setOpenChecklistActionMenu(null);
+                                    setChecklistActionAnchor(null);
                                   }}
                                 >
                                   <Pencil size={15} />
@@ -1220,12 +1235,13 @@ export function TripWorkspace({
                                   onClick={() => {
                                     setDeleteTarget({ kind: "item", item });
                                     setOpenChecklistActionMenu(null);
+                                    setChecklistActionAnchor(null);
                                   }}
                                 >
                                   <Trash2 size={15} />
                                   {label("ลบ")}
                                 </button>
-                              </div>
+                              </ChecklistActionPopover>
                             )}
                           </div>
                         </article>

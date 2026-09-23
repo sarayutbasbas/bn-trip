@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import { ChecklistCategoryIcon, ChecklistCategoryIconPicker } from "@/src/components/checklist-category-icon";
+import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { normalizeChecklistCategoryIcon, type ChecklistCategoryIconKey } from "@/src/lib/checklist-category-icons";
 import { InvitationNotifications } from "@/src/components/invitation-notifications";
 
@@ -79,6 +80,8 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryIcon, setNewCategoryIcon] = useState<ChecklistCategoryIconKey>("help");
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
+  const [actionMenuAnchor, setActionMenuAnchor] =
+    useState<HTMLElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -177,8 +180,14 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   useEffect(() => {
     if (!openActionMenu) return;
     const close = (event: PointerEvent) => {
-      if (!(event.target as HTMLElement).closest(".checklist-action-menu-wrap"))
+      if (
+        !(event.target as HTMLElement).closest(
+          ".checklist-action-menu-wrap, .checklist-action-popover",
+        )
+      ) {
         setOpenActionMenu(null);
+        setActionMenuAnchor(null);
+      }
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
@@ -474,7 +483,35 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                           </small>
                         </button>
                       )}
-                      {isEditingCategory ? <><button type="button" className="checklist-edit master-category-action" onClick={() => void saveCategory()} disabled={busy === category.id} aria-label="บันทึกหมวด"><Check size={15} /></button><button type="button" className="checklist-category-delete" onClick={() => setEditingCategory(null)} aria-label="ยกเลิก"><X size={15} /></button></> : <div className="checklist-action-menu-wrap"><button type="button" className="checklist-more" onClick={() => setOpenActionMenu(openActionMenu === `category:${category.id}` ? null : `category:${category.id}`)} aria-label={`เมนู ${category.name}`} aria-expanded={openActionMenu === `category:${category.id}`}><MoreHorizontal size={18} /></button>{openActionMenu === `category:${category.id}` && <div className="checklist-action-popover"><button type="button" onClick={() => { setEditingCategory({ id:category.id,value:category.name,iconKey:normalizeChecklistCategoryIcon(category.icon_key,category.name) });setOpenActionMenu(null); }}><Pencil size={15} />แก้ไข</button><button type="button" className="danger" onClick={() => { setDeleteTarget({kind:"category",id:category.id,name:category.name});setOpenActionMenu(null); }}><Trash2 size={15} />ลบ</button></div>}</div>}
+                      {isEditingCategory ? (
+                        <>
+                          <button type="button" className="checklist-edit master-category-action" onClick={() => void saveCategory()} disabled={busy === category.id} aria-label="บันทึกหมวด"><Check size={15} /></button>
+                          <button type="button" className="checklist-category-delete" onClick={() => setEditingCategory(null)} aria-label="ยกเลิก"><X size={15} /></button>
+                        </>
+                      ) : (
+                        <div className="checklist-action-menu-wrap">
+                          <button
+                            type="button"
+                            className="checklist-more"
+                            onClick={(event) => {
+                              const menuId = `category:${category.id}`;
+                              const isClosing = openActionMenu === menuId;
+                              setOpenActionMenu(isClosing ? null : menuId);
+                              setActionMenuAnchor(isClosing ? null : event.currentTarget);
+                            }}
+                            aria-label={`เมนู ${category.name}`}
+                            aria-expanded={openActionMenu === `category:${category.id}`}
+                          >
+                            <MoreHorizontal size={18} />
+                          </button>
+                          {openActionMenu === `category:${category.id}` && (
+                            <ChecklistActionPopover anchor={actionMenuAnchor}>
+                              <button type="button" onClick={() => { setEditingCategory({ id:category.id,value:category.name,iconKey:normalizeChecklistCategoryIcon(category.icon_key,category.name) });setOpenActionMenu(null);setActionMenuAnchor(null); }}><Pencil size={15} />แก้ไข</button>
+                              <button type="button" className="danger" onClick={() => { setDeleteTarget({kind:"category",id:category.id,name:category.name});setOpenActionMenu(null);setActionMenuAnchor(null); }}><Trash2 size={15} />ลบ</button>
+                            </ChecklistActionPopover>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {isEditingCategory && <div className="master-category-icon-editor"><span>เลือกไอคอนหมวดหมู่</span><ChecklistCategoryIconPicker value={editingCategory.iconKey} onChange={(iconKey) => setEditingCategory({...editingCategory,iconKey})} /></div>}
                     {expanded && (
@@ -482,7 +519,28 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
                         {categoryItems.map((item) => (
                           <article key={item.id}>
                             <strong>{item.title}</strong>
-                            <div className="checklist-action-menu-wrap"><button type="button" className="checklist-more" onClick={() => setOpenActionMenu(openActionMenu === `item:${item.id}` ? null : `item:${item.id}`)} aria-label={`เมนู ${item.title}`} aria-expanded={openActionMenu === `item:${item.id}`}><MoreHorizontal size={18} /></button>{openActionMenu === `item:${item.id}` && <div className="checklist-action-popover"><button type="button" onClick={() => { openEditItem(item);setOpenActionMenu(null); }}><Pencil size={15} />แก้ไข</button><button type="button" className="danger" onClick={() => { setDeleteTarget({kind:"item",id:item.id,name:item.title});setOpenActionMenu(null); }}><Trash2 size={15} />ลบ</button></div>}</div>
+                            <div className="checklist-action-menu-wrap">
+                              <button
+                                type="button"
+                                className="checklist-more"
+                                onClick={(event) => {
+                                  const menuId = `item:${item.id}`;
+                                  const isClosing = openActionMenu === menuId;
+                                  setOpenActionMenu(isClosing ? null : menuId);
+                                  setActionMenuAnchor(isClosing ? null : event.currentTarget);
+                                }}
+                                aria-label={`เมนู ${item.title}`}
+                                aria-expanded={openActionMenu === `item:${item.id}`}
+                              >
+                                <MoreHorizontal size={18} />
+                              </button>
+                              {openActionMenu === `item:${item.id}` && (
+                                <ChecklistActionPopover anchor={actionMenuAnchor}>
+                                  <button type="button" onClick={() => { openEditItem(item);setOpenActionMenu(null);setActionMenuAnchor(null); }}><Pencil size={15} />แก้ไข</button>
+                                  <button type="button" className="danger" onClick={() => { setDeleteTarget({kind:"item",id:item.id,name:item.title});setOpenActionMenu(null);setActionMenuAnchor(null); }}><Trash2 size={15} />ลบ</button>
+                                </ChecklistActionPopover>
+                              )}
+                            </div>
                           </article>
                         ))}
                       </div>

@@ -4,7 +4,7 @@ import { useEffect,useMemo,useState,type FormEvent,type KeyboardEvent } from "re
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays,CalendarRange,CheckCircle2,Compass,Heart,MapPinned,PlaneTakeoff,Plus,RefreshCw,Search,Trash2,UserPlus,X } from "lucide-react";
+import { CalendarDays,CalendarRange,CheckCircle2,Compass,Heart,LogOut,MapPinned,PlaneTakeoff,Plus,RefreshCw,Search,Trash2,UserPlus,X } from "lucide-react";
 import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas";
 import { getCurrentAccount } from "@/src/lib/client-account";
 import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
@@ -87,14 +87,14 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     onClose={close}
     onSubmit={submit}
     busy={busy}
-    className="trip-idea-sheet"
-    bodyClassName="bottom-sheet-body trip-idea-sheet-body"
     submitLabel={busy?"กำลังบันทึก…":promote?"เลื่อนขึ้นและบันทึกช่วงเวลา":"บันทึก"}
     submitDisabled={busy||!name.trim()||(kind==="planned"&&(!targetMonth||!targetYear))}
-    onDelete={current?.access_role==="owner"?requestDelete:undefined}
+    onDelete={current?requestDelete:undefined}
     deleteDisabled={busy}
-    deleteLabel="ลบรายการ"
+    deleteLabel={current?.access_role==="owner"?"ลบรายการ":"ออกจากทริปที่เล็งไว้"}
+    deleteIcon={current?.access_role==="collaborator"?<LogOut size={18}/>:undefined}
   >
+    <div className="form-grid trip-idea-form-grid">
     <CoverImagePicker existingUrl={current?.cover_image_url||null} onChange={setCoverFile}/>
     <label className="trip-idea-field"><span>ชื่อทริป</span><input required maxLength={160} value={name} onChange={event=>setName(event.target.value)} placeholder="เช่น Fukuoka Food Trip"/></label>
     <CountryPicker value={countryCode} onChange={nextCountryCode=>{setCountryCode(nextCountryCode);setLocations([])}} note="เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง"/>
@@ -103,6 +103,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     {kind==="planned"?<div className="trip-idea-date-row"><label className="trip-idea-field"><span>เดือน</span><select required value={targetMonth||""} onChange={event=>setTargetMonth(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกเดือน</option>{monthNames.map((month,index)=><option key={month} value={index+1}>{month}</option>)}</select></label><label className="trip-idea-field"><span>ปี ค.ศ.</span><input required type="number" min="2020" max="2200" value={targetYear||""} onChange={event=>setTargetYear(event.target.value?Number(event.target.value):null)}/></label></div>:null}
     <label className="trip-idea-field"><span>โน้ต <small>(ไม่บังคับ)</small></span><textarea maxLength={500} value={note} onChange={event=>setNote(event.target.value)} placeholder="สิ่งที่อยากทำ เหตุผลที่อยากไป หรือไอเดียคร่าว ๆ"/></label>
     {error?<p className="trip-idea-error">{error}</p>:null}
+    </div>
   </BottomSheet>;
 }
 
@@ -129,7 +130,14 @@ export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:
   function openForm(idea:TripIdea|null,promote=false){if(demo){notify("เข้าสู่ระบบเพื่อเพิ่มหรือแก้ไขรายการ");return}setEditing({idea,promote})}
   async function save(draft:IdeaDraft){setBusy(true);try{const current=editing?.idea||null;const saved=await readResponse(await fetch(current?`/api/trip-ideas/${current.id}`:"/api/trip-ideas",{method:current?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)})) as TripIdea;setIdeas(items=>sortIdeas(current?items.map(item=>item.id===saved.id?saved:item):[...items,saved]));setEditing(undefined);notify(current?"บันทึกการแก้ไขแล้ว":"เพิ่มลงลิสต์แล้ว")}finally{setBusy(false)}}
   async function remove(idea:TripIdea){await readResponse(await fetch(`/api/trip-ideas/${idea.id}`,{method:"DELETE"}));setIdeas(items=>items.filter(item=>item.id!==idea.id));setEditing(undefined);notify("ลบออกจากลิสต์แล้ว")}
-  function askRemove(idea:TripIdea){setConfirmation({title:`ลบ “${idea.name}” ออกจากลิสต์?`,description:"รายการ รูปปก และการแชร์กับผู้ร่วมวางแผนจะถูกลบถาวร",confirmLabel:"ลบรายการ",onConfirm:()=>remove(idea)})}
+  async function leave(idea:TripIdea){await readResponse(await fetch(`/api/trip-ideas/${idea.id}`,{method:"DELETE"}));setIdeas(items=>items.filter(item=>item.id!==idea.id));setEditing(undefined);notify("ออกจากทริปที่เล็งไว้แล้ว")}
+  function askRemove(idea:TripIdea){
+    if(idea.access_role==="collaborator"){
+      setConfirmation({title:`ออกจาก “${idea.name}”?`,description:"เมื่อออกแล้ว ทริปที่เล็งไว้นี้จะหายจากรายการของคุณ และคุณจะไม่สามารถเปิดหรือแก้ไขร่วมกันได้อีก",confirmLabel:"ออกจากทริปที่เล็งไว้",busyLabel:"กำลังออก…",onConfirm:()=>leave(idea)});
+      return;
+    }
+    setConfirmation({title:`ลบ “${idea.name}” ออกจากลิสต์?`,description:"รายการ รูปปก และการแชร์กับผู้ร่วมวางแผนจะถูกลบถาวร",confirmLabel:"ลบรายการ",onConfirm:()=>remove(idea)});
+  }
   async function refreshIdea(id:string){try{const fresh=await readResponse(await fetch(`/api/trip-ideas/${id}`,{cache:"no-store"})) as TripIdea;setIdeas(items=>items.map(item=>item.id===id?fresh:item));setSharing(current=>current?.id===id?fresh:current)}catch{}}
   async function refreshAll(){if(refreshing)return;setRefreshing(true);try{const fresh=await readResponse(await fetch("/api/trip-ideas",{cache:"no-store"})) as TripIdea[];setIdeas(sortIdeas(fresh));window.dispatchEvent(new Event("invitation-notifications:refresh"));notify("อัปเดตทริปที่เล็งไว้แล้ว")}catch(error){notify(error instanceof Error?error.message:"อัปเดตไม่สำเร็จ")}finally{setRefreshing(false)}}
   async function invitationChanged(result:Pick<InvitationNotification,"invitation_type">){if(result.invitation_type!=="trip_idea")return;const fresh=await readResponse(await fetch("/api/trip-ideas",{cache:"no-store"})) as TripIdea[];setIdeas(sortIdeas(fresh));notify("เพิ่มทริปที่เล็งไว้จากคำเชิญแล้ว")}
@@ -141,7 +149,7 @@ export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:
       <header className="mobile-head flow-header"><Link className="brand" href="/" aria-label="RouteRao · หน้าแรก"><Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized/><div>RouteRao<small>travel smarter together</small></div></Link><nav className="mobile-actions" aria-label="เมนูหลัก"><button className="icon-btn home-refresh-btn" type="button" onClick={()=>void refreshAll()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing?"analytics-refresh-spinning":""} size={24}/></button><InvitationNotifications onChanged={invitationChanged}/><button className="home-profile-btn" type="button" onClick={()=>router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์"><span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url?{backgroundImage:`url("${profile.avatar_url}")`}:undefined}>{!profile?.avatar_url&&avatarLabel.charAt(0).toUpperCase()}</span></span></button></nav></header>
       <div className="trip-ideas-screen">
         <PageIntro title="ทริปที่เล็งไว้" titleIcon={<Heart size={25} fill="currentColor"/>} subtitle={<>เก็บแพลนที่อยากไปไว้ที่นี่ แล้วออกเดินทางด้วยกันในสักวัน</>}/>
-        <div className="trip-ideas-search-row"><label className="trip-search trip-ideas-search"><Search size={20}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="ค้นหา" aria-label="ค้นหาทริปที่เล็งไว้"/>{query?<button type="button" onClick={()=>setQuery("")} aria-label="ล้างคำค้นหา"><X size={15}/></button>:null}</label><button className="trip-ideas-add-button" type="button" onClick={()=>openForm(null)} aria-label="เพิ่มทริปที่เล็งไว้" title="เพิ่มทริปที่เล็งไว้"><Plus size={21}/></button></div>
+        <div className="trip-ideas-search-row"><label className="trip-search trip-ideas-search"><Search size={20}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="ค้นหาทริป เมือง หรือประเทศ" aria-label="ค้นหาทริป เมือง หรือประเทศ"/>{query?<button type="button" onClick={()=>setQuery("")} aria-label="ล้างคำค้นหา"><X size={15}/></button>:null}</label><button className="trip-ideas-add-button" type="button" onClick={()=>openForm(null)} aria-label="เพิ่มทริปที่เล็งไว้" title="เพิ่มทริปที่เล็งไว้"><Plus size={21}/></button></div>
         <section className="trip-ideas-list" aria-label="รายการทริปที่เล็งไว้">
           {filteredIdeas.length?<div className="trip-idea-groups">
             {plannedIdeas.length?<section className="trip-ideas-group" aria-label="ทริปที่เล็งไว้"><div className="trip-ideas-grid">{plannedIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} convert={()=>convertToTrip(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}

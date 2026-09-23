@@ -17,7 +17,6 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { compressImageFile } from "@/src/lib/client-image-compression";
 import {
@@ -295,7 +294,9 @@ function BookingPlatformPicker({
         aria-expanded={open}
       >
         {selected ? (
-          <Image src={selected.icon} alt="" width={40} height={24} />
+          <span className="booking-platform-logo" aria-hidden="true">
+            <Image src={selected.icon} alt="" width={40} height={40} />
+          </span>
         ) : (
           <span className="booking-platform-placeholder">เลือก</span>
         )}
@@ -317,7 +318,9 @@ function BookingPlatformPicker({
                 }}
               />
               <span className="split-checkmark" aria-hidden="true" />
-              <Image src={option.icon} alt="" width={42} height={25} />
+              <span className="booking-platform-logo" aria-hidden="true">
+                <Image src={option.icon} alt="" width={42} height={42} />
+              </span>
               <span>{option.label}</span>
             </label>
           ))}
@@ -901,7 +904,7 @@ export function TripAccommodations({
                         {item.includes_breakfast ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                         <span>{item.includes_breakfast ? "รวมอาหารเช้า" : "ไม่รวมอาหารเช้า"}</span>
                       </span>
-                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={40} height={40} /></span>}
+                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={36} height={36} /></span>}
                       <strong className="accommodation-total-price"><small>{isBaht ? "THB" : `${item.currency} · ≈ THB`}</small>{Number(isBaht ? item.foreign_amount : bahtAmount).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</strong>
                     </footer>
                   </div>
@@ -949,21 +952,19 @@ export function TripAccommodations({
                 </div>
                 <section className="accommodation-image-field">
                   <div><strong>รูปที่พัก</strong><small>ไม่บังคับ · หากไม่เพิ่มจะแสดงรูปเริ่มต้น</small></div>
-                  {imagePreview && (
-                    <div className="accommodation-image-preview">
-                      <Image src={imagePreview} alt="ตัวอย่างรูปที่พัก" fill sizes="(max-width: 600px) 90vw, 520px" unoptimized />
-                      <button type="button" onClick={() => setImageRemovalPending(true)} aria-label="ลบรูปที่พัก"><Trash2 size={16} /></button>
-                    </div>
-                  )}
-                  <DocumentFilePicker
-                    fileName={imageFile?.name || ""}
-                    inputRef={imageInputRef}
-                    onFileChange={selectAccommodationImage}
-                    accept="image/jpeg,image/png,image/webp"
-                    idleLabel={imagePreview ? "เลือกรูปใหม่เพื่อแทนที่" : "เลือกรูปที่พัก"}
-                    idleNote="รองรับ JPG, PNG และ WebP · สูงสุด 20 MB"
-                    selectedNote="พร้อมอัปโหลดเมื่อกดบันทึก"
-                  />
+                  <div className={`cover-picker accommodation-cover-picker ${imagePreview ? "has-image" : ""}`}>
+                    <label className={`upload-field cover-upload ${imagePreview ? "selected" : ""}`}>
+                      <span className="upload-preview">
+                        {imagePreview ? <Image src={imagePreview} alt="ตัวอย่างรูปที่พัก" fill sizes="36vw" unoptimized className="upload-preview-image" /> : <ImagePlus size={24} />}
+                      </span>
+                      <span>
+                        <strong>{imagePreview ? <><CheckCircle2 size={15} />เลือกรูปแล้ว</> : "เพิ่มรูปที่พัก"}</strong>
+                        <small>{imagePreview ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะเพื่อเลือกรูปใหม่" : "เลือกภาพสำหรับใช้เป็นรูปที่พัก · รองรับ JPG, PNG และ WebP"}</small>
+                      </span>
+                      <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectAccommodationImage(event.target.files?.[0] || null)} />
+                    </label>
+                    {imagePreview && <button type="button" className="cover-picker-remove" onClick={() => setImageRemovalPending(true)} aria-label="ลบรูปที่พัก" title="ลบรูปที่พัก"><Trash2 size={16} /></button>}
+                  </div>
                 </section>
                 <div className="form-row accommodation-booking-row">
                   <LocationSearch
@@ -1035,26 +1036,15 @@ export function TripAccommodations({
                   </div>
                 </div>
                 <section className="accommodation-night-details">
-                  <div>
-                    <strong>
-                      {focusedDetailDay === null
-                        ? "รายละเอียดแต่ละวัน"
-                        : `รายละเอียด Day ${displayDay(focusedDetailDay)}`}
-                    </strong>
-                    <small>
-                      {focusedDetailDay === null
-                        ? "แยกบันทึกใน Timeline ของแต่ละคืน"
-                        : `คืนที่ ${focusedDetailDay - checkInDay + 1}/${checkOutDay - checkInDay} · ${tripDateLabel(startDate, focusedDetailDay)}`}
-                    </small>
-                  </div>
                   {detailDays.map((day) => (
                     <div className="accommodation-night-entry" key={day}>
                       <header>
-                        <strong>Day {displayDay(day)}</strong>
-                        <small>
-                          คืนที่ {day - checkInDay + 1}/{checkOutDay - checkInDay}
-                          {" · "}{tripDateLabel(startDate, day)}
-                        </small>
+                        <strong>
+                          Day {displayDay(day)} <span>
+                            (คืนที่ {day - checkInDay + 1}/{checkOutDay - checkInDay}
+                            {" · "}{tripDateLabel(startDate, day)})
+                          </span>
+                        </strong>
                       </header>
                       <div className="field accommodation-night-bedtime">
                         <label>เวลานอน</label>
