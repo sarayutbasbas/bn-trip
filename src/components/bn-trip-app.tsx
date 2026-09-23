@@ -3576,6 +3576,7 @@ function TripsDirectory({
     {value:"domestic",label:"ในประเทศ",Icon:MapPin},
     {value:"international",label:"ต่างประเทศ",Icon:Globe2},
   ];
+  const hasActiveTripFilters=status!=="all"||tripType!=="all"||selectedYears.length>0;
   return (
     <>
       <div className="screen trips-directory">
@@ -3600,7 +3601,8 @@ function TripsDirectory({
               </button>
             )}
           </label>
-          <button className={`trip-directory-filter-toggle ${filtersOpen||tripType!=="all"||selectedYears.length?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/></button>
+          <button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/>{hasActiveTripFilters?<i className="trip-directory-filter-dot" aria-label={t("กำลังใช้ตัวกรอง")}/>:null}</button>
+          <button className="trip-directory-add-button" type="button" onClick={createTrip} aria-label={t("สร้างทริปใหม่")} title={t("สร้างทริปใหม่")}><Plus size={21}/></button>
       </div>
       {filtersOpen&&(
         <BottomSheet

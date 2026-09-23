@@ -3237,6 +3237,7 @@ button:disabled {
 }
 .trip-directory-search { margin: 0; }
 .trip-directory-filter-toggle {
+  position: relative;
   width: 44px;
   height: 44px;
   flex: 0 0 44px;
@@ -3247,11 +3248,35 @@ button:disabled {
   color: var(--muted);
   background: var(--surface-solid);
   box-shadow: 0 1px 0 var(--glass-highlight) inset;
+  overflow: visible;
 }
 .trip-directory-filter-toggle.active {
   border-color: rgba(255,107,0,.35);
   color: var(--orange);
   background: var(--brand-soft);
+}
+.trip-directory-filter-dot {
+  position:absolute;
+  top:5px;
+  right:5px;
+  width:8px;
+  height:8px;
+  border:2px solid var(--surface-solid);
+  border-radius:50%;
+  display:block;
+  background:var(--orange);
+  box-shadow:0 1px 5px rgba(255,94,10,.48);
+}
+.trip-directory-add-button {
+  width:44px;
+  height:44px;
+  flex:0 0 44px;
+  border-radius:14px;
+  display:grid;
+  place-items:center;
+  color:#fff;
+  background:var(--brand-gradient);
+  box-shadow:0 7px 18px rgba(255,96,12,.24);
 }
 .trip-directory-filter-backdrop {
   position: fixed;
@@ -11047,20 +11072,16 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
 }
 .trip-ideas-search input { font-size: 14px; }
 .trip-ideas-add-button {
-  flex: 0 0 auto;
+  width:44px;
   height: 44px;
-  padding: 0 14px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
+  padding:0;
+  flex:0 0 44px;
+  border-radius:14px;
+  display:grid;
+  place-items:center;
   color: #fff;
   background: var(--brand-gradient);
   box-shadow: 0 7px 18px rgba(255,96,12,.2);
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 .trip-ideas-list { min-width: 0; }
 .trip-idea-groups {
@@ -11230,7 +11251,6 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 @media (max-width: 370px) {
   .page-intro { padding-right: 0; }
   .page-intro-note { display: none; }
-  .trip-ideas-add-button { padding-inline: 11px; }
   .trip-idea-card.compact-trip-card { grid-template-columns: 41% minmax(0,1fr); }
   .trip-idea-card-footer .trip-idea-convert { padding-inline: 8px; font-size: 9px; }
 }
