@@ -24,7 +24,7 @@ LOCK_DIR="$BACKUP_ROOT/.backup.lock"
 
 mkdir -p "$BACKUP_ROOT"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  print -u2 "Another BN Trip backup is already running: $LOCK_DIR"
+  print -u2 "Another RouteRao backup is already running: $LOCK_DIR"
   exit 1
 fi
 

@@ -352,6 +352,7 @@ const migrations = [
         trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
         name VARCHAR(180) NOT NULL,
         location TEXT NOT NULL DEFAULT '',
+        night_bedtimes JSONB NOT NULL DEFAULT '{}'::jsonb,
         check_in_day INTEGER NOT NULL CHECK (check_in_day >= 1),
         check_out_day INTEGER NOT NULL CHECK (check_out_day > check_in_day),
         check_in_time TIME NOT NULL DEFAULT '15:00',
@@ -569,6 +570,30 @@ const migrations = [
         ELSE 'help' END
         WHERE icon_key IS NULL OR icon_key=''`,
       "CREATE INDEX IF NOT EXISTS checklist_master_categories_icon_idx ON checklist_master_categories(user_id,icon_key)",
+    ],
+  },
+  {
+    version: 45,
+    statements: [
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS night_bedtimes JSONB NOT NULL DEFAULT '{}'::jsonb",
+      `UPDATE trip_accommodations accommodation
+       SET night_bedtimes=COALESCE((
+         SELECT jsonb_object_agg(
+           stay_day.day_number::text,
+           COALESCE((
+             SELECT to_char(itinerary.start_time,'HH24:MI')
+             FROM itineraries itinerary
+             WHERE itinerary.trip_id=accommodation.trip_id
+               AND itinerary.accommodation_id=accommodation.id
+               AND itinerary.day_number=stay_day.day_number
+             ORDER BY itinerary.sort_order,itinerary.id
+             LIMIT 1
+           ),'23:30')
+         )
+         FROM generate_series(accommodation.check_in_day,accommodation.check_out_day-1)
+           AS stay_day(day_number)
+       ),'{}'::jsonb)
+       WHERE accommodation.night_bedtimes='{}'::jsonb`,
     ],
   },
 ] as const;

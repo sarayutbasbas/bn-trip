@@ -6,9 +6,9 @@ export function AppRouteLoading() {
     <div className="app-shell flow-shell route-skeleton-shell" role="status" aria-label="กำลังเปิดหน้า">
       <main>
         <header className="mobile-head flow-header route-skeleton-header">
-          <Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก">
-            <Image src="/pack-and-go-icon-512.png" alt="Pack & Go+" width={48} height={48} priority />
-            <div>Pack &amp; Go+<small>travel smarter together</small></div>
+          <Link className="brand" href="/" aria-label="RouteRao · หน้าแรก">
+            <Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized />
+            <div>RouteRao<small>travel smarter together</small></div>
           </Link>
           <div className="route-skeleton-header-actions" aria-hidden="true">
             <span className="route-skeleton-block" />

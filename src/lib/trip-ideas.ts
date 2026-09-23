@@ -26,7 +26,7 @@ function serializeTripIdea(idea:DatabaseTripIdea):TripIdea {
   };
 }
 
-const demoOwner:TripIdeaMember={id:"demo-owner",email:"demo@packandgo.app",display_name:"Bas",avatar_url:null,role:"owner"};
+const demoOwner:TripIdeaMember={id:"demo-owner",email:"demo@routerao.app",display_name:"Bas",avatar_url:null,role:"owner"};
 const place=(id:string,countryCode:string,nameTh:string,nameEn:string,badgeId:string):TripDestinationSelection=>({id,countryCode,nameTh,nameEn,badgeId});
 const demoIdea=(value:Omit<TripIdea,"owner_id"|"access_role"|"members"|"country_code"|"trip_destinations">&{country_code?:string;trip_destinations?:TripDestinationSelection[]}):TripIdea=>({...value,owner_id:demoOwner.id,access_role:"owner",members:[demoOwner],country_code:value.country_code||null,trip_destinations:value.trip_destinations||[]});
 const demoIdeas:TripIdea[]=[

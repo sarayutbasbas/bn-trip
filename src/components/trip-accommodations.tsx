@@ -56,6 +56,7 @@ type Accommodation = {
   image_url: string | null;
   description: string;
   night_descriptions: Record<string, string>;
+  night_bedtimes?: Record<string, string>;
   check_in_day: number;
   check_out_day: number;
   check_in_time: string;
@@ -154,10 +155,12 @@ function NativeTimeInput({
   name,
   value,
   label,
+  onValueChange,
 }: {
   name: string;
   value: string;
   label: string;
+  onValueChange?: (value: string) => void;
 }) {
   const [time, setTime] = useState(value);
   return (
@@ -171,7 +174,10 @@ function NativeTimeInput({
         type="time"
         value={time}
         required
-        onChange={(event) => setTime(event.target.value)}
+        onChange={(event) => {
+          setTime(event.target.value);
+          onValueChange?.(event.target.value);
+        }}
       />
     </label>
   );
@@ -389,6 +395,9 @@ export function TripAccommodations({
   const [nightDescriptions, setNightDescriptions] = useState<
     Record<string, string>
   >({});
+  const [nightBedtimes, setNightBedtimes] = useState<Record<string, string>>(
+    {},
+  );
   const [focusedDetailDay, setFocusedDetailDay] = useState<number | null>(null);
   const [currency, setCurrency] = useState("THB");
   const [exchangeRate, setExchangeRate] = useState(1);
@@ -589,6 +598,7 @@ export function TripAccommodations({
     setCheckInDay(1);
     setCheckOutDay(2);
     setNightDescriptions({});
+    setNightBedtimes({});
     setFocusedDetailDay(null);
     setCurrency("THB");
     setExchangeRate(1);
@@ -616,6 +626,17 @@ export function TripAccommodations({
         ).map((day) => [
           String(day),
           item.night_descriptions?.[String(day)] ?? item.description ?? "",
+        ]),
+      ),
+    );
+    setNightBedtimes(
+      Object.fromEntries(
+        Array.from(
+          { length: item.check_out_day - item.check_in_day },
+          (_, index) => item.check_in_day + index,
+        ).map((day) => [
+          String(day),
+          item.night_bedtimes?.[String(day)]?.slice(0, 5) || "23:30",
         ]),
       ),
     );
@@ -739,6 +760,12 @@ export function TripAccommodations({
           (nightDescriptions[String(day)] || "").trim(),
         ]),
       ),
+      nightBedtimes: Object.fromEntries(
+        Array.from(
+          { length: checkOutDay - checkInDay },
+          (_, index) => checkInDay + index,
+        ).map((day) => [String(day), nightBedtimes[String(day)] || "23:30"]),
+      ),
       checkInDay,
       checkOutDay,
       checkInTime: String(form.get("checkInTime") || "15:00"),
@@ -814,13 +841,12 @@ export function TripAccommodations({
       className={`accommodation-panel ${overlayOnly ? "accommodation-overlay-only" : ""}`}
     >
       {!overlayOnly && (
-        <div className="accommodation-page-heading">
+        <div className="accommodation-page-heading trip-section-heading">
           <div>
-            <span className="accommodation-heading-icon"><BedDouble size={18} /></span>
             <h2>ที่พักในทริปนี้</h2>
             <p>จัดการข้อมูลที่พักของคุณได้ที่นี่ ครบ จบ ในที่เดียว</p>
           </div>
-          <small>ทั้งหมด {items.length} รายการ</small>
+          <button className="trip-section-add" type="button" onClick={openNew} aria-label="เพิ่มที่พัก" title="เพิ่มที่พัก"><Plus size={21} /><span>เพิ่มที่พัก</span></button>
         </div>
       )}
       {error && <div className="form-error">{error}</div>}
@@ -875,7 +901,7 @@ export function TripAccommodations({
                         {item.includes_breakfast ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
                         <span>{item.includes_breakfast ? "รวมอาหารเช้า" : "ไม่รวมอาหารเช้า"}</span>
                       </span>
-                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={44} height={44} /></span>}
+                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={40} height={40} /></span>}
                       <strong className="accommodation-total-price"><small>{isBaht ? "THB" : `${item.currency} · ≈ THB`}</small>{Number(isBaht ? item.foreign_amount : bahtAmount).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</strong>
                     </footer>
                   </div>
@@ -894,23 +920,6 @@ export function TripAccommodations({
             </p>
           </div>
         ))}
-      {!overlayOnly && !loading && items.length > 0 && (
-        <button type="button" className="accommodation-more-card" onClick={openNew}>
-          <span><BedDouble size={19} /><Plus size={11} /></span>
-          <div><strong>ยังไม่มีที่พักเพิ่มอีก?</strong><small>เพิ่มที่พักให้ครบทุกคืน แล้วให้แผนของคุณครบถ้วน</small></div>
-          <Plus size={18} />
-        </button>
-      )}
-      {!overlayOnly && (
-        <button
-          className="directory-fab accommodation-fab"
-          type="button"
-          onClick={openNew}
-        >
-          <Plus size={22} />
-          <span>เพิ่มที่พัก</span>
-        </button>
-      )}
       {editing && (
         <BottomSheet
           title={edit ? "แก้ไขที่พัก" : "เพิ่มที่พัก"}
@@ -1039,22 +1048,43 @@ export function TripAccommodations({
                     </small>
                   </div>
                   {detailDays.map((day) => (
-                    <div className="field" key={day}>
-                      <label>
-                        Day {displayDay(day)} · คืนที่ {day - checkInDay + 1}/
-                        {checkOutDay - checkInDay}
-                      </label>
-                      <textarea
-                        maxLength={2000}
-                        value={nightDescriptions[String(day)] || ""}
-                        onChange={(event) =>
-                          setNightDescriptions((current) => ({
-                            ...current,
-                            [String(day)]: event.target.value,
-                          }))
-                        }
-                        placeholder={`รายละเอียดสำหรับ Day ${displayDay(day)} เช่น วิธีเช็กอินหรือหมายเหตุ`}
-                      />
+                    <div className="accommodation-night-entry" key={day}>
+                      <header>
+                        <strong>Day {displayDay(day)}</strong>
+                        <small>
+                          คืนที่ {day - checkInDay + 1}/{checkOutDay - checkInDay}
+                          {" · "}{tripDateLabel(startDate, day)}
+                        </small>
+                      </header>
+                      <div className="field accommodation-night-bedtime">
+                        <label>เวลานอน</label>
+                        <NativeTimeInput
+                          key={`${edit?.id || "new"}-${day}`}
+                          name={`bedtime-${day}`}
+                          value={nightBedtimes[String(day)] || "23:30"}
+                          label={`เวลานอน Day ${displayDay(day)}`}
+                          onValueChange={(value) =>
+                            setNightBedtimes((current) => ({
+                              ...current,
+                              [String(day)]: value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="field">
+                        <label>รายละเอียด / หมายเหตุ</label>
+                        <textarea
+                          maxLength={2000}
+                          value={nightDescriptions[String(day)] || ""}
+                          onChange={(event) =>
+                            setNightDescriptions((current) => ({
+                              ...current,
+                              [String(day)]: event.target.value,
+                            }))
+                          }
+                          placeholder={`รายละเอียดสำหรับ Day ${displayDay(day)} เช่น วิธีเช็กอินหรือหมายเหตุ`}
+                        />
+                      </div>
                     </div>
                   ))}
                 </section>

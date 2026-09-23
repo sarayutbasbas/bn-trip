@@ -1,4 +1,4 @@
-# BN Trip
+# RouteRao
 
 Mobile-first PWA สำหรับวางแผนท่องเที่ยวร่วมกัน 2 คน สร้างด้วย Next.js 16, React 19, Tailwind CSS 4 และ PostgreSQL 16
 
@@ -176,7 +176,7 @@ node --env-file=.env.cloud.local scripts/setup-cloud-db.mjs
 
 สคริปต์รันใน transaction, สร้าง schema ที่ยังไม่มี และ upsert บัญชีเจ้าของตาม `GOOGLE_OWNER_EMAIL`
 
-หากต้องย้ายข้อมูลจาก PostgreSQL เดิมไปฐานข้อมูล cloud ให้สำรองฐานข้อมูลปลายทางก่อน แล้วรันสคริปต์ต่อไปนี้ สคริปต์จะล้างเฉพาะตารางของ BN Trip ที่ปลายทางก่อนคัดลอกข้อมูลทั้งหมด:
+หากต้องย้ายข้อมูลจาก PostgreSQL เดิมไปฐานข้อมูล cloud ให้สำรองฐานข้อมูลปลายทางก่อน แล้วรันสคริปต์ต่อไปนี้ สคริปต์จะล้างเฉพาะตารางของ RouteRao ที่ปลายทางก่อนคัดลอกข้อมูลทั้งหมด:
 
 ```bash
 SOURCE_DATABASE_URL=postgresql://<source> \
@@ -250,4 +250,4 @@ RESTORE_CONFIRM=restore-bn-trip npm run restore -- /path/to/snapshot
 
 ## Logo
 
-โลโก้ BN Trip อยู่ที่ `public/bn-trip-logo.png` เป็น PNG โปร่งใส ใช้กับ navbar, favicon และ PWA icon ส่วน `bn-trip-logo-source.png` คือไฟล์ต้นฉบับพื้น chroma key
+โลโก้ RouteRao สำหรับ Header ใช้ `public/routerao-logo-transparent-1024.png` ซึ่งเป็น PNG โปร่งใส ส่วน App/PWA icon ใช้ `public/routerao-icon-1024.png` ซึ่งวางโลโก้เดียวกันบนพื้นขาว และมีไฟล์ย่อใน `public/` กับ metadata icons ใน `app/`

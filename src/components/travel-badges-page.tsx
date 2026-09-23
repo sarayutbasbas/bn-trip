@@ -569,9 +569,9 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
     <div className="app-shell flow-shell main-nav-page-shell badges-page-shell">
       <main>
         <header className="mobile-head flow-header">
-          <Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก">
-            <Image src="/pack-and-go-icon-512.png" alt="Pack & Go+" width={48} height={48} priority />
-            <div>Pack &amp; Go+<small>travel smarter together</small></div>
+          <Link className="brand" href="/" aria-label="RouteRao · หน้าแรก">
+            <Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized />
+            <div>RouteRao<small>travel smarter together</small></div>
           </Link>
           <nav className="mobile-actions" aria-label="เมนูหลัก">
             <button className="icon-btn home-refresh-btn" type="button" onClick={refreshPage} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={24} /></button>

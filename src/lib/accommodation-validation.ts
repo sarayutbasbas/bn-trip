@@ -5,6 +5,14 @@ const nightDescriptionsSchema = z
   .refine((value) => Object.keys(value).length <= 32)
   .default({});
 
+const nightBedtimesSchema = z
+  .record(
+    z.string().regex(/^\d+$/),
+    z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  )
+  .refine((value) => Object.keys(value).length <= 32)
+  .default({});
+
 export const accommodationSchema = z.object({
   name: z.string().trim().min(1).max(180),
   location: z.string().trim().max(1000).default(""),
@@ -16,6 +24,7 @@ export const accommodationSchema = z.object({
   imageUrl: z.string().trim().max(2000).nullable().default(null),
   description: z.string().trim().max(2000).default(""),
   nightDescriptions: nightDescriptionsSchema,
+  nightBedtimes: nightBedtimesSchema,
   checkInDay: z.number().int().min(1),
   checkOutDay: z.number().int().min(2),
   checkInTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -41,6 +50,17 @@ export const accommodationSchema = z.object({
       code: "custom",
       path: ["nightDescriptions"],
       message: "รายละเอียดรายวันอยู่นอกช่วงวันที่พัก",
+    });
+  }
+  const invalidBedtimeDay = Object.keys(value.nightBedtimes).some((day) => {
+    const dayNumber = Number(day);
+    return dayNumber < value.checkInDay || dayNumber >= value.checkOutDay;
+  });
+  if (invalidBedtimeDay) {
+    context.addIssue({
+      code: "custom",
+      path: ["nightBedtimes"],
+      message: "เวลานอนรายวันอยู่นอกช่วงวันที่พัก",
     });
   }
 });

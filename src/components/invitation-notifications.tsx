@@ -84,7 +84,10 @@ export function InvitationNotifications({onChanged}:{onChanged?:(result:Invitati
         {items.map(invitation=><article className="invitation-popover-card" key={invitation.id}>
           <Image src={invitation.cover_image_url||"/travel-postcard-fallback.jpg"} alt="" width={62} height={62} unoptimized/>
           <div className="invitation-popover-copy"><span className={`invitation-kind is-${invitation.invitation_type}`}>{invitation.invitation_type==="trip_idea"?<Users size={11}/>:<Plane size={11}/>} {invitation.invitation_type==="trip_idea"?"ทริปที่เล็งไว้":"ทริป"}</span><strong>{invitation.trip_name}</strong><small><MapPin size={10}/>{invitation.destination}</small><p>{invitation.owner_name||invitation.owner_email} เชิญคุณเข้าร่วม</p></div>
-          <div className="invitation-popover-actions"><button className="invitation-popover-accept" type="button" onClick={()=>void respond(invitation,"PATCH")} disabled={Boolean(busyId)}><Check size={14}/>{busyId===invitation.id?"กำลังตอบรับ…":"ตอบรับ"}</button><button className="invitation-popover-decline" type="button" onClick={()=>void respond(invitation,"DELETE")} disabled={Boolean(busyId)} aria-label={`ปฏิเสธคำเชิญ ${invitation.trip_name}`} title="ปฏิเสธ"><Trash2 size={14}/></button></div>
+          <div className="invitation-popover-actions">
+            <button className="invitation-popover-accept" type="button" onClick={()=>void respond(invitation,"PATCH")} disabled={Boolean(busyId)} aria-label={`ยอมรับคำเชิญ ${invitation.trip_name}`} title="ยอมรับ" aria-busy={busyId===invitation.id}><Check size={21}/></button>
+            <button className="invitation-popover-decline" type="button" onClick={()=>void respond(invitation,"DELETE")} disabled={Boolean(busyId)} aria-label={`ปฏิเสธคำเชิญ ${invitation.trip_name}`} title="ปฏิเสธ"><Trash2 size={21}/></button>
+          </div>
         </article>)}
       </div>
       {error?<p className="invitation-popover-error">{error}</p>:null}

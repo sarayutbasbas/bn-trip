@@ -19,7 +19,7 @@ for required in database.dump uploads.tar.gz SHA256SUMS manifest.txt; do
 done
 
 if [[ "${RESTORE_CONFIRM:-}" != "restore-bn-trip" ]]; then
-  print -u2 "Restore replaces the current BN Trip database and uploaded files."
+  print -u2 "Restore replaces the current RouteRao database and uploaded files."
   print -u2 "Re-run with RESTORE_CONFIRM=restore-bn-trip after checking the snapshot path."
   exit 1
 fi

@@ -8,7 +8,7 @@ import { AuthenticatedDashboard } from "@/src/components/authenticated-dashboard
 import { loadTripIdea } from "@/src/lib/trip-ideas";
 
 export const metadata: Metadata = {
-  title: "Pack & Go+ — วางแผนทุกโมเมนต์ด้วยกัน",
+  title: "RouteRao — วางแผนทุกโมเมนต์ด้วยกัน",
   description: "สมุดท่องเที่ยวสีสดสำหรับแพลนทริป บันทึกความทรงจำ และคุมค่าใช้จ่าย",
 };
 

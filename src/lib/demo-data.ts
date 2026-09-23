@@ -3,7 +3,7 @@ const DEMO_USER_ID="d0000000-0000-4000-8000-000000000001";
 function isoDate(offset:number){const date=new Date();date.setUTCHours(0,0,0,0);date.setUTCDate(date.getUTCDate()+offset);return date.toISOString().slice(0,10)}
 function timestamp(date:string,time:string){return `${date}T${time}:00`}
 
-const demoProfile={id:DEMO_USER_ID,email:"demo@packandgo.app",display_name:"Pack & Go+ Explorer",avatar_url:"/pack-and-go-icon-512.png"};
+const demoProfile={id:DEMO_USER_ID,email:"demo@routerao.app",display_name:"RouteRao Explorer",avatar_url:"/routerao-icon-512.png"};
 const demoCards=[
   {id:"d3000000-0000-4000-8000-000000000001",nickname:"Travel Visa",brand:"visa",last_four:"2026",is_active:true,sort_order:0,owner_id:DEMO_USER_ID,owner_name:demoProfile.display_name,owner_email:demoProfile.email,owner_avatar_url:demoProfile.avatar_url,is_own:true,member_role:"owner"},
   {id:"d3000000-0000-4000-8000-000000000002",nickname:"Journey JCB",brand:"jcb",last_four:"8899",is_active:true,sort_order:1,owner_id:DEMO_USER_ID,owner_name:demoProfile.display_name,owner_email:demoProfile.email,owner_avatar_url:demoProfile.avatar_url,is_own:true,member_role:"owner"},

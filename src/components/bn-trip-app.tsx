@@ -14,7 +14,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import Image, { type ImageLoaderProps } from "next/image";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -1423,16 +1423,17 @@ function TripCountryFlag({ trip }: { trip: Trip }) {
 
 function Brand() {
   return (
-    <Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก">
+    <Link className="brand" href="/" aria-label="RouteRao · หน้าแรก">
       <Image
-        src="/pack-and-go-icon-512.png"
-        alt="Pack & Go+"
+        src="/routerao-logo-transparent-512.png"
+        alt="RouteRao"
         width={48}
         height={48}
         priority
+        unoptimized
       />
       <div>
-        Pack &amp; Go+<small>travel smarter together</small>
+        RouteRao<small>travel smarter together</small>
       </div>
     </Link>
   );
@@ -1445,7 +1446,7 @@ function AccountAvatar({
   profile: AccountProfile | null;
   size?: "small" | "medium" | "large";
 }) {
-  const label = (profile?.display_name || profile?.email || "Pack & Go+").trim();
+  const label = (profile?.display_name || profile?.email || "RouteRao").trim();
   const initial = label.charAt(0).toUpperCase();
   return (
     <span
@@ -3574,6 +3575,9 @@ function TripsDirectory({
     {value:"international",label:"ต่างประเทศ",Icon:Globe2},
   ];
   const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0;
+  const firstPastTripIndex = status === "all"
+    ? items.findIndex((trip) => tripTemporalStatus(trip, now).past)
+    : -1;
   return (
     <>
       <div className="screen trips-directory">
@@ -3648,7 +3652,18 @@ function TripsDirectory({
       ) : items.length ? (
         <>
           <div className="compact-trip-grid">
-            {items.map((trip, index) => <CompactTripCard key={trip.id} trip={trip} now={now} priority={index<3} selectTrip={openTrip}/>)}
+            {items.map((trip, index) => (
+              <Fragment key={trip.id}>
+                {firstPastTripIndex > 0 && index === firstPastTripIndex ? (
+                  <div className="trip-ideas-divider trip-directory-divider" role="separator" aria-label={t("ทริปที่ผ่านมาแล้ว")}>
+                    <span />
+                    <h2>{t("ทริปที่ผ่านมาแล้ว")}</h2>
+                    <span />
+                  </div>
+                ) : null}
+                <CompactTripCard trip={trip} now={now} priority={index<3} selectTrip={openTrip}/>
+              </Fragment>
+            ))}
           </div>
           {hasMore && (
             <button
@@ -4099,7 +4114,13 @@ function SwipeableTimelineDay({
       onPointerUp={(event) => finishSwipe(event.clientX, event.clientY)}
       onPointerCancel={() => {
         pointerStart.current = null;
-        settleTrack("translate3d(-33.333333%, 0, 0)", null);
+        targetDay.current = null;
+        settling.current = false;
+        suppressClick.current = false;
+        // Native vertical scrolling cancels the active pointer. Reset
+        // immediately because a centered track has no transition to finish;
+        // waiting for transitionend here would leave swiping locked forever.
+        centerTrack();
       }}
       onClickCapture={(event) => {
         if (!suppressClick.current) return;
@@ -4114,9 +4135,12 @@ function SwipeableTimelineDay({
           if (event.currentTarget !== event.target || event.propertyName !== "transform") return;
           const nextDay = targetDay.current;
           targetDay.current = null;
-          settling.current = false;
+          // Commit the newly visible day before recentering the three-panel
+          // track. Keeping both DOM updates in this transition-end frame
+          // prevents the previous day from flashing at the center for a frame.
+          if (nextDay !== null) flushSync(() => setDay(nextDay));
           centerTrack();
-          if (nextDay !== null) setDay(nextDay);
+          settling.current = false;
           window.setTimeout(() => {
             suppressClick.current = false;
           }, 80);
@@ -4146,6 +4170,7 @@ function TimelineDayPicker({
   itemCount,
   dayCounts,
   swapDay,
+  addPlace,
 }: {
   trip: Trip;
   day: number;
@@ -4154,6 +4179,7 @@ function TimelineDayPicker({
   itemCount: number;
   dayCounts?: Map<number, number>;
   swapDay?: (targetDay: number) => Promise<void>;
+  addPlace: () => void;
 }) {
   const t = useT();
   const [pickerMode, setPickerMode] = useState<"select" | "swap" | null>(null);
@@ -4205,6 +4231,7 @@ function TimelineDayPicker({
         ) : (
           <div className="timeline-day-picker-static"><strong>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</strong></div>
         )}
+        <button type="button" className="timeline-add-place trip-section-add" onClick={addPlace} aria-label={t(`เพิ่มรายการวันที่ ${displayTripDay(trip, day)}`)} title={t("เพิ่มสถานที่")}><Plus size={21} /><span>{t("เพิ่มสถานที่")}</span></button>
         {swapDay && trip.total_days > 1 && <button type="button" className="timeline-swap-days" onClick={() => { setPendingSwapDay(null); setPickerError(""); setPickerMode("swap"); }} aria-label={t("สลับวัน")} title={t("สลับวัน")}><ArrowUpDown size={17} /><span>{t("สลับวัน")}</span></button>}
       </div>
       <p>{dateLabel} · {t(`${itemCount} สถานที่`)}</p>
@@ -4441,15 +4468,8 @@ function TripHub({
                 itemCount={dayItems.length}
                 dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
                 swapDay={trip.access_role === "view" ? undefined : swapDay}
+                addPlace={() => addPlace(day)}
               />
-              <button
-                className="directory-fab timeline-fab"
-                onClick={() => addPlace(day)}
-                aria-label={t(`เพิ่มรายการวันที่ ${displayTripDay(trip, day)}`)}
-              >
-                <Plus size={22} />
-                <span>{t("เพิ่มสถานที่")}</span>
-              </button>
             </div>
             {dayItems.length === 0 ? (
               <EmptyState
@@ -4538,14 +4558,23 @@ function TripHub({
                                 sizes="108px"
                                 unoptimized
                               />
-                              <span className="event-time-badge">
-                                {item.accommodation_id
-                                  ? "23:30"
-                                  : item.start_time?.slice(0, 5) ||
+                              {!item.accommodation_id && (
+                                <span className="event-time-badge">
+                                  {item.start_time?.slice(0, 5) ||
                                     t("ไม่ระบุเวลา")}
-                              </span>
+                                </span>
+                              )}
                             </span>
                             <div className="event-copy">
+                              {item.accommodation_id && (
+                                <span className="accommodation-night-badge">
+                                  <BedDouble size={11} aria-hidden="true" />
+                                  {item.start_time?.slice(0, 5) || "23:30"}
+                                  <i aria-hidden="true">·</i>
+                                  นอนที่นี่ คืนที่ {item.accommodation_night}/
+                                  {item.accommodation_nights}
+                                </span>
+                              )}
                               <div className="timeline-title-row">
                                 <h3>{item.place_name}</h3>
                               </div>
@@ -4805,15 +4834,8 @@ function TimelineScreen({
           itemCount={dayItems.length}
           dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
           swapDay={trip.access_role === "view" ? undefined : swapDay}
+          addPlace={() => addPlace(day)}
         />
-        <button
-          className="directory-fab timeline-fab"
-          onClick={() => addPlace(day)}
-          aria-label={t("เพิ่มสถานที่")}
-        >
-          <Plus size={22} />
-          <span>{t("เพิ่มสถานที่")}</span>
-        </button>
       </div>
       {dayItems.length === 0 ? (
         <EmptyState
@@ -4863,15 +4885,24 @@ function TimelineScreen({
                     }}
                   >
                     <div className="event-copy">
-                      <span className="event-time">
-                        {item.accommodation_id
-                          ? "23:30"
-                          : item.start_time?.slice(0, 5) ||
-                            t("ไม่ระบุเวลา")}
+                      <span
+                        className={
+                          item.accommodation_id
+                            ? "event-time accommodation-night-badge"
+                            : "event-time"
+                        }
+                      >
+                        {item.accommodation_id && (
+                          <BedDouble size={11} aria-hidden="true" />
+                        )}
+                        {item.start_time?.slice(0, 5) ||
+                          (item.accommodation_id
+                            ? "23:30"
+                            : t("ไม่ระบุเวลา"))}
                         {item.accommodation_id && (
                           <>
                             {" "}
-                            · พักที่นี่ คืนที่ {item.accommodation_night}/
+                            · นอนที่นี่ คืนที่ {item.accommodation_night}/
                             {item.accommodation_nights}
                           </>
                         )}
@@ -5707,6 +5738,23 @@ function PlanExpensesContent({
     });
   return (
     <div className="plan-expenses redesigned-plan-expenses">
+      <div className="trip-section-heading expense-page-heading">
+        <div>
+          <h2>{t("ค่าใช้จ่าย")}</h2>
+          <p>{t("สรุปค่าใช้จ่ายทั้งหมดของทริป")}</p>
+        </div>
+        <button
+          type="button"
+          className="trip-section-add"
+          disabled={!firstAvailableDay}
+          title={t(firstAvailableDay ? "เพิ่มค่าใช้จ่าย" : "ต้องเพิ่ม Timeline ก่อน")}
+          aria-label={t(firstAvailableDay ? "เพิ่มค่าใช้จ่าย" : "ต้องเพิ่ม Timeline ก่อน")}
+          onClick={() => firstAvailableDay && openCost(undefined, undefined, firstAvailableDay)}
+        >
+          <Plus size={21} />
+          <span>{t("เพิ่มค่าใช้จ่าย")}</span>
+        </button>
+      </div>
       <ExpenseSplitSummary
         trip={trip}
         tripTotal={tripTotal}
@@ -5924,23 +5972,6 @@ function PlanExpensesContent({
           <ArrowUp size={20} />
         </button>
       )}
-      <button
-        type="button"
-        className="directory-fab expense-floating-add"
-        disabled={!firstAvailableDay}
-        title={t(
-          firstAvailableDay ? "เพิ่มค่าใช้จ่าย" : "ต้องเพิ่ม Timeline ก่อน",
-        )}
-        aria-label={t(
-          firstAvailableDay ? "เพิ่มค่าใช้จ่าย" : "ต้องเพิ่ม Timeline ก่อน",
-        )}
-        onClick={() =>
-          firstAvailableDay && openCost(undefined, undefined, firstAvailableDay)
-        }
-      >
-        <Plus size={22} />
-        <span>{t("เพิ่มค่าใช้จ่าย")}</span>
-      </button>
     </div>
   );
 }
@@ -8588,18 +8619,28 @@ export function TripDestinationPicker({
       (!normalized || [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => term.toLowerCase().includes(normalized)))
     ).slice(0, 12);
   }, [countryCode, query, selected]);
+  const optionLabel = (option: TripDestinationOption) =>
+    lang === "EN" ? option.nameEn : option.nameTh;
+  const matchesQuery = (option: TripDestinationOption, value: string) =>
+    [option.nameTh, option.nameEn, ...option.searchTerms].some(
+      (term) => term.trim().toLowerCase() === value.trim().toLowerCase(),
+    );
   const add = (option: TripDestinationOption) => {
     if (!selected.some((item) => item.id === option.id)) onChange([...selected, option]);
-    setQuery("");
-    setFocused(true);
+    setQuery(optionLabel(option));
+    setFocused(false);
   };
   const commitQuery = () => {
     const normalized = query.trim().replace(/\s+/g, " ");
     if (!normalized) return;
+    const alreadySelected = selected.find((option) => matchesQuery(option, normalized));
+    if (alreadySelected) {
+      setQuery(optionLabel(alreadySelected));
+      setFocused(false);
+      return;
+    }
     const exact = options.find((option) =>
-      [option.nameTh, option.nameEn, ...option.searchTerms].some(
-        (term) => term.trim().toLowerCase() === normalized.toLowerCase(),
-      ),
+      matchesQuery(option, normalized),
     );
     const custom = exact || createCustomTripDestination(countryCode, normalized);
     if (custom) add(custom);
@@ -8633,7 +8674,10 @@ export function TripDestinationPicker({
             enterKeyHint="search"
             autoComplete="off"
             autoCorrect="off"
-            onFocus={() => setFocused(true)}
+            onFocus={() => {
+              if (selected.some((option) => matchesQuery(option, query))) setQuery("");
+              setFocused(true);
+            }}
             onBlur={() => {
               commitQuery();
               window.setTimeout(() => setFocused(false), 120);
@@ -8655,14 +8699,14 @@ export function TripDestinationPicker({
         {focused && (
           <div id="trip-destination-options" className="trip-destination-options" role="listbox">
             {options.map((option) => (
-              <button type="button" role="option" aria-selected="false" key={option.id} onPointerDown={(event) => event.preventDefault()} onClick={() => add(option)}>
+              <button type="button" role="option" aria-selected="false" key={option.id} onPointerDown={(event) => { event.preventDefault(); add(option); }} onClick={() => add(option)}>
                 <MapPin size={14} />
                 <span><strong>{lang === "EN" ? option.nameEn : option.nameTh}</strong><small>{lang === "EN" ? option.nameTh : option.nameEn}</small></span>
                 <Plus size={14} />
               </button>
             ))}
             {canAddCustom ? (
-              <button type="button" role="option" aria-selected="false" className="trip-destination-custom-option" onPointerDown={(event) => event.preventDefault()} onClick={commitQuery}>
+              <button type="button" role="option" aria-selected="false" className="trip-destination-custom-option" onPointerDown={(event) => { event.preventDefault(); commitQuery(); }} onClick={commitQuery}>
                 <Plus size={14} />
                 <span><strong>เพิ่ม “{query.trim()}”</strong><small>บันทึกเป็นเมืองใหม่ในประเทศที่เลือก</small></span>
               </button>

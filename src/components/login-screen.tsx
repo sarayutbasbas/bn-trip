@@ -16,16 +16,16 @@ export function LoginScreen({ authError }: { authError?: string }) {
     <main className="login-page">
       <section className="login-art">
         <div className="login-art-top">
-          <Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก">
-            <Image src="/pack-and-go-icon-512.png" alt="Pack & Go+" width={48} height={48} priority />
-            <div>Pack &amp; Go+<small>travel smarter together</small></div>
+          <Link className="brand" href="/" aria-label="RouteRao · หน้าแรก">
+            <Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized />
+            <div>RouteRao<small>travel smarter together</small></div>
           </Link>
           <span className="login-private-pill"><Crown size={12} />พื้นที่ส่วนตัว</span>
         </div>
         <div className="login-hero-copy">
           <div className="eyebrow"><Sparkles size={13} /> private journeys · made together</div>
           <h1>เก็บทุกเส้นทาง<br />ไว้ในที่เดียว</h1>
-          <p>แพลนที่เที่ยว จดโมเมนต์ และคุมงบ<br />ครบทุกการเดินทางใน Pack &amp; Go+</p>
+          <p>แพลนที่เที่ยว จดโมเมนต์ และคุมงบ<br />ครบทุกการเดินทางใน RouteRao</p>
           <div className="login-route"><span>BKK</span><div><Plane size={20} /></div><span>ANYWHERE</span></div>
         </div>
       </section>

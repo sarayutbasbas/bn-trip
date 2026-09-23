@@ -12,17 +12,17 @@ import { AppGlassScene } from "@/src/components/app-glass-scene";
 import { PwaRuntime } from "@/src/components/pwa-runtime";
 
 export const metadata: Metadata = {
-  title: { default: "Pack & Go+", template: "%s · Pack & Go+" },
+  title: { default: "RouteRao", template: "%s · RouteRao" },
   description: "วางแผนทริป ตารางเที่ยว และค่าใช้จ่ายของเราในที่เดียว",
-  applicationName: "Pack & Go+",
+  applicationName: "RouteRao",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "Pack & Go+", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "RouteRao", statusBarStyle: "black-translucent" },
   icons: {
     icon: [
-      { url: "/pack-and-go-icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/pack-and-go-icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/routerao-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/routerao-icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon-pack-and-go.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon-routerao.png", sizes: "180x180", type: "image/png" }],
   },
 };
 

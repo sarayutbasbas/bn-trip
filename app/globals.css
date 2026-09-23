@@ -1461,10 +1461,10 @@ button:disabled {
 }
 
 .brand {
-  min-height: 44px;
+  min-height: 46px;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 0;
   color: var(--ink);
   font-size: 16px;
   font-weight: 680;
@@ -1480,16 +1480,14 @@ button:disabled {
   line-height: 1;
 }
 .brand img {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
   display: block;
-  border-radius: 12px;
+  border-radius: 0;
   object-fit: contain;
   filter: none;
-  box-shadow:
-    0 0 0 0.5px rgba(255, 107, 0, 0.2),
-    0 5px 14px rgba(255, 92, 10, 0.16);
+  box-shadow: none;
 }
 .dark .brand img {
   filter: none;
@@ -4777,7 +4775,8 @@ html.dark .trip-section-nav button.active {
   gap: 8px;
 }
 .timeline-day-picker-trigger,
-.timeline-swap-days {
+.timeline-swap-days,
+.timeline-add-place {
   min-height: 44px;
   padding: 0;
   border: 0;
@@ -4810,7 +4809,7 @@ html.dark .trip-section-nav button.active {
   width: 44px;
   height: 44px;
   min-height: 44px;
-  margin-left: auto;
+  margin-left: 0;
   padding: 0;
   border: .5px solid var(--line);
   border-radius: 14px;
@@ -4821,27 +4820,80 @@ html.dark .trip-section-nav button.active {
   flex: 0 0 44px;
 }
 .timeline-swap-days span,
-.timeline-heading > .timeline-fab span {
+.timeline-add-place span {
   display: none;
 }
-.timeline-heading > .timeline-fab {
-  position: static;
-  z-index: 1;
-  right: auto;
-  bottom: auto;
+.timeline-add-place {
   width: 44px;
   height: 44px;
   min-height: 44px;
+  margin-left: auto;
   padding: 0;
   flex: 0 0 44px;
+  border: 1px solid rgba(255,255,255,.48);
   border-radius: 14px;
-  gap: 0;
-  box-shadow: 0 7px 18px rgba(255, 96, 12, .24);
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(145deg,#ff4f1f 0%,#ff7a16 52%,#ffad28 100%);
+  box-shadow: 0 8px 20px rgba(255,82,18,.32),0 1px 0 rgba(255,255,255,.42) inset;
+  transition: transform 160ms var(--ease-ios),box-shadow 160ms ease;
 }
-.timeline-heading > .timeline-fab svg {
-  width: 19px;
-  height: 19px;
+.timeline-add-place:active {
+  transform: scale(.95);
+  box-shadow: 0 4px 12px rgba(255,82,18,.26);
 }
+.trip-section-heading {
+  width: 100%;
+  margin: 12px 2px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.trip-section-heading > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.trip-section-heading h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 720;
+  line-height: 1.25;
+  letter-spacing: -.035em;
+}
+.trip-section-heading p,
+.trip-section-heading .page-sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.trip-section-add {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.48);
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  color: #fff;
+  background: linear-gradient(145deg,#ff4f1f 0%,#ff7a16 52%,#ffad28 100%);
+  box-shadow: 0 8px 20px rgba(255,82,18,.32),0 1px 0 rgba(255,255,255,.42) inset;
+  overflow: visible;
+  transition: transform 160ms var(--ease-ios),box-shadow 160ms ease,opacity 160ms ease;
+}
+.trip-section-add span { display: none; }
+.trip-section-add:active {
+  transform: scale(.95);
+  box-shadow: 0 4px 12px rgba(255,82,18,.26);
+}
+.trip-section-add:disabled { opacity: .45; }
+.trip-section-add .notification-dot { top: -3px;right: -3px; }
 .timeline-day-picker > label { display:none; }
 .timeline-day-picker label {
   position: relative;
@@ -5219,12 +5271,15 @@ html.dark .trip-section-nav button.active {
   z-index: 0;
   top: 0;
   bottom: 12px;
-  left: 19px;
-  width: 2px;
-  background: color-mix(in srgb, var(--orange) 34%, #a8a8ad);
+  left: 18.5px;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg,rgba(255,153,67,.5) 0%,#ff6a18 18%,#ff8e26 72%,rgba(255,174,82,.58) 100%);
+  box-shadow: 0 0 0 1px color-mix(in srgb,var(--orange) 8%,transparent),0 0 9px rgba(255,107,24,.16);
 }
 .dark .timeline::before {
-  background: color-mix(in srgb, var(--orange) 52%, #636366);
+  background: linear-gradient(180deg,rgba(255,169,98,.5) 0%,#ff7830 18%,#ff9e43 72%,rgba(255,177,107,.56) 100%);
+  box-shadow: 0 0 10px rgba(255,122,48,.2);
 }
 .timeline-stop {
   position: relative;
@@ -5232,20 +5287,20 @@ html.dark .trip-section-nav button.active {
 .timeline-insert-place {
   position: absolute;
   z-index: 6;
-  top: -18px;
+  top: -19px;
   left: 7px;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border: 1px solid rgba(255, 107, 0, 0.42);
+  border: 2px solid var(--surface-solid);
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: var(--orange);
-  background: var(--surface-solid);
+  color: #fff;
+  background: linear-gradient(145deg,#ff4f1f 0%,#ff7a16 55%,#ffad28 100%);
   box-shadow:
     0 0 0 3px var(--bg),
-    0 4px 11px rgba(255, 107, 0, 0.2);
+    0 5px 13px rgba(255,82,18,.34);
   transition:
     transform 180ms var(--ease-ios),
     border-color 180ms ease,
@@ -5255,7 +5310,7 @@ html.dark .trip-section-nav button.active {
   top: 0;
 }
 .timeline-insert-place.is-between-cards {
-  top: -18px;
+  top: -19px;
 }
 .timeline-insert-place:active {
   transform: scale(0.88);
@@ -5265,7 +5320,8 @@ html.dark .trip-section-nav button.active {
   bottom: 0;
 }
 .dark .timeline-insert-place {
-  background: #2c2c2e;
+  border-color:#3a3a3c;
+  background:linear-gradient(145deg,#ff642d 0%,#ff8730 58%,#ffad42 100%);
 }
 .event {
   position: relative;
@@ -5281,9 +5337,12 @@ html.dark .trip-section-nav button.active {
   content: "";
   position: absolute;
   z-index: 1;
-  left: 19px;
-  width: 2px;
+  /* Cut out the terminal rail and its orange glow completely. The theme
+     background keeps the result visually transparent in light and dark. */
+  left: 10px;
+  width: 20px;
   background: var(--bg);
+  box-shadow: none;
 }
 .timeline-stop:first-child .event::before {
   top: 0;
@@ -5296,23 +5355,23 @@ html.dark .trip-section-nav button.active {
 .event-dot {
   position: relative;
   z-index: 2;
-  width: 14px;
-  height: 14px;
-  border: 1px solid #8e8e93;
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb,var(--orange) 66%,#c8c8cc);
   border-radius: 50%;
   justify-self: center;
   display: grid;
   place-items: center;
   color: transparent;
-  background: #fff;
-  box-shadow: 0 0 0 3px var(--bg);
+  background:var(--surface-solid);
+  box-shadow:0 0 0 3px var(--bg),0 3px 9px rgba(255,107,24,.14);
 }
 .event-dot svg {
   display: none;
 }
 .dark .event-dot {
-  border-color: #8e8e93;
-  background: #d1d1d6;
+  border-color:color-mix(in srgb,var(--orange) 72%,#8e8e93);
+  background:#2c2c2e;
 }
 .event-card {
   position: relative;
@@ -5479,6 +5538,39 @@ html.dark .trip-section-nav button.active {
 }
 .dark .event-time {
   color: #ffc39f;
+}
+.accommodation-night-badge {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 23px;
+  margin: 0 0 5px;
+  padding: 0 8px;
+  border: 0.5px solid color-mix(in srgb, var(--orange) 32%, var(--line));
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--orange);
+  background: var(--brand-soft);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+.accommodation-night-badge svg {
+  flex: 0 0 auto;
+}
+.accommodation-night-badge i {
+  font-style: normal;
+  opacity: 0.65;
+}
+.dark .accommodation-night-badge {
+  color: #ffc39f;
+  background: color-mix(in srgb, var(--orange) 18%, var(--surface-solid));
 }
 .accommodation-booking-text {
   width: fit-content;
@@ -9024,7 +9116,7 @@ html.dark .expense-overview.is-over-budget .expense-overview-stats .is-remaining
 .toast {
   position: fixed;
   z-index: 100;
-  top: max(14px, calc(env(safe-area-inset-top) + 10px));
+  top: max(22px, calc(env(safe-area-inset-top) + 18px));
   left: 50%;
   max-width: calc(100vw - 28px);
   padding: 11px 15px;
@@ -9108,9 +9200,9 @@ html.dark .expense-overview.is-over-budget .expense-overview-stats .is-remaining
   color: #fff;
 }
 .login-art .brand img {
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 24px rgba(132, 38, 0, 0.16);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .login-art .brand small {
   color: rgba(255, 255, 255, 0.72);
@@ -11438,6 +11530,10 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
   line-height: 1.2;
   white-space: nowrap;
 }
+.trip-directory-divider {
+  grid-column: 1 / -1;
+  margin: 10px 0 1px;
+}
 .trip-ideas-grid {
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));
@@ -13113,6 +13209,32 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
   min-height: 76px;
   background: var(--surface-solid);
 }
+.accommodation-night-entry {
+  padding: 11px;
+  border: 0.5px solid var(--line);
+  border-radius: 15px;
+  display: grid;
+  gap: 10px;
+  background: var(--surface-solid);
+}
+.accommodation-night-entry > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.accommodation-night-entry > header strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+.accommodation-night-entry > header small {
+  color: var(--muted);
+  font-size: 9px;
+  text-align: right;
+}
+.accommodation-night-bedtime {
+  max-width: 180px;
+}
 .accommodation-card-brand {
   background-color: #fff;
   background-position: center;
@@ -13191,12 +13313,12 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 }
 
 /* Accommodation gallery */
-.accommodation-panel:not(.accommodation-overlay-only) { padding-top:12px; }
-.accommodation-page-heading { margin:0 2px 14px; }
-.accommodation-page-heading > div { display:grid;grid-template-columns:25px minmax(0,1fr);align-items:center;column-gap:7px; }
+.accommodation-panel:not(.accommodation-overlay-only) { padding-top:12px;padding-bottom:48px; }
+.accommodation-page-heading { margin:12px 2px 16px; }
+.accommodation-page-heading > div { display:block; }
 .accommodation-heading-icon { width:25px;height:25px;border-radius:8px;display:grid;place-items:center;color:#fff;background:var(--brand-gradient); }
-.accommodation-page-heading h2 { margin:0;color:var(--ink);font-size:24px;font-weight:750;line-height:1.15;letter-spacing:-.035em; }
-.accommodation-page-heading p { grid-column:1/-1;margin:5px 0 0;color:var(--muted);font-size:11px; }
+.accommodation-page-heading h2 { margin:0;color:var(--ink);font-size:22px;font-weight:720;line-height:1.25;letter-spacing:-.035em; }
+.accommodation-page-heading p { margin:2px 0 0;color:var(--muted);font-size:12px;line-height:1.45; }
 .accommodation-page-heading > small { margin-top:12px;display:block;color:var(--muted);font-size:10px; }
 .accommodation-list { gap:10px; }
 .accommodation-card {
@@ -13243,8 +13365,8 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-breakfast-status.is-excluded { color:#a45a52; }
 .accommodation-breakfast-status > span { overflow:hidden;text-overflow:ellipsis; }
 .accommodation-booking-badge,.accommodation-payment-badge { min-width:0;display:inline-flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.accommodation-booking-badge { grid-column:1;width:44px;height:44px;align-self:center;justify-self:start;font-size:7px; }
-.accommodation-booking-badge img { width:44px;height:44px;object-fit:contain;object-position:left center; }
+.accommodation-booking-badge { grid-column:1;width:40px;height:40px;border-radius:10px;align-self:center;justify-self:start;font-size:7px; }
+.accommodation-booking-badge img { width:40px;height:40px;border-radius:10px;object-fit:contain;object-position:left center; }
 .accommodation-booking-badge svg { color:#ff6718; }
 .accommodation-payment-badge { width:fit-content;max-width:100%;padding:3px 6px;border-radius:999px;color:#188568;background:#e7f8f1;font-size:6px; }
 .accommodation-total-price { grid-column:2;grid-row:1 / span 2;align-self:center;margin:0;text-align:right;color:var(--ink);font-size:20px;line-height:1;white-space:nowrap; }
@@ -14074,11 +14196,12 @@ html.dark .dashboard-favorite-hotel-card > button { background:color-mix(in srgb
 
 /* Flight and insurance pages share the trip data, but present independent tools. */
 .flight-page .flight-toolbar,
-.insurance-page .flight-toolbar { margin:0 2px 16px; }
+.insurance-page .flight-toolbar { margin:12px 2px 16px; }
 .flight-page .flight-toolbar h2,
-.insurance-page .flight-toolbar h2 { font-size:24px;font-weight:750;line-height:1.15;letter-spacing:-.035em; }
+.insurance-page .flight-toolbar h2 { font-size:22px;font-weight:720;line-height:1.25;letter-spacing:-.035em; }
 .flight-page .flight-toolbar .page-sub,
-.insurance-page .flight-toolbar .page-sub { margin-top:5px;font-size:11px; }
+.insurance-page .flight-toolbar .page-sub { margin-top:2px;font-size:12px;line-height:1.45; }
+.flight-page .flight-panel { padding-bottom:48px; }
 .flight-journey-heading { margin:18px 2px 8px;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:9px; }
 .flight-journey-heading > span { width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:var(--orange);background:var(--brand-soft); }
 .flight-journey-heading > div { min-width:0;display:grid;gap:1px; }
@@ -14550,7 +14673,7 @@ html.dark .dashboard-quick-actions > button:nth-child(3) {
 .invitation-popover > header small { color:var(--muted);font-size:9px; }
 .invitation-popover > header button { width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--muted);background:var(--surface-2); }
 .invitation-popover-list { max-height:min(390px,58dvh);padding:8px;display:grid;gap:7px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch; }
-.invitation-popover-card { min-width:0;padding:8px;border:1px solid var(--line);border-radius:15px;display:grid;grid-template-columns:62px minmax(0,1fr);gap:9px;background:var(--surface-2); }
+.invitation-popover-card { min-width:0;min-height:80px;padding:8px;border:1px solid var(--line);border-radius:15px;display:grid;grid-template-columns:62px minmax(0,1fr) 95px;align-items:center;gap:9px;background:var(--surface-2); }
 .invitation-popover-card > img { width:62px;height:62px;border-radius:11px;object-fit:cover; }
 .invitation-popover-copy { min-width:0;align-self:center;display:grid;gap:2px; }
 .invitation-popover-copy .invitation-kind { width:max-content;max-width:100%;display:flex;align-items:center;gap:3px;color:var(--orange);font-size:8px;font-weight:700; }
@@ -14559,10 +14682,12 @@ html.dark .dashboard-quick-actions > button:nth-child(3) {
 .invitation-popover-copy strong { font-size:12px; }
 .invitation-popover-copy small { display:flex;align-items:center;gap:3px;color:var(--muted);font-size:8px; }
 .invitation-popover-copy p { margin:1px 0 0;color:var(--muted);font-size:8px; }
-.invitation-popover-actions { grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 38px;gap:6px; }
-.invitation-popover-actions button { min-height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:10px;font-weight:700; }
-.invitation-popover-accept { color:#fff;background:var(--brand-gradient); }
-.invitation-popover-decline { color:var(--muted);background:var(--surface-3); }
+.invitation-popover-actions { width:95px;align-self:center;display:grid;grid-template-columns:repeat(2,44px);gap:7px; }
+.invitation-popover-actions button { width:44px;height:44px;padding:0;border-radius:14px;display:grid;place-items:center;transition:transform 160ms var(--ease-ios),opacity 160ms ease; }
+.invitation-popover-actions button:active { transform:scale(.96); }
+.invitation-popover-actions button:disabled { opacity:.48;transform:none; }
+.invitation-popover-accept { color:#fff;background:var(--brand-gradient);box-shadow:0 7px 18px rgba(255,96,12,.24); }
+.invitation-popover-decline { border:.5px solid var(--line);color:#d84a38;background:var(--surface-solid);box-shadow:0 1px 0 var(--glass-highlight) inset; }
 .invitation-popover-error { margin:0;padding:8px 12px;border-top:1px solid var(--line);color:#c4472c;font-size:9px; }
 @media (max-width:600px) {
   .invitation-notification { position:static; }

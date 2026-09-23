@@ -384,9 +384,9 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
       )}
       <main>
         <header className="mobile-head flow-header">
-          <Link className="brand" href="/" aria-label="Pack & Go+ · หน้าแรก">
-            <Image src="/pack-and-go-icon-512.png" alt="Pack & Go+" width={48} height={48} priority />
-            <div>Pack &amp; Go+<small>travel smarter together</small></div>
+          <Link className="brand" href="/" aria-label="RouteRao · หน้าแรก">
+            <Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized />
+            <div>RouteRao<small>travel smarter together</small></div>
           </Link>
           <nav className="mobile-actions" aria-label="เมนูหลัก">
             <button className="icon-btn home-refresh-btn" type="button" onClick={() => void refreshMaster()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช">

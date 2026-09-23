@@ -157,7 +157,7 @@ export async function buildTripPlanWorkbook(input: {
   cards: ExportCard[];
 }) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "BN Trip";
+  workbook.creator = "RouteRao";
   workbook.created = new Date();
   workbook.modified = new Date();
   workbook.subject = `แผนเที่ยวและค่าใช้จ่าย ${input.trip.name}`;

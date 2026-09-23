@@ -9,6 +9,7 @@ export type AccommodationLinkedInput = {
   location: string;
   description: string;
   nightDescriptions: Record<string, string>;
+  nightBedtimes: Record<string, string>;
   checkInDay: number;
   checkOutDay: number;
   checkInTime: string;
@@ -79,12 +80,13 @@ export async function syncAccommodationLinkedRecords(
       `INSERT INTO itineraries
        (trip_id,day_number,time_slot,start_time,place_name,address,transport_mode,
         transport_note,cost_items,sort_order,accommodation_id,accommodation_night,accommodation_nights)
-       VALUES ($1,$2,'evening','23:30',$3,$4,NULL,$5,$6::jsonb,
+       VALUES ($1,$2,'evening',$3::time,$4,$5,NULL,$6,$7::jsonb,
         COALESCE((SELECT max(sort_order)+1 FROM itineraries WHERE trip_id=$1 AND day_number=$2),0),
-        $7,$8,$9)`,
+        $8,$9,$10)`,
       [
         input.tripId,
         dayNumber,
+        input.nightBedtimes[String(dayNumber)] || "23:30",
         input.name,
         input.location || null,
         (input.nightDescriptions[String(dayNumber)] ?? input.description) || null,
