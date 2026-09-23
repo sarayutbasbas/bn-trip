@@ -693,7 +693,8 @@ export async function loadItineraries(session: SessionUser, id: string) {
   await ensureLatestDatabaseSchema();
   if (!(await getTripRole(id, session.userId))) return [];
   const result = await query(
-    `SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform
+    `SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
+       accommodation.image_url AS accommodation_image_url
      FROM itineraries i
      LEFT JOIN trip_accommodations accommodation ON accommodation.id=i.accommodation_id
      WHERE i.trip_id=$1 AND i.place_name IS NOT NULL

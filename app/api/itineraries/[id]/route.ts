@@ -14,7 +14,7 @@ const schema=z.object({
   startTime:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   placeName:z.string().trim().min(1).max(180),
   address:z.string().max(1000).optional(),
-  imageUrl:z.string().max(2000).optional(),
+  imageUrl:z.string().max(2000).nullable().optional(),
   transportMode:z.string().max(100).optional(),
   transportNote:z.string().max(1000).optional(),
   costItems:z.array(z.object({
@@ -43,7 +43,8 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     if(!await tripExpenseGuestIdsBelongToTrip(existing.trip_id,costItems.flatMap(item=>item.splitGuestIds||[])))return NextResponse.json({error:"คนนอกที่เลือกไม่ได้อยู่ในทริปนี้"},{status:400});
     const duplicate=await query("SELECT 1 FROM itineraries WHERE trip_id=$1 AND day_number=$2 AND start_time=$3::time AND id<>$4 LIMIT 1",[existing.trip_id,x.dayNumber,x.startTime,id]);if(duplicate.rowCount)return NextResponse.json({error:"วันและเวลานี้มีแผนอยู่แล้ว กรุณาเลือกเวลาอื่น"},{status:409});
     if(role==="view"&&existing.cost_items.length>x.costItems.length){const nextIds=new Set(x.costItems.map(item=>item.id).filter(Boolean));const removed=existing.cost_items.filter(item=>!item.id||!nextIds.has(item.id));if(removed.some(item=>!item.id))return NextResponse.json({error:"สิทธิ์ View ไม่มีสิทธิลบค่าใช้จ่าย"},{status:403});const moved=await query<{id:string}>("SELECT DISTINCT cost->>'id' AS id FROM itineraries other CROSS JOIN LATERAL jsonb_array_elements(other.cost_items) cost WHERE other.trip_id=$1 AND other.id<>$2 AND cost->>'id'=ANY($3::text[])",[existing.trip_id,id,removed.map(item=>item.id)]);const movedIds=new Set(moved.rows.map(row=>row.id));if(removed.some(item=>!movedIds.has(item.id!)))return NextResponse.json({error:"สิทธิ์ View ไม่มีสิทธิลบค่าใช้จ่าย"},{status:403});}
-    const result=await query("UPDATE itineraries i SET day_number=$1,time_slot=$2,start_time=$3,place_name=$4,address=$5,image_url=COALESCE($6,image_url),transport_mode=$7,transport_note=$8,cost_items=$9::jsonb,updated_at=now() FROM trips t WHERE i.id=$10 AND t.id=i.trip_id AND $1 BETWEEN 1 AND t.total_days RETURNING i.*",[x.dayNumber,x.timeSlot,x.startTime,x.placeName,x.address||null,x.imageUrl||null,x.transportMode||null,x.transportNote||null,JSON.stringify(costItems),id]);
+    const hasImageUrl=Object.prototype.hasOwnProperty.call(x,"imageUrl");
+    const result=await query("UPDATE itineraries i SET day_number=$1,time_slot=$2,start_time=$3,place_name=$4,address=$5,image_url=CASE WHEN $6 THEN $7 ELSE image_url END,transport_mode=$8,transport_note=$9,cost_items=$10::jsonb,updated_at=now() FROM trips t WHERE i.id=$11 AND t.id=i.trip_id AND $1 BETWEEN 1 AND t.total_days RETURNING i.*",[x.dayNumber,x.timeSlot,x.startTime,x.placeName,x.address||null,hasImageUrl,x.imageUrl??null,x.transportMode||null,x.transportNote||null,JSON.stringify(costItems),id]);
     if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await clearFirstItineraryTransport(existing.trip_id,[existing.day_number,x.dayNumber]);await syncAccommodationCostsFromItineraries(existing.trip_id);const saved=await query("SELECT * FROM itineraries WHERE id=$1",[id]);await logTripActivity({tripId:existing.trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"update",summary:`แก้ไขแผน “${x.placeName}”`,before:current.rows[0],after:saved.rows[0]});return NextResponse.json(saved.rows[0]);
   }catch{return NextResponse.json({error:"ข้อมูลรายการไม่ถูกต้อง"},{status:400});}
 }

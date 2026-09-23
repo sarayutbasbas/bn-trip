@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarDays,CalendarRange,CheckCircle2,Compass,Heart,MapPinned,PlaneTakeoff,Plus,RefreshCw,Search,Trash2,UserPlus,X } from "lucide-react";
 import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas";
-import { getCachedCurrentAccount,getCurrentAccount } from "@/src/lib/client-account";
+import { getCurrentAccount } from "@/src/lib/client-account";
 import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
 import { TRIP_DESTINATION_OPTIONS,type TripDestinationOption } from "@/src/lib/travel-badges";
 import { ConfirmDialog,CountryFlagImage,CountryPicker,CoverImagePicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
@@ -119,7 +119,7 @@ function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:Trip
 }
 
 export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:boolean}){
-  const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor>();const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [profile,setProfile]=useState<HeaderProfile|null>(()=>getCachedCurrentAccount());const [refreshing,setRefreshing]=useState(false);
+  const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor>();const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [profile,setProfile]=useState<HeaderProfile|null>(null);const [refreshing,setRefreshing]=useState(false);
   const filteredIdeas=useMemo(()=>{const keyword=query.trim().toLocaleLowerCase();if(!keyword)return ideas;return ideas.filter(idea=>`${idea.name} ${idea.destination} ${idea.note} ${countryByCode(idea.country_code)?.nameTh||""} ${countryByCode(idea.country_code)?.nameEn||""}`.toLocaleLowerCase().includes(keyword))},[ideas,query]);
   const plannedIdeas=filteredIdeas.filter(idea=>idea.kind==="planned");
   const somedayIdeas=filteredIdeas.filter(idea=>idea.kind==="someday");

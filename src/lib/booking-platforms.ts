@@ -2,25 +2,37 @@ export type BookingPlatform =
   | "agoda"
   | "trip.com"
   | "booking.com"
-  | "klook";
+  | "klook"
+  | "traveloka"
+  | "direct";
 
 export const BOOKING_PLATFORMS: Array<{
   value: BookingPlatform;
   label: string;
   icon: string;
 }> = [
-  { value: "agoda", label: "Agoda", icon: "/booking-platforms/agoda.svg" },
+  { value: "agoda", label: "Agoda", icon: "/images/applications/agoda.png" },
   {
     value: "trip.com",
     label: "Trip.com",
-    icon: "/booking-platforms/trip-dot-com.svg",
+    icon: "/images/applications/trip.png",
   },
   {
     value: "booking.com",
     label: "Booking.com",
-    icon: "/booking-platforms/booking-dot-com.svg",
+    icon: "/images/applications/booking.png",
   },
-  { value: "klook", label: "Klook", icon: "/booking-platforms/klook.svg" },
+  { value: "klook", label: "Klook", icon: "/images/applications/klook.png" },
+  {
+    value: "traveloka",
+    label: "Traveloka",
+    icon: "/images/applications/travelloka.png",
+  },
+  {
+    value: "direct",
+    label: "จองเอง / โทรจอง",
+    icon: "/images/applications/direct.svg",
+  },
 ];
 
 export function bookingPlatformByValue(value?: string | null) {

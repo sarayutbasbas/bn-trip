@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" role="img" aria-labelledby="title">
+  <title id="title">จองเองหรือโทรจอง</title>
+  <rect width="96" height="64" rx="14" fill="#fff3ea"/>
+  <rect x="18" y="17" width="31" height="31" rx="7" fill="#ff6817"/>
+  <path d="M27 38V27h13v11M31 38v-5h5v5M25 38h17" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M59 20c2 8 8 14 16 16l-5 7c-1 2-4 2-6 1-7-4-13-10-17-17-1-2-1-5 1-6l7-5 4 4Z" fill="#ff6817"/>
+</svg>

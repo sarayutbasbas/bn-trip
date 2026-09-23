@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BedDouble,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   Clock,
   Coffee,
@@ -14,6 +15,7 @@ import {
   Plus,
   ReceiptText,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import { BottomSheet } from "@/src/components/bottom-sheet";
@@ -274,7 +276,7 @@ function BookingPlatformPicker({
   }, [open]);
   return (
     <div className="field accommodation-booking-field" ref={pickerRef}>
-      <label>จองจากแอป</label>
+      <label>ช่องทางการจอง</label>
       <button
         type="button"
         className={`booking-platform-trigger ${open ? "is-open" : ""}`}
@@ -287,7 +289,7 @@ function BookingPlatformPicker({
         ) : (
           <span className="booking-platform-placeholder">เลือก</span>
         )}
-        <strong>{selected?.label || "เลือกแอป"}</strong>
+        <strong>{selected?.label || "เลือกช่องทางการจอง"}</strong>
         <ChevronDown size={16} aria-hidden="true" />
       </button>
       {open && (
@@ -861,10 +863,15 @@ export function TripAccommodations({
                     <div className="accommodation-stay-dates">
                       <span><CalendarDays size={14} /><small>เช็กอิน</small><b>{tripDateLabel(startDate, item.check_in_day)}</b></span>
                       <span><CalendarDays size={14} /><small>เช็กเอาต์</small><b>{tripDateLabel(startDate, item.check_out_day)}</b></span>
-                      <span><Clock size={14} /><b>{item.nights} คืน</b></span>
+                      <span><b>{item.nights} คืน</b></span>
                     </div>
                     <footer>
-                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={64} height={24} /></span>}
+                      <span className={`accommodation-breakfast-status ${item.includes_breakfast ? "is-included" : "is-excluded"}`}>
+                        <Coffee size={14} />
+                        {item.includes_breakfast ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                        <span>{item.includes_breakfast ? "รวมอาหารเช้า" : "ไม่รวมอาหารเช้า"}</span>
+                      </span>
+                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={44} height={18} /></span>}
                       <strong className="accommodation-total-price"><small>{isBaht ? "THB" : `${item.currency} · ≈ THB`}</small>{Number(isBaht ? item.foreign_amount : bahtAmount).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</strong>
                     </footer>
                   </div>

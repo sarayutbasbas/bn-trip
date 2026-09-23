@@ -37,7 +37,6 @@ import {
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
   clearCurrentAccount,
-  getCachedCurrentAccount,
   getCurrentAccount,
   updateCurrentAccount,
 } from "@/src/lib/client-account";
@@ -98,6 +97,7 @@ import {
   Map as MapIcon,
   MapPin,
   Menu,
+  Ellipsis,
   Minus,
   Moon,
   Navigation,
@@ -106,6 +106,7 @@ import {
   Plus,
   ReceiptText,
   RefreshCw,
+  RotateCcw,
   Search,
   Settings2,
   ShieldCheck,
@@ -341,6 +342,7 @@ export type Itinerary = {
   accommodation_night?: number | null;
   accommodation_nights?: number | null;
   accommodation_booking_platform?: string | null;
+  accommodation_image_url?: string | null;
 };
 type Modal =
   | { type: "trip"; trip?: Trip; preset?: TripCreationPreset }
@@ -1288,12 +1290,15 @@ export function CountryPicker({
   const [activeIndex, setActiveIndex] = useState(0);
   const options = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return TRIP_COUNTRIES.filter((country) => {
+    const filtered = TRIP_COUNTRIES.filter((country) => {
       if (!normalized) return true;
       return [country.code, country.nameTh, country.nameEn, ...(country.aliases || [])]
         .some((term) => term.toLowerCase().includes(normalized));
-    }).slice(0, 20);
-  }, [query]);
+    });
+    return filtered
+      .sort((a, b) => Number(b.code === selected.code) - Number(a.code === selected.code))
+      .slice(0, 20);
+  }, [query, selected.code]);
 
   function selectCountry(code: string) {
     const country = countryByCode(code);
@@ -2119,19 +2124,6 @@ function useMinuteClock() {
   return now;
 }
 
-/* Timeline images are intentionally disabled to keep dense daily plans compact.
-function TimelineImagePicker({existingUrl,onChange}:{existingUrl?:string|null;onChange:(file:File|null)=>void}){
-  const inputRef=useRef<HTMLInputElement>(null);const canvasRef=useRef<HTMLCanvasElement>(null);const objectUrls=useRef<string[]>([]);
-  const [source,setSource]=useState<CropSource|null>(null);const [preview,setPreview]=useState(existingUrl||"");const [cropping,setCropping]=useState(false);const [zoom,setZoom]=useState(1);const [positionX,setPositionX]=useState(0);const [positionY,setPositionY]=useState(0);const [error,setError]=useState("");
-  useEffect(()=>()=>{objectUrls.current.forEach(url=>URL.revokeObjectURL(url))},[]);
-  useEffect(()=>{const canvas=canvasRef.current;if(!canvas||!source)return;const context=canvas.getContext("2d");if(!context)return;const outputWidth=640;const outputHeight=360;const imageWidth=source.image.naturalWidth;const imageHeight=source.image.naturalHeight;const scale=Math.max(outputWidth/imageWidth,outputHeight/imageHeight)*zoom;const visibleWidth=outputWidth/scale;const visibleHeight=outputHeight/scale;const centerX=imageWidth/2+(positionX/100)*(imageWidth-visibleWidth)/2;const centerY=imageHeight/2+(positionY/100)*(imageHeight-visibleHeight)/2;const sx=Math.max(0,Math.min(imageWidth-visibleWidth,centerX-visibleWidth/2));const sy=Math.max(0,Math.min(imageHeight-visibleHeight,centerY-visibleHeight/2));context.clearRect(0,0,outputWidth,outputHeight);context.drawImage(source.image,sx,sy,visibleWidth,visibleHeight,0,0,outputWidth,outputHeight)},[source,zoom,positionX,positionY]);
-  function select(event:React.ChangeEvent<HTMLInputElement>){const file=event.target.files?.[0];if(!file)return;setError("");if(!["image/jpeg","image/png","image/webp"].includes(file.type)){setError("รองรับเฉพาะ JPG, PNG และ WebP");return}if(file.size>8*1024*1024){setError("รูปต้องมีขนาดไม่เกิน 8 MB");return}const url=URL.createObjectURL(file);objectUrls.current.push(url);const image=new window.Image();image.onload=()=>{setSource({file,image,url});setZoom(1);setPositionX(0);setPositionY(0);setCropping(true)};image.onerror=()=>setError("ไม่สามารถอ่านไฟล์รูปนี้ได้");image.src=url}
-  async function applyCrop(){const canvas=canvasRef.current;if(!canvas||!source)return;const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/jpeg",.78));if(!blob){setError("ไม่สามารถ Crop รูปได้");return}const baseName=source.file.name.replace(/\.[^.]+$/,"")||"timeline";const croppedFile=new File([blob],`${baseName}-timeline.jpg`,{type:"image/jpeg"});const url=URL.createObjectURL(blob);objectUrls.current.push(url);setPreview(url);setCropping(false);onChange(croppedFile)}
-  function cancelCrop(){setCropping(false);setSource(null);if(inputRef.current)inputRef.current.value=""}
-  return <div className="timeline-image-control">{!cropping&&<label className={`timeline-image-picker ${preview?"has-image":""}`} title="เลือกรูป Timeline" aria-label="เลือกรูป Timeline" style={preview?{backgroundImage:`url("${preview}")`}:undefined}><ImagePlus size={20}/><span>{preview?"เปลี่ยนรูป":"เพิ่มรูป"}</span><input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={select}/></label>}{cropping&&<div className="timeline-cropper"><div className="timeline-crop-head"><strong>จัดตำแหน่งรูป 16:9</strong><button type="button" onClick={cancelCrop}>ยกเลิก</button></div><div className="timeline-crop-canvas"><canvas ref={canvasRef} width={640} height={360}/></div><div className="timeline-crop-controls"><label><span>ซูม</span><input type="range" min="1" max="2.5" step="0.01" value={zoom} onChange={event=>setZoom(Number(event.target.value))}/></label><label><span>ซ้าย–ขวา</span><input type="range" min="-100" max="100" value={positionX} onChange={event=>setPositionX(Number(event.target.value))}/></label><label><span>บน–ล่าง</span><input type="range" min="-100" max="100" value={positionY} onChange={event=>setPositionY(Number(event.target.value))}/></label></div><button type="button" className="timeline-crop-apply" onClick={applyCrop}>ใช้รูปนี้</button></div>}{error&&<p className="cover-error">{error}</p>}</div>;
-}
-*/
-
 function LoginScreen({ authError }: { authError?: string }) {
   const t = useT();
   const error = authError
@@ -2671,7 +2663,7 @@ function Dashboard({
   const t = useT();
   const router = useRouter();
   const [now] = useState(() => Date.now());
-  const [profile, setProfile] = useState<AccountProfile | null>(() => getCachedCurrentAccount());
+  const [profile, setProfile] = useState<AccountProfile | null>(null);
   useEffect(() => {
     let active = true;
     getCurrentAccount()
@@ -3576,7 +3568,7 @@ function TripsDirectory({
     {value:"domestic",label:"ในประเทศ",Icon:MapPin},
     {value:"international",label:"ต่างประเทศ",Icon:Globe2},
   ];
-  const hasActiveTripFilters=status!=="all"||tripType!=="all"||selectedYears.length>0;
+  const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0;
   return (
     <>
       <div className="screen trips-directory">
@@ -3601,7 +3593,7 @@ function TripsDirectory({
               </button>
             )}
           </label>
-          <button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/>{hasActiveTripFilters?<i className="trip-directory-filter-dot" aria-label={t("กำลังใช้ตัวกรอง")}/>:null}</button>
+          <button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label={t("กำลังใช้ตัวกรอง")}/>:null}</button>
           <button className="trip-directory-add-button" type="button" onClick={createTrip} aria-label={t("สร้างทริปใหม่")} title={t("สร้างทริปใหม่")}><Plus size={21}/></button>
       </div>
       {filtersOpen&&(
@@ -3614,6 +3606,9 @@ function TripsDirectory({
           className="trip-directory-filter-sheet"
           bodyClassName="bottom-sheet-body trip-directory-filter-body"
           submitLabel={t("แสดงผล")}
+          deleteLabel={t("รีเซ็ตตัวกรอง")}
+          deleteIcon={<RotateCcw size={18}/>}
+          onDelete={()=>{setDraftTripType("all");setDraftYears([]);setTripType("all");setSelectedYears([]);setFiltersOpen(false)}}
         >
           <section className="trip-directory-filter-section">
             <h3>{t("ประเภททริป")}</h3>
@@ -3642,7 +3637,9 @@ function TripsDirectory({
         ))}
       </div>
       {loading ? (
-        <div className="directory-loading">{t("กำลังโหลดทริป…")}</div>
+        <div className="compact-trip-grid compact-trip-list-skeleton" role="status" aria-label={t("กำลังโหลดทริป…")}>
+          {Array.from({length:4},(_,index)=><span className="compact-trip-skeleton-card" key={index}><i/><b><em/><em/><em/></b></span>)}
+        </div>
       ) : items.length ? (
         <>
           <div className="compact-trip-grid">
@@ -3694,8 +3691,15 @@ function TripHeader({
   editTrip?: () => void;
 }) {
   const t = useT();
+  const now = useMinuteClock();
   const coverUrl = trip.cover_image_url || DEFAULT_TRIP_COVER;
-  const ended = tripHasEnded(trip, new Date());
+  const ended = tripHasEnded(trip, now);
+  const temporal = tripTemporalStatus(trip, now);
+  const countdownLabel = !trip.outbound_departure_at
+    ? t("ยังไม่กำหนดวัน")
+    : temporal.ongoing
+      ? t("กำลังเดินทาง")
+      : t(`อีก ${temporal.daysUntil} วัน`);
   return (
     <div className="trip-detail-head has-cover">
       <div className="trip-detail-image-frame">
@@ -3722,6 +3726,12 @@ function TripHeader({
       <div
         className={`trip-cover-copy ${trip.members?.length ? "has-collaborators" : ""}`}
       >
+        {!ended && (
+          <span className={`trip-header-countdown ${temporal.ongoing ? "is-ongoing" : ""}`}>
+            <CalendarDays size={12} />
+            {countdownLabel}
+          </span>
+        )}
         <h1 className="page-title">{trip.name}</h1>
         <span className="eyebrow">
           <TripCountryFlag trip={trip} />
@@ -3812,7 +3822,7 @@ function TripSectionNav({
     { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", active: active === "insurance", action: () => select("insurance") },
     { id: "stays", label: "ที่พัก", Icon: BedDouble, disabled: trip.total_days <= 1, active: active === "stays", action: () => select("stays") },
     { id: "photos", label: "รูปภาพ / Link", Icon: Images, disabled: !trip.google_photos_url, action: () => trip.google_photos_url && window.open(trip.google_photos_url, "_blank", "noopener,noreferrer") },
-    { id: "export", label: "ดาวน์โหลด Plan", Icon: Download, action: () => { window.open(`/api/trips/${trip.id}/export-plan`, "_self"); } },
+    { id: "export", label: "Download", Icon: Download, action: () => { window.open(`/api/trips/${trip.id}/export-plan`, "_self"); } },
     { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
     { id: "checklist", label: "Checklist", Icon: ClipboardList, active: active === "workspace" && workspaceTab === "checklist", action: () => select("workspace", "checklist") },
   ];
@@ -3849,29 +3859,77 @@ function TripSectionNav({
   );
 }
 
-function TimelineCostBar({
+function TimelineExpenseMenu({
   item,
   openCost,
 }: {
   item: Itinerary;
   openCost: (item: Itinerary, index?: number) => void;
 }) {
+  const t = useT();
   const costs = item.cost_items || [];
-  if (!costs.length) return null;
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
   return (
-    <div className="inline-cost">
-      <div className="timeline-cost-chips">
-        {costs.map((cost, index) => (
+    <div className="timeline-expense-menu" ref={menuRef}>
+      <button
+        type="button"
+        className="timeline-expense-trigger"
+        onClick={() => setOpen((value) => !value)}
+        aria-label={t("รายการค่าใช้จ่าย")}
+        aria-expanded={open}
+      >
+        <Ellipsis size={18} />
+      </button>
+      {open && (
+        <div className="timeline-expense-popover" role="menu">
+          <strong>{t("รายการค่าใช้จ่าย")}</strong>
+          <div className="timeline-expense-list">
+            {costs.length ? costs.map((cost, index) => (
+              <button
+                type="button"
+                role="menuitem"
+                key={cost.id || `${cost.key}-${index}`}
+                onClick={() => {
+                  setOpen(false);
+                  openCost(item, index);
+                }}
+              >
+                <i><ReceiptText size={14} /></i>
+                <span><b>{cost.key}</b><small>{costSourceLabel(cost)}</small></span>
+                <em>฿{bahtFormat(cost.value)}</em>
+              </button>
+            )) : <small className="timeline-expense-empty">{t("ยังไม่มีค่าใช้จ่าย")}</small>}
+          </div>
           <button
             type="button"
-            key={cost.id || `${cost.key}-${index}`}
-            onClick={() => openCost(item, index)}
+            className="timeline-expense-add"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              openCost(item);
+            }}
           >
-            <span>{cost.key}</span>
-            <b>{costSourceLabel(cost)}</b>
+            <Plus size={15} />
+            {t("เพิ่มค่าใช้จ่าย")}
           </button>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3963,6 +4021,18 @@ function TimelineDayPicker({
       setBusyDay(null);
     }
   };
+  const dayPickerContent = (
+    <>
+      {pickerError && <p className="day-picker-dialog-error" role="alert">{t(pickerError)}</p>}
+      <div className="day-picker-dialog-grid">
+        {days.map((number) => {
+          const sourceDay = number === day;
+          const selected = pickerMode === "swap" ? number === pendingSwapDay : sourceDay;
+          return <button type="button" key={number} className={`${selected ? "active" : ""} ${pickerMode === "swap" && sourceDay ? "source" : ""}`} disabled={(pickerMode === "swap" && sourceDay) || busyDay !== null} onClick={() => void chooseDay(number)}><small>DAY</small><strong>{displayTripDay(trip, number)}</strong><span>{dayCounts?.get(number) || 0} {t("สถานที่")}</span></button>;
+        })}
+      </div>
+    </>
+  );
   return (
     <div className="timeline-day-picker">
       <div className="timeline-day-picker-actions">
@@ -3973,29 +4043,37 @@ function TimelineDayPicker({
         ) : (
           <div className="timeline-day-picker-static"><strong>{t(`แผนวันที่ ${displayTripDay(trip, day)}`)}</strong></div>
         )}
-        {swapDay && trip.total_days > 1 && <button type="button" className="timeline-swap-days" onClick={() => { setPendingSwapDay(null); setPickerError(""); setPickerMode("swap"); }}><ArrowUpDown size={15} /><span>{t("สลับวัน")}</span></button>}
+        {swapDay && trip.total_days > 1 && <button type="button" className="timeline-swap-days" onClick={() => { setPendingSwapDay(null); setPickerError(""); setPickerMode("swap"); }} aria-label={t("สลับวัน")} title={t("สลับวัน")}><ArrowUpDown size={17} /><span>{t("สลับวัน")}</span></button>}
       </div>
       <p>{dateLabel} · {t(`${itemCount} สถานที่`)}</p>
       {trip.total_days > 1 && pickerMode && typeof document !== "undefined" && createPortal(
-        <div className="day-picker-dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setPickerMode(null)}>
-          <section className="day-picker-dialog" role="dialog" aria-modal="true" aria-label={t(pickerMode === "swap" ? "เลือกวันที่ต้องการสลับ" : "เลือกวัน")}>
-            <i><ArrowUpDown size={20} /></i>
-            <h2>{t(pickerMode === "swap" ? "เลือกวันที่ต้องการสลับ" : "เลือกแผนการเดินทาง")}</h2>
-            <p>{t(pickerMode === "swap" ? `แผนและค่าใช้จ่ายของวันที่ ${displayTripDay(trip, day)} จะสลับกับวันที่เลือก` : "เลือกวันที่ต้องการดูแผนการเดินทาง")}</p>
-            {pickerError && <p className="day-picker-dialog-error" role="alert">{t(pickerError)}</p>}
-            <div className="day-picker-dialog-grid">
-              {days.map((number) => {
-                const sourceDay = number === day;
-                const selected = pickerMode === "swap" ? number === pendingSwapDay : sourceDay;
-                return <button type="button" key={number} className={`${selected ? "active" : ""} ${pickerMode === "swap" && sourceDay ? "source" : ""}`} disabled={(pickerMode === "swap" && sourceDay) || busyDay !== null} onClick={() => void chooseDay(number)}><small>DAY</small><strong>{displayTripDay(trip, number)}</strong><span>{dayCounts?.get(number) || 0} {t("สถานที่")}</span></button>;
-              })}
-            </div>
-            <div className="day-picker-dialog-actions">
-              <button type="button" className="day-picker-dialog-cancel" onClick={() => setPickerMode(null)}>{t("ยกเลิก")}</button>
-              {pickerMode === "swap" && <button type="button" className="day-picker-dialog-confirm" disabled={pendingSwapDay === null || busyDay !== null} onClick={() => void confirmSwap()}>{t(busyDay !== null ? "กำลังสลับ…" : "ยืนยันสลับวัน")}</button>}
-            </div>
-          </section>
-        </div>, document.body)}
+        pickerMode === "swap" ? (
+          <BottomSheet
+            title={t("สลับแผนการเดินทาง")}
+            subtitle={t(`แผนและค่าใช้จ่ายของวันที่ ${displayTripDay(trip, day)} จะสลับกับวันที่เลือก`)}
+            closeLabel={t("ยกเลิก")}
+            onClose={() => setPickerMode(null)}
+            onSubmit={(event) => { event.preventDefault(); void confirmSwap(); }}
+            busy={busyDay !== null}
+            className="timeline-day-sheet"
+            bodyClassName="bottom-sheet-body timeline-day-sheet-body"
+            submitLabel={t(busyDay !== null ? "กำลังสลับ…" : "ยืนยันสลับวัน")}
+            submitDisabled={pendingSwapDay === null || busyDay !== null}
+          >
+            {dayPickerContent}
+          </BottomSheet>
+        ) : (
+          <BottomSheet
+            title={t("เปลี่ยนแผนการเดินทาง")}
+            subtitle={t("เลือกวันที่ต้องการดูแผนการเดินทาง")}
+            closeLabel={t("ยกเลิก")}
+            onClose={() => setPickerMode(null)}
+            className="timeline-day-sheet"
+            bodyClassName="bottom-sheet-body timeline-day-sheet-body"
+          >
+            {dayPickerContent}
+          </BottomSheet>
+        ), document.body)}
     </div>
   );
 }
@@ -4012,10 +4090,15 @@ function TimelineInsertPlaceButton({
   const t = useT();
   const defaultTime = insertionPlanTime(previous, next);
   const label = t(next ? "เพิ่มสถานที่ระหว่างจุด" : "เพิ่มสถานที่ถัดไป");
+  const positionClass = !next
+    ? "is-terminal"
+    : next.transport_mode?.trim()
+      ? "has-transport"
+      : "is-between-cards";
   return (
     <button
       type="button"
-      className={`timeline-insert-place ${next ? "" : "is-terminal"}`}
+      className={`timeline-insert-place ${positionClass}`}
       onClick={() => onClick(defaultTime)}
       aria-label={`${label} · ${defaultTime}`}
       title={`${label} · ${defaultTime}`}
@@ -4147,11 +4230,6 @@ function TripHub({
     if (!response.ok) throw new Error(body.error || t("สลับวันไม่สำเร็จ"));
     await onFlightChanged();
     notify(t("สลับแผนระหว่างวันแล้ว"));
-  };
-  const slots = {
-    morning: t("เช้า"),
-    afternoon: t("บ่าย"),
-    evening: t("เย็น"),
   };
   const nowMinutes = zonedClock(now, trip.timezone).minutes;
   const currentIndex =
@@ -4285,28 +4363,28 @@ function TripHub({
                               } else editPlace(item);
                             }}
                           >
-                            <div className="event-copy">
-                              <span className="event-time">
+                            <span className={`event-image ${item.image_url||item.accommodation_image_url?"":"is-placeholder"}`}>
+                              <Image
+                                src={item.image_url||item.accommodation_image_url||"/travel-postcard-fallback.jpg"}
+                                alt={`รูป ${item.place_name}`}
+                                fill
+                                sizes="108px"
+                                unoptimized
+                              />
+                              <span className="event-time-badge">
                                 {item.accommodation_id
                                   ? "23:30"
                                   : item.start_time?.slice(0, 5) ||
-                                    t("ไม่ระบุเวลา")}{" "}
-                                · {slots[item.time_slot]}
-                                {item.accommodation_id && (
-                                  <>
-                                    {" "}
-                                    · พักที่นี่ คืนที่{" "}
-                                    {item.accommodation_night}/
-                                    {item.accommodation_nights}
-                                  </>
-                                )}
+                                    t("ไม่ระบุเวลา")}
                               </span>
-                              <AccommodationBookingText
-                                platform={item.accommodation_booking_platform}
-                              />
+                            </span>
+                            <div className="event-copy">
                               <div className="timeline-title-row">
                                 <h3>{item.place_name}</h3>
                               </div>
+                              <AccommodationBookingText
+                                platform={item.accommodation_booking_platform}
+                              />
                               <p>
                                 <MapPin size={10} />
                                 {item.address || t("ยังไม่ได้ระบุสถานที่")}
@@ -4329,11 +4407,7 @@ function TripHub({
                                 </p>
                               )}
                             </div>
-                            <span className="event-edit">
-                              <Pencil size={14} />
-                            </span>
                           </button>
-                          <TimelineCostBar item={item} openCost={openCost} />
                           <div className="navigate-actions">
                             {previous && (
                               <a
@@ -4357,17 +4431,9 @@ function TripHub({
                             >
                               <LocateFixed size={17} />
                             </a>
-                            <button
-                              type="button"
-                              className="navigate-point-btn expense-point-btn"
-                              onClick={() => openCost(item)}
-                              aria-label={t("กรอกเงิน")}
-                              title={t("กรอกเงิน")}
-                            >
-                              <ReceiptText size={16} />
-                            </button>
                           </div>
                         </article>
+                        <TimelineExpenseMenu item={item} openCost={openCost} />
                       </div>
                       {index === dayItems.length - 1 && (
                         <TimelineInsertPlaceButton
@@ -4521,11 +4587,6 @@ function TimelineScreen({
     await onChanged();
     notify(t("สลับแผนระหว่างวันแล้ว"));
   };
-  const slots = {
-    morning: t("เช้า"),
-    afternoon: t("บ่าย"),
-    evening: t("เย็น"),
-  };
   const baseDate = localDate(trip.outbound_departure_at, trip.start_date);
   const activeDateLabel = tripDayLabel(baseDate, day);
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -4624,8 +4685,7 @@ function TimelineScreen({
                         {item.accommodation_id
                           ? "23:30"
                           : item.start_time?.slice(0, 5) ||
-                            t("ไม่ระบุเวลา")}{" "}
-                        · {slots[item.time_slot]}
+                            t("ไม่ระบุเวลา")}
                         {item.accommodation_id && (
                           <>
                             {" "}
@@ -6551,7 +6611,7 @@ function SettingsScreen(
 ) {
   const t = (value: string) =>
     props.lang === "EN" ? translateUiText(value) : value;
-  const [profile, setProfile] = useState<AccountProfile | null>(() => getCachedCurrentAccount());
+  const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [storageOpen, setStorageOpen] = useState(false);
   useEffect(() => {
     let active = true;
@@ -6674,11 +6734,18 @@ type CropSource = { file: File; image: HTMLImageElement; url: string };
 export function CoverImagePicker({
   existingUrl,
   onChange,
+  variant = "cover",
+  removable = false,
 }: {
   existingUrl?: string | null;
   onChange: (file: File | null) => void;
+  variant?: "cover" | "square";
+  removable?: boolean;
 }) {
   const t = useT();
+  const square = variant === "square";
+  const outputWidth = square ? 640 : 1600;
+  const outputHeight = square ? 640 : 900;
   const inputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const objectUrls = useRef<string[]>([]);
@@ -6706,12 +6773,12 @@ export function CoverImagePicker({
     if (!source) return { x: 0, y: 0 };
     const scale =
       Math.max(
-        1600 / source.image.naturalWidth,
-        900 / source.image.naturalHeight,
+        outputWidth / source.image.naturalWidth,
+        outputHeight / source.image.naturalHeight,
       ) * nextZoom;
     return {
-      x: Math.max(0, (source.image.naturalWidth * scale - 1600) / 2),
-      y: Math.max(0, (source.image.naturalHeight * scale - 900) / 2),
+      x: Math.max(0, (source.image.naturalWidth * scale - outputWidth) / 2),
+      y: Math.max(0, (source.image.naturalHeight * scale - outputHeight) / 2),
     };
   }
   function clampOffset(next: { x: number; y: number }, nextZoom = zoom) {
@@ -6724,8 +6791,8 @@ export function CoverImagePicker({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !source) return;
-    canvas.width = 1600;
-    canvas.height = 900;
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
     const context = canvas.getContext("2d");
     if (!context) return;
     const scale =
@@ -6743,7 +6810,7 @@ export function CoverImagePicker({
       width,
       height,
     );
-  }, [source, zoom, offset]);
+  }, [source, zoom, offset, outputWidth, outputHeight]);
   function selectFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -6820,7 +6887,7 @@ export function CoverImagePicker({
     const canvas = canvasRef.current;
     if (!start || !canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const ratio = 1600 / rect.width;
+    const ratio = outputWidth / rect.width;
     setOffset(
       clampOffset({
         x: start.offsetX + (event.clientX - start.clientX) * ratio,
@@ -6849,10 +6916,10 @@ export function CoverImagePicker({
     let croppedFile: File;
     try {
       croppedFile = await optimizedCanvasFile(canvas, source.file.name, {
-        quality: 0.86,
-        minQuality: 0.74,
-        targetBytes: 900 * 1024,
-        suffix: "cover",
+        quality: square ? 0.78 : 0.86,
+        minQuality: square ? 0.66 : 0.74,
+        targetBytes: square ? 180 * 1024 : 900 * 1024,
+        suffix: square ? "timeline" : "cover",
       });
     } catch {
       setError("ไม่สามารถ Crop รูปได้");
@@ -6862,6 +6929,7 @@ export function CoverImagePicker({
     objectUrls.current.push(url);
     setPreview(url);
     setCropping(false);
+    setSource(null);
     onChange(croppedFile);
   }
   function cancelCrop() {
@@ -6872,25 +6940,36 @@ export function CoverImagePicker({
     setSource(null);
     if (inputRef.current) inputRef.current.value = "";
   }
+  function removeImage() {
+    pointers.current.clear();
+    dragStart.current = null;
+    pinchStart.current = null;
+    setPreview("");
+    setCropping(false);
+    setSource(null);
+    setError("");
+    if (inputRef.current) inputRef.current.value = "";
+    onChange(null);
+  }
   const cropEditor = cropping ? (
     <div
       className="crop-editor"
       role="dialog"
       aria-modal="true"
-      aria-label={t("ครอบรูปหน้าปก")}
+      aria-label={t(square ? "ครอบรูปสถานที่" : "ครอบรูปหน้าปก")}
     >
       <header>
         <button type="button" onClick={cancelCrop} aria-label={t("ยกเลิก")}>
           <X size={20} />
         </button>
         <div>
-          <strong>{t("ครอบรูปหน้าปก")}</strong>
+          <strong>{t(square ? "ครอบรูปสถานที่" : "ครอบรูปหน้าปก")}</strong>
           <small>{t("ลากด้วยหนึ่งนิ้ว · จีบเข้า–ออกด้วยสองนิ้ว")}</small>
         </div>
         <span />
       </header>
       <main>
-        <div className="fixed-crop-frame">
+        <div className={`fixed-crop-frame ${square ? "is-square" : ""}`}>
           <canvas
             ref={canvasRef}
             onPointerDown={startMove}
@@ -6901,7 +6980,7 @@ export function CoverImagePicker({
           <span className="crop-gesture-hint">
             {t("ลากเพื่อขยับ · จีบเพื่อซูม")}
           </span>
-          <span className="crop-ratio">16 : 9</span>
+          <span className="crop-ratio">{square ? "1 : 1" : "16 : 9"}</span>
         </div>
       </main>
       <footer>
@@ -6913,7 +6992,7 @@ export function CoverImagePicker({
     </div>
   ) : null;
   return (
-    <div className="cover-picker">
+    <div className={`cover-picker ${square ? "square-picker" : ""}`}>
       {!cropping && (
         <label
           className={`upload-field cover-upload ${preview ? "selected" : ""}`}
@@ -6922,7 +7001,7 @@ export function CoverImagePicker({
             {preview && (
               <Image
                 src={preview}
-                alt={t("รูปหน้าปกที่เลือก")}
+                alt={t(square ? "รูปสถานที่ที่เลือก" : "รูปหน้าปกที่เลือก")}
                 fill
                 sizes="36vw"
                 unoptimized
@@ -6939,14 +7018,16 @@ export function CoverImagePicker({
                   {t("เลือกรูปแล้ว")}
                 </>
               ) : (
-                t("เพิ่มรูปหน้าปก")
+                t(square ? "เพิ่มรูปสถานที่" : "เพิ่มรูปหน้าปก")
               )}
             </strong>
             <small>
               {t(
                 preview
                   ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะเพื่อเลือกและครอบรูปใหม่"
-                  : "เลือกภาพ แล้วจัดตำแหน่งในกรอบแนวนอน 16:9",
+                  : square
+                    ? "เลือกภาพ แล้วจัดตำแหน่งในกรอบสี่เหลี่ยมจัตุรัส"
+                    : "เลือกภาพ แล้วจัดตำแหน่งในกรอบแนวนอน 16:9",
               )}
             </small>
           </span>
@@ -6957,6 +7038,16 @@ export function CoverImagePicker({
             onChange={selectFile}
           />
         </label>
+      )}
+      {removable && preview && !cropping && (
+        <button
+          type="button"
+          className="cover-picker-remove"
+          onClick={removeImage}
+          aria-label={t("ลบรูปสถานที่")}
+        >
+          <Trash2 size={16} />
+        </button>
       )}
       {cropEditor && createPortal(cropEditor, document.body)}
       {error && <p className="cover-error">{error}</p>}
@@ -8450,6 +8541,8 @@ function ModalForm({
   const [summaryImageFile, setSummaryImageFile] = useState<File | null>(null);
   const [summaryImagePreview, setSummaryImagePreview] = useState(modal.type==="trip"?modal.trip?.summary_image_url||"":"");
   const [summaryImageRemoved, setSummaryImageRemoved] = useState(false);
+  const [timelineImageFile, setTimelineImageFile] = useState<File | null>(null);
+  const [timelineImageRemoved, setTimelineImageRemoved] = useState(false);
   const [timelineDocuments, setTimelineDocuments] = useState<TimelineDocument[]>([]);
   const [pendingTimelineDocuments, setPendingTimelineDocuments] = useState<PendingTimelineDocument[]>([]);
   const [documentTitle, setDocumentTitle] = useState("");
@@ -8782,6 +8875,15 @@ function ModalForm({
         });
       }
       if (modal.type === "place") {
+        let imageUrl=timelineImageRemoved?null:modal.item?.image_url||null;
+        if(timelineImageFile){
+          const upload=new FormData();upload.set("file",timelineImageFile);
+          const response=await fetch("/api/uploads",{method:"POST",body:upload});
+          const result=await response.json();
+          if(!response.ok)throw new Error(result.error||"อัปโหลดรูปสถานที่ไม่สำเร็จ");
+          if(typeof result.url!=="string"||!result.url)throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");
+          imageUrl=result.url;
+        }
         const stagedTimelineDocuments=[...pendingTimelineDocuments];
         if(documentFile){
           const title=documentTitle.trim();
@@ -8799,6 +8901,7 @@ function ModalForm({
               ? undefined
               : f.get("transportMode"),
             transportNote: f.get("transportNote"),
+            imageUrl,
             costItems: modal.item?.cost_items || [],
             dayNumber: Number(f.get("dayNumber")),
             timeSlot,
@@ -8852,7 +8955,7 @@ function ModalForm({
         backdropClassName="trip-modal-backdrop"
         backdropRef={modalBackdropRef}
         submitLabel={t(saving ? "กำลังบันทึก…" : "บันทึก")}
-        submitDisabled={saving || (!hasChanges && !coverFile && !summaryImageFile && !summaryImageRemoved && !documentFile && pendingTimelineDocuments.length===0)}
+        submitDisabled={saving || (!hasChanges && !coverFile && !summaryImageFile && !summaryImageRemoved && !timelineImageFile && !timelineImageRemoved && !documentFile && pendingTimelineDocuments.length===0)}
         onDelete={canDeleteCurrent && ((modal.type === "place" && modal.item) || (modal.type === "trip" && modal.trip)) ? () => setPendingDelete(true) : undefined}
         deleteDisabled={saving}
         deleteLabel={t(modal.type === "trip" ? "ลบทริป" : "ลบรายการ")}
@@ -9051,6 +9154,17 @@ function ModalForm({
                 items={items}
                 currentItem={placeSource}
               />
+              <CoverImagePicker
+                key={`timeline-image-${placeSource?.id || "new"}`}
+                existingUrl={placeSource?.image_url}
+                variant="square"
+                removable
+                onChange={(file)=>{
+                  setTimelineImageFile(file);
+                  setTimelineImageRemoved(file === null);
+                  checkForChanges();
+                }}
+              />
               {!placeIsFirst && (
                 <div className="field">
                   <label>{t("วิธีเดินทางมาที่นี่")}</label>
@@ -9232,7 +9346,7 @@ export function BNTripApp({
   const router = useRouter();
   const [dark, setDark] = useState(false);
   const lang: Lang = "TH";
-  const [headerProfile, setHeaderProfile] = useState<AccountProfile | null>(() => getCachedCurrentAccount());
+  const [headerProfile, setHeaderProfile] = useState<AccountProfile | null>(null);
   const [trips, setTrips] = useState<Trip[]>(() =>
     cachedDashboardSnapshot?.trips ||
       initialDashboardTrips ||

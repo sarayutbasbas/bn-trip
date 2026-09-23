@@ -24,7 +24,7 @@ Mobile-first PWA สำหรับวางแผนท่องเที่ย
 
 | สภาพแวดล้อม | ฐานข้อมูล | รูปที่อัปโหลด |
 | --- | --- | --- |
-| Local / Docker | PostgreSQL ที่ `localhost:5434` หรือ service `db` | Docker volume `bntrip_uploads` |
+| Docker SIT | PostgreSQL service `db` | Docker volume `bntrip_uploads` |
 | Vercel | PostgreSQL จาก `DATABASE_URL` (แนะนำ Neon pooled URL) | Private Vercel Blob |
 
 `STORAGE_BACKEND` รับค่า `local` หรือ `blob` หากไม่กำหนด แอปจะใช้ `blob` บน Vercel และใช้ `local` ในสภาพแวดล้อมอื่น URL รูปในฐานข้อมูลยังเป็น `/api/uploads/<filename>` เหมือนกันทั้งสองโหมด และ route นี้ตรวจ session ก่อนส่งรูปเสมอ
@@ -101,40 +101,22 @@ Compose จะเปิด `cloudflared` พร้อมกันและตั
 
 หยุดระบบด้วย `docker compose down` ข้อมูลฐานข้อมูลยังคงอยู่ใน named volume `bntrip_postgres_data` หากต้องการลบข้อมูลทดสอบทั้งหมดให้ใช้ `docker compose down -v` (คำสั่งนี้ลบฐานข้อมูลถาวร)
 
-## รันแบบ Development
+## ขั้นตอนทำงานบน SIT
 
-1. เปิด PostgreSQL อย่างเดียว
+ระบบทดสอบใช้ Docker เป็นสภาพแวดล้อมหลัก หลังแก้โค้ดให้ rebuild และเปิด service ด้วยคำสั่ง:
 
-   ```bash
-   docker compose up db -d
-   ```
+```bash
+docker compose up -d --build app cloudflared
+```
 
-2. ติดตั้งแพ็กเกจ
+ตรวจสถานะและ health check หลัง rebuild:
 
-   ```bash
-   npm install
-   ```
+```bash
+docker compose ps
+curl http://localhost:8001/api/health
+```
 
-3. สร้าง `.env.local`
-
-   ```env
-   DATABASE_URL=postgresql://bntrip:change-me-for-production@localhost:5434/bntrip
-   AUTH_SECRET=your-long-random-secret
-   ```
-
-   รหัสผ่านใน URL ต้องตรงกับ `POSTGRES_PASSWORD` ที่ใช้ตอนสร้าง container ครั้งแรก
-
-4. เปิด development server
-
-   ```bash
-   npm run dev
-   ```
-
-5. ตรวจ production build
-
-   ```bash
-   npm run build
-   ```
+หน้าเว็บบน Mac เปิดที่ [http://localhost:8001](http://localhost:8001) ส่วนมือถือใช้ URL ของ Cloudflare Tunnel ที่ตั้งไว้ การเข้าสู่ระบบใช้ Google Account เท่านั้น
 
 ## Deploy ขึ้น Vercel + Neon + Private Blob
 

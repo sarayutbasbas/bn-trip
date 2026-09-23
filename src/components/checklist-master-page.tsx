@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getCachedCurrentAccount, getCurrentAccount } from "@/src/lib/client-account";
+import { getCurrentAccount } from "@/src/lib/client-account";
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
   invalidateClientResourcesContaining,
@@ -85,7 +85,7 @@ export function ChecklistMasterPage({ demo = false }: { demo?: boolean }) {
   const [toast, setToast] = useState("");
   const [showBackTop, setShowBackTop] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [profile, setProfile] = useState<MasterAccount | null>(() => getCachedCurrentAccount());
+  const [profile, setProfile] = useState<MasterAccount | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     formRef: itemFormRef,

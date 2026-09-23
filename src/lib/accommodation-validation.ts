@@ -9,7 +9,7 @@ export const accommodationSchema = z.object({
   name: z.string().trim().min(1).max(180),
   location: z.string().trim().max(1000).default(""),
   bookingPlatform: z
-    .enum(["agoda", "trip.com", "booking.com", "klook"])
+    .enum(["agoda", "trip.com", "booking.com", "klook", "traveloka", "direct"])
     .or(z.literal(""))
     .default(""),
   includesBreakfast: z.boolean().default(false),

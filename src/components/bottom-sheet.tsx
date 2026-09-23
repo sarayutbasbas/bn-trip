@@ -25,6 +25,7 @@ type BottomSheetCommonProps = {
   submitLabel?: ReactNode;
   submitDisabled?: boolean;
   deleteLabel?: string;
+  deleteIcon?: ReactNode;
   onDelete?: () => void;
   deleteDisabled?: boolean;
 };
@@ -84,12 +85,14 @@ export function BottomSheetFooter({
   submitLabel,
   submitDisabled = false,
   deleteLabel = "ลบรายการ",
+  deleteIcon,
   onDelete,
   deleteDisabled = false,
 }: {
   submitLabel: ReactNode;
   submitDisabled?: boolean;
   deleteLabel?: string;
+  deleteIcon?: ReactNode;
   onDelete?: () => void;
   deleteDisabled?: boolean;
 }) {
@@ -107,7 +110,7 @@ export function BottomSheetFooter({
           aria-label={deleteLabel}
           title={deleteLabel}
         >
-          <Trash2 size={18} />
+          {deleteIcon || <Trash2 size={18} />}
         </button>
       ) : null}
     </div>
@@ -131,6 +134,7 @@ export function BottomSheet(props: BottomSheetProps) {
     submitLabel,
     submitDisabled,
     deleteLabel,
+    deleteIcon,
     onDelete,
     deleteDisabled,
     onSubmit,
@@ -173,6 +177,7 @@ export function BottomSheet(props: BottomSheetProps) {
           submitLabel={submitLabel}
           submitDisabled={submitDisabled}
           deleteLabel={deleteLabel}
+          deleteIcon={deleteIcon}
           onDelete={onDelete}
           deleteDisabled={deleteDisabled}
         />
