@@ -1204,6 +1204,8 @@ button.timeline-document-thumbnail { cursor: zoom-in; }
   background: rgba(0,0,0,.94);
 }
 .attachment-preview-overlay > header {
+  position: relative;
+  z-index: 2;
   min-width: 0;
   min-height: calc(58px + env(safe-area-inset-top));
   padding: calc(8px + env(safe-area-inset-top)) 12px 8px 16px;
@@ -1234,8 +1236,90 @@ button.timeline-document-thumbnail { cursor: zoom-in; }
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: #050505;
 }
-.attachment-preview-content img { object-fit: contain; }
+.attachment-preview-image-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: zoom-in;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: contain;
+}
+.attachment-preview-image-viewport.is-zoomed { cursor: grab; }
+.attachment-preview-image-viewport.is-zoomed:active { cursor: grabbing; }
+.attachment-preview-image-canvas {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+  will-change: transform;
+}
+.attachment-preview-image-canvas img {
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.attachment-preview-status {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255,255,255,.78);
+  font-size: 12px;
+}
+.attachment-preview-status.error { color: #ffb4a8; }
+.attachment-pdf-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  overscroll-behavior: contain;
+  background: #303034;
+}
+.attachment-pdf-viewport:active { cursor: grabbing; }
+.attachment-pdf-pages {
+  min-width: 100%;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  transform-origin: top left;
+}
+.attachment-pdf-page {
+  position: relative;
+  width: min(100%, 980px);
+  margin: 0 auto;
+  padding: 0;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(0,0,0,.28);
+}
+.attachment-pdf-page > span {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  right: 7px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(0,0,0,.55);
+  font-size: 8px;
+}
+.attachment-pdf-page canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.attachment-pdf-page p {
+  min-height: 180px;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: #8b1f17;
+  font-size: 11px;
+}
 .attachment-preview-content iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 .document-upload-submit {
   width: 100%;
@@ -4778,7 +4862,7 @@ html.dark .trip-section-nav button.active {
   min-width: 0;
   overflow-x: clip;
   overflow-y: visible;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .timeline-day-swipe-track {
   width: 300%;
@@ -8852,6 +8936,7 @@ html.dark .settings-liquid-glass .card {
 }
 .upload-preview {
   position: relative;
+  padding: 0;
   overflow: hidden;
   width: 36%;
   height: auto;
@@ -8865,16 +8950,25 @@ html.dark .settings-liquid-glass .card {
   background: var(--surface-solid);
   background-size: cover;
   background-position: center;
+  cursor: zoom-in;
 }
 .upload-preview-image {
   object-fit: cover;
   object-position: center;
 }
-.upload-field > span:last-of-type {
+.upload-field > span:last-of-type,
+.upload-select-content {
   min-width: 0;
   max-width: 64%;
   overflow: hidden;
   padding: 14px;
+}
+.upload-select-content {
+  align-self: stretch;
+  flex: 1 1 auto;
+  color: inherit;
+  background: transparent;
+  text-align: left;
 }
 .cover-picker { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; }
 .cover-picker.square-picker {
@@ -8891,7 +8985,8 @@ html.dark .settings-liquid-glass .card {
   aspect-ratio: 1;
   flex-basis: 96px;
 }
-.square-picker .upload-field > span:last-of-type {
+.square-picker .upload-field > span:last-of-type,
+.square-picker .upload-select-content {
   max-width: calc(100% - 96px);
 }
 .cover-picker-remove {

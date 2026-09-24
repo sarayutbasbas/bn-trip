@@ -4756,6 +4756,8 @@ function TripHub({
     number | null
   >(null);
   const [openTimelineExpenseId, setOpenTimelineExpenseId] = useState<string | null>(null);
+  const [timelineImagePreview, setTimelineImagePreview] =
+    useState<AttachmentMediaPreview | null>(null);
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
@@ -4830,6 +4832,7 @@ function TripHub({
   };
   const nowMinutes = zonedClock(now, trip.timezone).minutes;
   return (
+    <>
       <div className="screen trip-hub-screen">
       <div className="trip-cover-region">
         <TripHeader
@@ -4969,7 +4972,23 @@ function TripHub({
                               }
                             }}
                           >
-                            <span className={`event-image ${item.image_url||item.location_image_url||item.accommodation_image_url?"":"is-placeholder"}`}>
+                            <button
+                              type="button"
+                              className={`event-image ${item.image_url||item.location_image_url||item.accommodation_image_url?"":"is-placeholder"}`}
+                              onClick={() =>
+                                setTimelineImagePreview({
+                                  url:
+                                    item.image_url ||
+                                    item.location_image_url ||
+                                    item.accommodation_image_url ||
+                                    "/travel-postcard-fallback.jpg",
+                                  title: item.place_name,
+                                  mimeType: "image/jpeg",
+                                })
+                              }
+                              aria-label={`${t("เปิดรูปเต็มจอ")} ${item.place_name}`}
+                              title={t("เปิดรูปเต็มจอ")}
+                            >
                               <Image
                                 src={item.image_url||item.location_image_url||item.accommodation_image_url||"/travel-postcard-fallback.jpg"}
                                 alt={`รูป ${item.place_name}`}
@@ -4989,7 +5008,7 @@ function TripHub({
                                   </>
                                 )}
                               </span>
-                            </span>
+                            </button>
                             <div className="event-copy">
                               <div className="timeline-title-row">
                                 <h3>{item.place_name}</h3>
@@ -5149,6 +5168,7 @@ function TripHub({
             tripId={trip.id}
             label={t}
             initialTab={activeWorkspaceTab}
+            onDocumentsChanged={() => onFlightChanged()}
           />
         )}
         {view === "plan" && trip.total_days > 1 && (
@@ -5178,6 +5198,14 @@ function TripHub({
         )}
       </div>
       </div>
+      {timelineImagePreview && (
+        <AttachmentPreviewOverlay
+          preview={timelineImagePreview}
+          onClose={() => setTimelineImagePreview(null)}
+          closeLabel={t("ปิดรูป")}
+        />
+      )}
+    </>
   );
 }
 
@@ -7444,6 +7472,7 @@ export function CoverImagePicker({
   const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
   const [source, setSource] = useState<CropSource | null>(null);
   const [preview, setPreview] = useState(existingUrl || "");
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [cropping, setCropping] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -7633,6 +7662,7 @@ export function CoverImagePicker({
     setCropping(false);
     setSource(null);
     setError("");
+    setPreviewOpen(false);
     if (inputRef.current) inputRef.current.value = "";
     onChange(null);
   }
@@ -7679,10 +7709,21 @@ export function CoverImagePicker({
   return (
     <div className={`cover-picker ${square ? "square-picker" : ""}`}>
       {!cropping && (
-        <label
+        <div
           className={`upload-field cover-upload ${preview ? "selected" : ""}`}
         >
-          <span className="upload-preview">
+          <button
+            type="button"
+            className="upload-preview"
+            onClick={() =>
+              preview ? setPreviewOpen(true) : inputRef.current?.click()
+            }
+            aria-label={
+              preview
+                ? t("เปิดรูปเต็มจอ")
+                : t(square ? "เพิ่มรูปสถานที่" : "เพิ่มรูปหน้าปก")
+            }
+          >
             {preview && (
               <Image
                 src={preview}
@@ -7694,8 +7735,13 @@ export function CoverImagePicker({
               />
             )}
             {!preview && <ImagePlus size={24} />}
-          </span>
-          <span>
+          </button>
+          <button
+            type="button"
+            className="upload-select-content"
+            onClick={() => inputRef.current?.click()}
+            aria-label={t(preview ? "เลือกรูปใหม่" : "เลือกไฟล์รูป")}
+          >
             <strong>
               {preview ? (
                 <>
@@ -7709,20 +7755,20 @@ export function CoverImagePicker({
             <small>
               {t(
                 preview
-                  ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะเพื่อเลือกและครอบรูปใหม่"
+                  ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะด้านนี้เพื่อเลือกและครอบรูปใหม่"
                   : square
                     ? "เลือกภาพ แล้วจัดตำแหน่งในกรอบสี่เหลี่ยมจัตุรัส"
                     : "เลือกภาพ แล้วจัดตำแหน่งในกรอบแนวนอน 16:9",
               )}
             </small>
-          </span>
+          </button>
           <input
             ref={inputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
             onChange={selectFile}
           />
-        </label>
+        </div>
       )}
       {removable && preview && !cropping && (
         <button
@@ -7735,6 +7781,17 @@ export function CoverImagePicker({
         </button>
       )}
       {cropEditor && createPortal(cropEditor, document.body)}
+      {previewOpen && preview && (
+        <AttachmentPreviewOverlay
+          preview={{
+            url: preview,
+            title: t(square ? "รูปสถานที่" : "รูปหน้าปก"),
+            mimeType: "image/jpeg",
+          }}
+          onClose={() => setPreviewOpen(false)}
+          closeLabel={t("ปิดรูป")}
+        />
+      )}
       {error && <p className="cover-error">{error}</p>}
     </div>
   );

@@ -18,6 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { BottomSheet } from "@/src/components/bottom-sheet";
+import { AttachmentPreviewOverlay } from "@/src/components/attachment-preview-overlay";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionEmpty } from "@/src/components/trip-section-empty";
@@ -418,6 +419,7 @@ export function TripAccommodations({
   const [paymentSource, setPaymentSource] = useState("cash");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [imageRemoved, setImageRemoved] = useState(false);
   const [imageRemovalPending, setImageRemovalPending] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -594,10 +596,12 @@ export function TripAccommodations({
           ? editing.image_url || ""
           : "",
     );
+    setImagePreviewOpen(false);
   }
   function removeAccommodationImage() {
     setImageFile(null);
     setImagePreview("");
+    setImagePreviewOpen(false);
     setImageRemoved(true);
     setImageRemovalPending(false);
     if (imageInputRef.current) imageInputRef.current.value = "";
@@ -663,6 +667,7 @@ export function TripAccommodations({
     setPaymentSource(item.credit_card_id || "cash");
     setImageFile(null);
     setImagePreview(item.image_url || "");
+    setImagePreviewOpen(false);
     setImageRemoved(false);
     setImageRemovalPending(false);
     if (imageInputRef.current) imageInputRef.current.value = "";
@@ -961,16 +966,26 @@ export function TripAccommodations({
                 <section className="accommodation-image-field">
                   <div><strong>รูปที่พัก</strong><small>ไม่บังคับ · หากไม่เพิ่มจะแสดงรูปเริ่มต้น</small></div>
                   <div className={`cover-picker accommodation-cover-picker ${imagePreview ? "has-image" : ""}`}>
-                    <label className={`upload-field cover-upload ${imagePreview ? "selected" : ""}`}>
-                      <span className="upload-preview">
+                    <div className={`upload-field cover-upload ${imagePreview ? "selected" : ""}`}>
+                      <button
+                        type="button"
+                        className="upload-preview"
+                        onClick={() => imagePreview ? setImagePreviewOpen(true) : imageInputRef.current?.click()}
+                        aria-label={imagePreview ? "เปิดรูปที่พักเต็มจอ" : "เพิ่มรูปที่พัก"}
+                      >
                         {imagePreview ? <Image src={imagePreview} alt="ตัวอย่างรูปที่พัก" fill sizes="36vw" unoptimized className="upload-preview-image" /> : <ImagePlus size={24} />}
-                      </span>
-                      <span>
+                      </button>
+                      <button
+                        type="button"
+                        className="upload-select-content"
+                        onClick={() => imageInputRef.current?.click()}
+                        aria-label={imagePreview ? "เลือกรูปที่พักใหม่" : "เลือกไฟล์รูปที่พัก"}
+                      >
                         <strong>{imagePreview ? <><CheckCircle2 size={15} />เลือกรูปแล้ว</> : "เพิ่มรูปที่พัก"}</strong>
-                        <small>{imagePreview ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะเพื่อเลือกรูปใหม่" : "เลือกภาพสำหรับใช้เป็นรูปที่พัก · รองรับ JPG, PNG และ WebP"}</small>
-                      </span>
+                        <small>{imagePreview ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะด้านนี้เพื่อเลือกรูปใหม่" : "เลือกภาพสำหรับใช้เป็นรูปที่พัก · รองรับ JPG, PNG และ WebP"}</small>
+                      </button>
                       <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectAccommodationImage(event.target.files?.[0] || null)} />
-                    </label>
+                    </div>
                     {imagePreview && <button type="button" className="cover-picker-remove" onClick={() => setImageRemovalPending(true)} aria-label="ลบรูปที่พัก" title="ลบรูปที่พัก"><Trash2 size={16} /></button>}
                   </div>
                 </section>
@@ -1320,6 +1335,13 @@ export function TripAccommodations({
             <div className="confirm-actions"><button type="button" className="confirm-cancel" onClick={() => setImageRemovalPending(false)}>ยกเลิก</button><button type="button" className="confirm-delete" onClick={removeAccommodationImage}>ลบรูป</button></div>
           </div>
         </div>
+      )}
+      {imagePreviewOpen && imagePreview && (
+        <AttachmentPreviewOverlay
+          preview={{ url: imagePreview, title: "รูปที่พัก", mimeType: "image/jpeg" }}
+          onClose={() => setImagePreviewOpen(false)}
+          closeLabel="ปิดรูปที่พัก"
+        />
       )}
     </section>
   );

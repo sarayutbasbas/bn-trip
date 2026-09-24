@@ -157,10 +157,12 @@ export function TripWorkspace({
   tripId,
   label,
   initialTab = "checklist",
+  onDocumentsChanged,
 }: {
   tripId: string;
   label: (value: string) => string;
   initialTab?: "checklist" | "documents";
+  onDocumentsChanged?: () => void | Promise<void>;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -248,6 +250,15 @@ export function TripWorkspace({
     window.dispatchEvent(
       new CustomEvent("trip-completion-changed", { detail: { tripId } }),
     );
+  }
+  async function syncDocumentConsumers() {
+    signalCompletionChanged();
+    try {
+      await onDocumentsChanged?.();
+    } catch {
+      // The document is already saved. A later trip refresh will retry the
+      // supplemental Timeline sync without showing a false save error.
+    }
   }
   function invalidateWorkspaceTabs(
     ...tabs: Array<"checklist" | "documents" | "history">
@@ -638,6 +649,7 @@ export function TripWorkspace({
         insuranceResourceKey(tripId),
       );
       await load("documents");
+      await syncDocumentConsumers();
       notify("อัปโหลดไฟล์แล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "อัปโหลดไม่สำเร็จ");
@@ -668,7 +680,7 @@ export function TripWorkspace({
         flightResourceKey(tripId),
         insuranceResourceKey(tripId),
       );
-      signalCompletionChanged();
+      await syncDocumentConsumers();
       notify("ลบไฟล์แล้ว");
     } catch (reason) {
       await load("documents");
@@ -772,6 +784,7 @@ export function TripWorkspace({
         insuranceResourceKey(tripId),
       );
       await load("documents");
+      await syncDocumentConsumers();
       notify("แก้ไขไฟล์แล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "แก้ไขเอกสารไม่สำเร็จ");
