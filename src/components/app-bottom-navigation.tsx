@@ -20,7 +20,7 @@ const NAV_VISIBLE_PATHS = new Set([
   "/", "/trips", "/settings", "/analytics", "/badges", "/trip-ideas",
 ]);
 
-type NavIconName = "home" | "trip" | "wishlist" | "badge" | "profile";
+type NavIconName = "home" | "trip" | "wishlist" | "stats" | "profile";
 
 function NavIcon({ name, filled, ...props }: SVGProps<SVGSVGElement> & {
   name: NavIconName;
@@ -49,17 +49,17 @@ function NavIcon({ name, filled, ...props }: SVGProps<SVGSVGElement> & {
       ) : (
         <path {...common} d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
       ) : null}
-      {name === "badge" ? filled ? (
+      {name === "stats" ? filled ? (
         <>
-          <path fill="currentColor" stroke="none" d="m7.6 11.8-1.5 9.4 5.9-3.1 5.9 3.1-1.5-9.4z" />
-          <circle cx="12" cy="8" r="6.2" fill="currentColor" stroke="none" />
-          <path d="m12 4.8.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 6.9l2-.3z" fill="white" stroke="none" />
+          <rect x="3" y="13" width="4.5" height="8" rx="1.4" fill="currentColor" stroke="none" />
+          <rect x="9.75" y="8" width="4.5" height="13" rx="1.4" fill="currentColor" stroke="none" />
+          <rect x="16.5" y="3" width="4.5" height="18" rx="1.4" fill="currentColor" stroke="none" />
         </>
       ) : (
         <>
-          <circle {...common} cx="12" cy="8" r="6.2" />
-          <path {...common} d="m7.6 12-1.5 9.2 5.9-3.1 5.9 3.1-1.5-9.2" />
-          <path {...common} d="m12 4.8.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2L9.1 6.9l2-.3z" />
+          <rect {...common} x="3" y="13" width="4.5" height="8" rx="1.4" />
+          <rect {...common} x="9.75" y="8" width="4.5" height="13" rx="1.4" />
+          <rect {...common} x="16.5" y="3" width="4.5" height="18" rx="1.4" />
         </>
       ) : null}
       {name === "profile" ? filled ? (
@@ -109,8 +109,8 @@ export function AppBottomNavigation() {
     { label: "หน้าแรก", href: "/", icon: "home" as const, active: pathname === "/" },
     { label: "ทริป", href: "/trips", icon: "trip" as const, active: pathname === "/trips" },
     { label: "เล็งไว้", href: "/trip-ideas", icon: "wishlist" as const, active: pathname === "/trip-ideas" },
-    { label: "เข็มกลัด", href: "/badges", icon: "badge" as const, active: pathname === "/badges" },
-    { label: "ฉัน", href: "/settings", icon: "profile" as const, active: pathname.startsWith("/settings") || pathname === "/analytics" },
+    { label: "สถิติ", href: "/analytics", icon: "stats" as const, active: pathname === "/analytics" || pathname === "/badges" },
+    { label: "ฉัน", href: "/settings", icon: "profile" as const, active: pathname.startsWith("/settings") },
   ], [pathname]);
   const activeIndex = Math.max(0, items.findIndex((item) => item.active));
   const navVisible = NAV_VISIBLE_PATHS.has(pathname);
@@ -345,7 +345,7 @@ export function AppBottomNavigation() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => ["/", "/trips", "/trip-ideas", "/badges", "/settings"].forEach((href) => {
+    const timer = setTimeout(() => ["/", "/trips", "/trip-ideas", "/analytics", "/settings"].forEach((href) => {
       if (href !== pathname) router.prefetch(href);
     }), 160);
     return () => clearTimeout(timer);

@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { TravelBadgesPage } from "@/src/components/travel-badges-page";
 import { getSession } from "@/src/lib/auth";
-import { loadTravelBadges } from "@/src/lib/trip-loaders";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -13,6 +11,5 @@ export const metadata: Metadata = {
 export default async function BadgesPage() {
   const session = await getSession();
   if (!session) redirect("/");
-  const collection = await loadTravelBadges(session);
-  return <TravelBadgesPage collection={collection} />;
+  redirect("/analytics#travel-badges");
 }

@@ -939,7 +939,7 @@ export function TripAccommodations({
       {editing && (
         <BottomSheet
           title={edit ? "แก้ไขที่พัก" : "เพิ่มที่พัก"}
-          subtitle="เลือกช่วงวันที่เข้าพัก ระบบจะแสดงคืนที่ 1/N ใน Timeline"
+          subtitle="เลือกช่วงวันที่เข้าพัก ระบบจะแสดงคืนที่ 1/N"
           onClose={() => setEditing(null)}
           onSubmit={save}
           busy={saving}

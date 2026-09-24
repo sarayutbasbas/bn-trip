@@ -63,6 +63,7 @@ import {
 import {
   createCustomTripDestination,
   TRIP_DESTINATION_OPTIONS,
+  type TravelBadgeCollection,
   type TripDestinationOption,
   type TripDestinationSelection,
 } from "@/src/lib/travel-badges";
@@ -154,6 +155,19 @@ const TripInsurance = dynamic(
 const TripAccommodations = dynamic(
   () => import("@/src/components/trip-accommodations").then((module) => module.TripAccommodations),
   { loading: () => <TripSectionSkeleton variant="accommodations" /> },
+);
+const TravelBadgesPage = dynamic(
+  () =>
+    import("@/src/components/travel-badges-page").then(
+      (module) => module.TravelBadgesPage,
+    ),
+  {
+    loading: () => (
+      <div className="analytics-badges-loading" aria-label="กำลังโหลดเข็มกลัด">
+        <span /><span /><span />
+      </div>
+    ),
+  },
 );
 
 type Screen =
@@ -375,6 +389,34 @@ export type Itinerary = {
   location_image_url?: string | null;
   documents?: TimelineDocument[];
 };
+
+function timelineImageUsage(item: Itinerary, items: Itinerary[]) {
+  const address = item.address?.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+  const sameLocation = (candidate: Itinerary) =>
+    Boolean(address) &&
+    candidate.address?.trim().toLocaleLowerCase().replace(/\s+/g, " ") === address;
+  if (item.image_url) {
+    const followers = items.filter((candidate) =>
+      candidate.id !== item.id &&
+      !candidate.image_url &&
+      sameLocation(candidate) &&
+      candidate.location_image_url === item.image_url,
+    ).length;
+    return { kind: "own" as const, followers, sourceName: item.place_name };
+  }
+  const inheritedUrl = item.location_image_url || item.accommodation_image_url;
+  if (!inheritedUrl) return { kind: "default" as const, followers: 0, sourceName: "" };
+  const source = items.find((candidate) =>
+    candidate.id !== item.id &&
+    sameLocation(candidate) &&
+    candidate.image_url === inheritedUrl,
+  );
+  return {
+    kind: "shared" as const,
+    followers: 0,
+    sourceName: source?.place_name || "ที่พัก",
+  };
+}
 type Modal =
   | { type: "trip"; trip?: Trip; preset?: TripCreationPreset }
   | {
@@ -2924,6 +2966,37 @@ function NearbyFlights({
   );
 }
 
+function TravelBadgeProgressCard({
+  unlocked,
+  total,
+  onClick,
+}: {
+  unlocked: number;
+  total: number;
+  onClick: () => void;
+}) {
+  const t = useT();
+  const progress = Math.round((unlocked / Math.max(1, total)) * 100);
+  return (
+    <section className="dashboard-badge-section" aria-label={t("เข็มกลัดท่องเที่ยว")}>
+      <button type="button" onClick={onClick} aria-label={t("เปิดเข็มกลัดท่องเที่ยว")}>
+        <span className="dashboard-badge-ring" style={{ "--badge-progress": `${progress * 3.6}deg` } as CSSProperties}>
+          <b>{progress}%</b>
+        </span>
+        <span className="dashboard-badge-copy">
+          <small>{t("สะสมแล้ว")}</small>
+          <strong>
+            <span className="dashboard-badge-count-current">{unlocked} /</span>{" "}
+            <span className="dashboard-badge-count-total">{total}</span>
+          </strong>
+          <em>{t("ออกเดินทางต่อไป เก็บให้ครบทุกที่เลย!")}</em>
+        </span>
+        <Image src="/badge-progress-mountains-v2.png" alt="" width={2043} height={770} className="dashboard-badge-art" aria-hidden="true" />
+      </button>
+    </section>
+  );
+}
+
 function Dashboard({
   trips,
   favoriteAccommodations,
@@ -3023,9 +3096,6 @@ function Dashboard({
   const visitedDestinations = counts.destinations ?? 0;
   const unlockedBadges = counts.badges_unlocked ?? 0;
   const totalBadges = counts.badges_total ?? 0;
-  const badgeProgress = Math.round(
-    (unlockedBadges / Math.max(1, totalBadges)) * 100,
-  );
   const heading = (
     kicker: string,
     title: string,
@@ -3156,32 +3226,7 @@ function Dashboard({
           )}
         </>
       )}
-      <section className="dashboard-badge-section" aria-label={t("เข็มกลัดท่องเที่ยว")}>
-        <button type="button" onClick={viewBadges} aria-label={t("เปิดเข็มกลัดท่องเที่ยว")}>
-          <span
-            className="dashboard-badge-ring"
-            style={{ "--badge-progress": `${badgeProgress * 3.6}deg` } as CSSProperties}
-          >
-            <b>{badgeProgress}%</b>
-          </span>
-          <span className="dashboard-badge-copy">
-            <small>{t("สะสมแล้ว")}</small>
-            <strong>
-              <span className="dashboard-badge-count-current">{unlockedBadges} /</span>{" "}
-              <span className="dashboard-badge-count-total">{totalBadges}</span>
-            </strong>
-            <em>{t("ออกเดินทางต่อไป เก็บให้ครบทุกที่เลย!")}</em>
-          </span>
-          <Image
-            src="/badge-progress-mountains-v2.png"
-            alt=""
-            width={2043}
-            height={770}
-            className="dashboard-badge-art"
-            aria-hidden="true"
-          />
-        </button>
-      </section>
+      <TravelBadgeProgressCard unlocked={unlockedBadges} total={totalBadges} onClick={viewBadges} />
       <section className="dashboard-memory-stats" aria-label={t("ความทรงจำของเรา")}>
         <div>
           <button type="button" onClick={viewAnalytics}>
@@ -3370,24 +3415,22 @@ function AnalyticsYearTrend({
 
 function TravelAnalyticsDashboard({
   datasets,
+  badges,
+  refreshRequestRef,
+  notify,
 }: {
   datasets: TravelAnalyticsCollection;
+  badges: TravelBadgeCollection;
+  refreshRequestRef: { current: (() => Promise<void>) | null };
+  notify: (message: string) => void;
 }) {
   const t = useT();
   const lang = useContext(LanguageContext);
   const [analytics, setAnalytics] = useState(datasets);
   const [scope, setScope] = useState<TravelAnalyticsScope>("all");
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshMessage, setRefreshMessage] = useState("");
-  const refreshMessageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const data = analytics[scope];
-  useEffect(
-    () => () => {
-      if (refreshMessageTimer.current) clearTimeout(refreshMessageTimer.current);
-    },
-    [],
-  );
-  const refreshAnalytics = async () => {
+  const refreshAnalytics = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
     try {
@@ -3397,22 +3440,23 @@ function TravelAnalyticsDashboard({
         throw new Error(body.error || "รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
       }
       setAnalytics(body as TravelAnalyticsCollection);
-      setRefreshMessage("อัปเดตสถิติล่าสุดแล้ว");
+      notify(t("อัปเดตสถิติล่าสุดแล้ว"));
     } catch (error) {
-      setRefreshMessage(
+      notify(t(
         error instanceof Error
           ? error.message
           : "รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง",
-      );
+      ));
     } finally {
       setRefreshing(false);
-      if (refreshMessageTimer.current) clearTimeout(refreshMessageTimer.current);
-      refreshMessageTimer.current = setTimeout(
-        () => setRefreshMessage(""),
-        2400,
-      );
     }
-  };
+  }, [notify, refreshing, t]);
+  useEffect(() => {
+    refreshRequestRef.current = refreshAnalytics;
+    return () => {
+      if (refreshRequestRef.current === refreshAnalytics) refreshRequestRef.current = null;
+    };
+  }, [refreshAnalytics, refreshRequestRef]);
   const money = (value: number) => `฿${bahtFormat(value)}`;
   const maxCountryTrips = Math.max(
     1,
@@ -3429,56 +3473,45 @@ function TravelAnalyticsDashboard({
   const topRoute = flightInsights.routes[0];
   const locationCount = scope === "domestic" ? data.totals.destinations : data.totals.countries;
   const scopeFilter = (
-    <nav className="analytics-scope-filter" aria-label={t("กรองสถิติการเดินทาง")}>
+    <nav className="trip-type-options status-filter analytics-type-options" aria-label={t("กรองสถิติการเดินทาง")}>
       {([
-        ["all", "ทั้งหมด"],
-        ["domestic", "ภายในประเทศ"],
-        ["international", "ต่างประเทศ"],
-      ] as const).map(([value, label]) => (
+        ["all", "ทั้งหมด", Luggage],
+        ["domestic", "ภายในประเทศ", MapPin],
+        ["international", "ต่างประเทศ", Globe2],
+      ] as const).map(([value, label, Icon]) => (
         <button
-          className={scope === value ? "active" : ""}
+          className={`${scope === value ? "active" : ""} status-${value}`}
           key={value}
           type="button"
           aria-pressed={scope === value}
           onClick={() => setScope(value)}
         >
-          {t(label)}
+          <Icon size={24} /><span><strong>{t(label)}</strong></span>
         </button>
       ))}
     </nav>
   );
-  const refreshButton = (
-    <button
-      className="analytics-refresh-fab"
-      type="button"
-      onClick={() => void refreshAnalytics()}
-      disabled={refreshing}
-      aria-label={t(refreshing ? "กำลังอัปเดต…" : "รีเฟรช")}
-      title={t(refreshing ? "กำลังอัปเดต…" : "รีเฟรช")}
-    >
-      <RefreshCw className={refreshing ? "analytics-refresh-spinning" : ""} size={21} />
-    </button>
+  const badgeTotals = Object.values(badges.totals).reduce(
+    (total, category) => ({ unlocked: total.unlocked + category.unlocked, count: total.count + category.total }),
+    { unlocked: 0, count: 0 },
   );
-  const analyticsHero = (
-    <header className="analytics-memory-heading">
-      <div>
-        <h1>{t("ความทรงจำของเรา")} <MapIcon size={24} /></h1>
-        <p>{t("เก็บทุกการเดินทาง ให้เป็นเรื่องราวที่สวยงามเสมอ")} <Heart size={15} fill="currentColor" /></p>
-      </div>
-      <span aria-hidden="true">Collect<br />Trips<br /><b>Not Things ♡</b></span>
-      {refreshButton}
-    </header>
-  );
+  const badgeSection = <>
+    <TravelBadgeProgressCard
+      unlocked={badgeTotals.unlocked}
+      total={badgeTotals.count}
+      onClick={() => document.querySelector(".badge-cabinet-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+    />
+    <TravelBadgesPage collection={badges} embedded />
+  </>;
+  const analyticsHero = <PageIntro
+    title={t("ความทรงจำของเรา")}
+    titleIcon={<Heart size={22} fill="currentColor" />}
+    subtitle={t("เก็บทุกการเดินทาง ให้เป็นเรื่องราวที่สวยงามเสมอ")}
+  />;
 
   if (!data.totals.trips)
     return (
       <div className="screen analytics-screen analytics-redesign">
-        {refreshMessage && (
-          <div className="toast toast-success" role="status" aria-live="polite">
-            <CheckCircle2 size={17} />
-            {t(refreshMessage)}
-          </div>
-        )}
         {analyticsHero}
         {scopeFilter}
         <article className="card analytics-empty">
@@ -3488,17 +3521,12 @@ function TravelAnalyticsDashboard({
             {t("เมื่อทริปจบแล้ว สถิติจะปรากฏที่หน้านี้โดยอัตโนมัติ")}
           </p>
         </article>
+        {badgeSection}
       </div>
     );
 
   return (
     <div className="screen analytics-screen analytics-redesign">
-      {refreshMessage && (
-        <div className="toast toast-success" role="status" aria-live="polite">
-          <CheckCircle2 size={17} />
-          {t(refreshMessage)}
-        </div>
-      )}
       {analyticsHero}
 
       {scopeFilter}
@@ -3554,6 +3582,7 @@ function TravelAnalyticsDashboard({
           <article className="is-mint"><i><Navigation size={20} /></i><span><small>{t("เส้นทางที่บินบ่อย")}</small><strong>{topRoute?.route || t("ยังไม่มีข้อมูล")}</strong><em>{topRoute ? `${topRoute.flights} ${t("เที่ยว")}` : "—"}</em></span></article>
         </div>
       </section>
+      {badgeSection}
     </div>
   );
 }
@@ -4898,6 +4927,7 @@ function TripHub({
               <div className="timeline editable-timeline">
                 {dayItems.map((item, index) => {
                   const itemCosts = item.cost_items || [];
+                  const imageUsage = timelineImageUsage(item, items);
                   const itemExpenseTotal = itemCosts.reduce(
                     (total, cost) => total + Number(cost.value || 0),
                     0,
@@ -4986,7 +5016,7 @@ function TripHub({
                                   mimeType: "image/jpeg",
                                 })
                               }
-                              aria-label={`${t("เปิดรูปเต็มจอ")} ${item.place_name}`}
+                              aria-label={`${t("เปิดรูปเต็มจอ")} ${item.place_name}${imageUsage.kind === "shared" ? ` · ใช้รูปจาก ${imageUsage.sourceName}` : imageUsage.followers > 0 ? ` · รูปต้นทาง มีอีก ${imageUsage.followers} รายการใช้รูปนี้` : ""}`}
                               title={t("เปิดรูปเต็มจอ")}
                             >
                               <Image
@@ -5008,6 +5038,17 @@ function TripHub({
                                   </>
                                 )}
                               </span>
+                              {imageUsage.kind === "shared" || imageUsage.followers > 0 ? (
+                                <span
+                                  className={`event-image-source-badge ${imageUsage.kind === "own" ? "is-source" : "is-shared"}`}
+                                  title={imageUsage.kind === "own"
+                                    ? `รูปต้นทาง · หากเปลี่ยนรูป รายการอีก ${imageUsage.followers} รายการจะเปลี่ยนตาม`
+                                    : `ใช้รูปจาก ${imageUsage.sourceName} · จะเปลี่ยนตามรูปต้นทาง`}
+                                >
+                                  <Images size={10} />
+                                  {imageUsage.kind === "own" ? "รูปต้นทาง" : "ตามรูปต้นทาง"}
+                                </span>
+                              ) : null}
                             </button>
                             <div className="event-copy">
                               <div className="timeline-title-row">
@@ -9303,6 +9344,7 @@ function ModalForm({
   const [selectedLocationImage, setSelectedLocationImage] = useState<
     string | null | undefined
   >(undefined);
+  const [locationAddressEdited, setLocationAddressEdited] = useState(false);
   const [timelineDocuments, setTimelineDocuments] = useState<TimelineDocument[]>([]);
   const [pendingTimelineDocuments, setPendingTimelineDocuments] = useState<PendingTimelineDocument[]>([]);
   const [documentTitle, setDocumentTitle] = useState("");
@@ -9499,6 +9541,26 @@ function ModalForm({
   const [outboundDate, setOutboundDate] = useState(initialOutboundDate);
   const [returnDate, setReturnDate] = useState(initialReturnDate);
   const placeSource = modal.type === "place" ? modal.item : undefined;
+  const currentImageUsage = placeSource
+    ? timelineImageUsage(placeSource, items)
+    : null;
+  const hasOwnTimelineImage = Boolean(
+    timelineImageFile || (placeSource?.image_url && !timelineImageRemoved),
+  );
+  const inheritedImageUrl = selectedLocationImage !== undefined
+    ? selectedLocationImage
+    : locationAddressEdited
+      ? null
+      : placeSource?.location_image_url || placeSource?.accommodation_image_url || null;
+  const inheritedImageSource = inheritedImageUrl
+    ? items.find((item) => item.image_url === inheritedImageUrl)
+      || items.find((item) => item.accommodation_image_url === inheritedImageUrl)
+    : null;
+  const timelineImageFollowers = locationAddressEdited
+    ? 0
+    : currentImageUsage?.kind === "own"
+      ? currentImageUsage.followers
+      : 0;
   const [placeName, setPlaceName] = useState(placeSource?.place_name || "");
   const initialPlaceDay =
     modal.type === "place"
@@ -9942,31 +10004,18 @@ function ModalForm({
                       imageSource?.accommodation_image_url ||
                       null,
                   );
+                  setLocationAddressEdited(Boolean(
+                    placeSource &&
+                    item.address?.trim().toLocaleLowerCase().replace(/\s+/g, " ") !==
+                      placeSource.address?.trim().toLocaleLowerCase().replace(/\s+/g, " "),
+                  ));
                   requestAnimationFrame(checkForChanges);
                 }}
-                onAddressChange={() => setSelectedLocationImage(undefined)}
+                onAddressChange={() => {
+                  setSelectedLocationImage(undefined);
+                  setLocationAddressEdited(true);
+                }}
               />
-              {selectedLocationImage !== undefined && (
-                <p
-                  className={`timeline-location-image-status ${
-                    selectedLocationImage ? "has-image" : "uses-default"
-                  }`}
-                  role="status"
-                >
-                  {selectedLocationImage ? (
-                    <CheckCircle2 size={15} />
-                  ) : (
-                    <ImagePlus size={15} />
-                  )}
-                  <span>
-                    {t(
-                      selectedLocationImage
-                        ? "พบรูปของโลเคชันนี้แล้ว ระบบจะนำมาใช้ให้อัตโนมัติ"
-                        : "โลเคชันนี้ยังไม่มีรูป ระบบจะใช้รูปเริ่มต้น",
-                    )}
-                  </span>
-                </p>
-              )}
               <CoverImagePicker
                 key={`timeline-image-${placeSource?.id || "new"}`}
                 existingUrl={placeSource?.image_url}
@@ -9978,6 +10027,23 @@ function ModalForm({
                   checkForChanges();
                 }}
               />
+              {(placeSource || selectedLocationImage !== undefined || timelineImageFile) && (
+                <p
+                  className={`timeline-location-image-status ${hasOwnTimelineImage ? "is-own-image" : inheritedImageUrl ? "has-image" : "uses-default"}`}
+                  role="status"
+                >
+                  {hasOwnTimelineImage || inheritedImageUrl ? <Images size={15} /> : <ImagePlus size={15} />}
+                  <span>
+                    {hasOwnTimelineImage
+                      ? timelineImageFollowers > 0
+                        ? `รูปต้นทางของโลเคชันนี้ · อีก ${timelineImageFollowers} รายการที่ยังไม่มีรูปของตัวเองจะเปลี่ยนตามเมื่อเปลี่ยนรูปนี้`
+                        : "รูปของรายการนี้เอง · จะไม่เปลี่ยนตามรูปจากรายการอื่น"
+                      : inheritedImageUrl
+                        ? `ใช้รูปจาก ${inheritedImageSource?.place_name || "โลเคชันนี้"} · หากรูปต้นทางเปลี่ยน รายการนี้จะเปลี่ยนตาม จนกว่าจะเพิ่มรูปของตัวเอง`
+                        : "โลเคชันนี้ยังไม่มีรูป ระบบจะใช้รูปเริ่มต้น"}
+                  </span>
+                </p>
+              )}
               {!placeIsFirst && (
                 <div className="field">
                   <label>{t("วิธีเดินทางมาที่นี่")}</label>
@@ -10097,6 +10163,7 @@ export function BNTripApp({
   accommodationId,
   initialDashboard,
   initialAnalytics,
+  initialBadges,
   initialAlbumTrips,
   initialTrip,
   initialItineraries,
@@ -10132,6 +10199,7 @@ export function BNTripApp({
     countryHighlights: CountryHighlight[];
   };
   initialAnalytics?: TravelAnalyticsCollection;
+  initialBadges?: TravelBadgeCollection;
   initialAlbumTrips?: Trip[];
   initialTrip?: Trip | null;
   initialItineraries?: Itinerary[];
@@ -10161,6 +10229,8 @@ export function BNTripApp({
     : null;
   const router = useRouter();
   const [dark, setDark] = useState(false);
+  const analyticsRefreshRef = useRef<(() => Promise<void>) | null>(null);
+  const [refreshingAnalytics, setRefreshingAnalytics] = useState(false);
   const lang: Lang = "TH";
   const [headerProfile, setHeaderProfile] = useState<AccountProfile | null>(null);
   const [trips, setTrips] = useState<Trip[]>(() =>
@@ -10905,12 +10975,12 @@ export function BNTripApp({
         router.push(status === "all" ? "/trips" : `/trips?status=${status}`)
       }
       viewAnalytics={() => router.push("/analytics")}
-      viewBadges={() => router.push("/badges")}
+      viewBadges={() => router.push("/analytics#travel-badges")}
       viewTripIdeas={() => router.push("/trip-ideas")}
       notify={flash}
     />
-  ) : page === "analytics" && initialAnalytics ? (
-    <TravelAnalyticsDashboard datasets={initialAnalytics} />
+  ) : page === "analytics" && initialAnalytics && initialBadges ? (
+    <TravelAnalyticsDashboard datasets={initialAnalytics} badges={initialBadges} refreshRequestRef={analyticsRefreshRef} notify={flash} />
   ) : page === "album" ? (
     <TripsDirectory
       initialFilters={{
@@ -11121,7 +11191,7 @@ export function BNTripApp({
     />
   );
   const label = (value: string) => value;
-  const mainNavigationPage = page === "dashboard" || page === "trips" || page === "settings";
+  const mainNavigationPage = page === "dashboard" || page === "trips" || page === "analytics" || page === "settings";
   const tripNavigationPage =
     Boolean(selected) && ["trip", "timeline", "expenses"].includes(page);
   const refreshingMainPage =
@@ -11157,17 +11227,21 @@ export function BNTripApp({
                   )}
                   {mainNavigationPage && (
                     <>
-                      <button className="icon-btn home-refresh-btn" type="button" onClick={() => {
+                      {page !== "settings" ? <button className="icon-btn home-refresh-btn" type="button" onClick={() => {
                         if (page === "dashboard") void refreshDashboard();
                         else if (page === "trips") {
                           if (refreshingTripDirectory) return;
                           tripDirectoryRefreshRequestedRef.current = true;
                           setRefreshingTripDirectory(true);
                           setTripDirectoryRefreshToken((value) => value + 1);
+                        } else if (page === "analytics") {
+                          if (refreshingAnalytics || !analyticsRefreshRef.current) return;
+                          setRefreshingAnalytics(true);
+                          void analyticsRefreshRef.current().finally(() => setRefreshingAnalytics(false));
                         } else router.refresh();
-                      }} disabled={refreshingMainPage} aria-label={label(refreshingMainPage ? "กำลังอัปเดต…" : "รีเฟรช")} title={label(refreshingMainPage ? "กำลังอัปเดต…" : "รีเฟรช")}>
-                        <RefreshCw className={refreshingMainPage ? "analytics-refresh-spinning" : ""} size={24} />
-                      </button>
+                      }} disabled={refreshingMainPage || refreshingAnalytics} aria-label={label(refreshingMainPage || refreshingAnalytics ? "กำลังอัปเดต…" : "รีเฟรช")} title={label(refreshingMainPage || refreshingAnalytics ? "กำลังอัปเดต…" : "รีเฟรช")}>
+                        <RefreshCw className={refreshingMainPage || refreshingAnalytics ? "analytics-refresh-spinning" : ""} size={24} />
+                      </button> : null}
                       <InvitationNotifications onChanged={async()=>{
                         tripListCache=null;
                         dashboardSnapshotCache=null;

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { House, Images, Navigation, UserRound } from "lucide-react";
+import { ChartNoAxesColumnIncreasing, Heart, House, Map, UserRound } from "lucide-react";
 import { LiquidGlass, type RenderingDiagnostics } from "simple-liquid-glass";
 
 const NAV_VISIBLE_PATHS = new Set([
@@ -39,9 +39,10 @@ export function LiquidAppBottomNavigation() {
   });
   const items = useMemo(() => [
     { label: "หน้าแรก", href: "/", icon: House, active: pathname === "/" },
-    { label: "ทริป", href: "/trips", icon: Navigation, active: pathname === "/trips" || pathname.startsWith("/trips/") || pathname.startsWith("/trip-ideas") },
-    { label: "ความทรงจำ", href: "/album", icon: Images, active: pathname === "/album" },
-    { label: "ฉัน", href: "/settings", icon: UserRound, active: pathname.startsWith("/settings") || pathname === "/analytics" || pathname === "/badges" },
+    { label: "ทริป", href: "/trips", icon: Map, active: pathname === "/trips" || pathname.startsWith("/trips/") },
+    { label: "เล็งไว้", href: "/trip-ideas", icon: Heart, active: pathname.startsWith("/trip-ideas") },
+    { label: "สถิติ", href: "/analytics", icon: ChartNoAxesColumnIncreasing, active: pathname === "/analytics" || pathname === "/badges" },
+    { label: "ฉัน", href: "/settings", icon: UserRound, active: pathname.startsWith("/settings") },
   ], [pathname]);
   const activeIndex = Math.max(0, items.findIndex((item) => item.active));
   const [pendingNavigation, setPendingNavigation] = useState<{ index: number; href: string; sourcePath: string } | null>(null);

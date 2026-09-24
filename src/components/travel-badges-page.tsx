@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -455,7 +455,13 @@ function BadgeGridCard({
   );
 }
 
-export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollection }) {
+export function TravelBadgesPage({
+  collection,
+  embedded = false,
+}: {
+  collection: TravelBadgeCollection;
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [category, setCategory] = useState<BadgeFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -550,7 +556,6 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
     setShowSelectedDetails(false);
   }
 
-  const overallPercent = Math.round((allUnlocked / Math.max(1, allBadges)) * 100);
   const mapCategory: Exclude<TravelBadgeCategory, "international"> =
     category === "thailand" || category === "japan"
       ? category
@@ -564,11 +569,12 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
     { key: "japan", label: "ญี่ปุ่น", Icon: Trophy },
     { key: "international", label: "นานาชาติ", Icon: Globe2 },
   ];
+  const ContentRoot = embedded ? "section" : "main";
 
   return (
-    <div className="app-shell flow-shell main-nav-page-shell badges-page-shell">
-      <main>
-        <header className="mobile-head flow-header">
+    <div className={embedded ? "badges-stats-embedded" : "app-shell flow-shell main-nav-page-shell badges-page-shell"}>
+      <ContentRoot id={embedded ? "travel-badges" : undefined} className={embedded ? "analytics-badge-content" : undefined}>
+        {!embedded ? <header className="mobile-head flow-header">
           <Link className="brand" href="/" aria-label="RouteRao · หน้าแรก">
             <Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized />
             <div>RouteRao<small>travel smarter together</small></div>
@@ -578,30 +584,15 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
             <InvitationNotifications onChanged={()=>router.refresh()}/>
             <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์"><span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url ? { backgroundImage: `url("${profile.avatar_url}")` } : undefined}>{!profile?.avatar_url && avatarLabel.charAt(0).toUpperCase()}</span></span></button>
           </nav>
-        </header>
+        </header> : null}
 
         <div className="badges-screen badges-screen-redesign">
           <section className="badges-intro">
             <span className="badges-intro-icon"><Trophy size={20} /></span>
             <div>
-              <h1>เข็มกลัดการเดินทาง</h1>
+              {embedded ? <h2>เข็มกลัดการเดินทาง</h2> : <h1>เข็มกลัดการเดินทาง</h1>}
               <p>เก็บทุกการเดินทาง ให้กลายเป็นความทรงจำ</p>
             </div>
-          </section>
-
-          <section className="badge-total-progress" aria-label={`สะสมแล้ว ${allUnlocked} จาก ${allBadges}`}>
-            <div
-              className="badge-total-ring"
-              style={{ "--badge-total-progress": `${overallPercent * 3.6}deg` } as CSSProperties}
-            >
-              <strong>{overallPercent}%</strong>
-            </div>
-            <div className="badge-total-copy">
-              <span>สะสมแล้ว</span>
-              <strong><b>{allUnlocked}</b> / {allBadges}</strong>
-              <small>ออกเดินทางต่อไป เพื่อปลดล็อกทุกที่เลย!</small>
-            </div>
-            <Image className="badge-total-art" src="/badge-progress-mountains-v2.png" alt="" width={180} height={100} />
           </section>
 
           <section className="badge-progress-grid" aria-label="ความคืบหน้าการสะสม">
@@ -675,7 +666,7 @@ export function TravelBadgesPage({ collection }: { collection: TravelBadgeCollec
             </div>
           </section>
         </div>
-      </main>
+      </ContentRoot>
       {showScrollTop ? <button type="button" className="expense-back-top badges-scroll-top" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} title="กลับด้านบน" aria-label="กลับด้านบน"><ArrowUp size={18} /></button> : null}
       {previewBadge ? <BadgePreviewDialog badge={previewBadge} close={() => setPreviewBadge(null)} /> : null}
     </div>
