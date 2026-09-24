@@ -13,8 +13,50 @@ export function AppGlassScene({
   useEffect(() => {
     const sheetSelector = ".modal-backdrop,.trip-idea-modal-backdrop";
     const editorSelector = "input,textarea,select,[contenteditable='true']";
+    const keyboardEditorSelector = [
+      "textarea",
+      "[contenteditable='true']",
+      "input:not([type])",
+      "input[type='text']",
+      "input[type='search']",
+      "input[type='email']",
+      "input[type='number']",
+      "input[type='password']",
+      "input[type='tel']",
+      "input[type='url']",
+    ].join(",");
     const timers = new Set<number>();
+    const isCompactViewport = () => window.matchMedia("(max-width: 900px)").matches;
+    let restingViewportHeight = window.visualViewport?.height || window.innerHeight;
+    let viewportWidth = window.visualViewport?.width || window.innerWidth;
+    const syncKeyboardFooter = () => {
+      const active = document.activeElement;
+      const activeEditor =
+        active instanceof HTMLElement && active.matches(keyboardEditorSelector)
+          ? active
+          : null;
+      const currentViewportHeight = window.visualViewport?.height || window.innerHeight;
+      const currentViewportWidth = window.visualViewport?.width || window.innerWidth;
+      if (Math.abs(currentViewportWidth - viewportWidth) > 80) {
+        viewportWidth = currentViewportWidth;
+        restingViewportHeight = currentViewportHeight;
+      } else if (!activeEditor) {
+        restingViewportHeight = Math.max(restingViewportHeight, currentViewportHeight);
+      }
+      const viewportWasReduced = window.visualViewport
+        ? restingViewportHeight - currentViewportHeight > 100
+        : true;
+      document.querySelectorAll<HTMLElement>(sheetSelector).forEach((sheet) => {
+        const keyboardIsOpen =
+          isCompactViewport() &&
+          Boolean(activeEditor) &&
+          viewportWasReduced &&
+          sheet.contains(activeEditor);
+        sheet.classList.toggle("sheet-keyboard-open", keyboardIsOpen);
+      });
+    };
     const resetDismissedSheets = () => {
+      syncKeyboardFooter();
       const active = document.activeElement;
       if (
         active instanceof HTMLElement &&
@@ -39,13 +81,16 @@ export function AppGlassScene({
     const handleFocusIn = (event: FocusEvent) => {
       if (!(event.target instanceof HTMLElement)) return;
       event.target.closest(sheetSelector)?.classList.remove("sheet-keyboard-dismissed");
+      syncKeyboardFooter();
     };
     document.addEventListener("focusin", handleFocusIn, true);
     document.addEventListener("focusout", scheduleReset, true);
+    window.addEventListener("resize", scheduleReset, { passive: true });
     window.visualViewport?.addEventListener("resize", scheduleReset, { passive: true });
     return () => {
       document.removeEventListener("focusin", handleFocusIn, true);
       document.removeEventListener("focusout", scheduleReset, true);
+      window.removeEventListener("resize", scheduleReset);
       window.visualViewport?.removeEventListener("resize", scheduleReset);
       timers.forEach((timer) => window.clearTimeout(timer));
     };

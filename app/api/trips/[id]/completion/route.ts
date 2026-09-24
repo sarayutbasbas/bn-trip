@@ -13,19 +13,22 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   if (session.isDemo)
-    return NextResponse.json({ flightIncomplete: false, checklistIncomplete: false });
+    return NextResponse.json({ flightIncomplete: false, accommodationIncomplete: false, insuranceIncomplete: false, checklistIncomplete: false });
   await ensureLatestDatabaseSchema();
   if (!(await getTripRole(id, session.userId)))
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   const result = await query<{
     has_flights: boolean;
     country_code: string | null;
+    total_days: number;
     flight_count: number;
+    accommodation_count: number;
     insurance_complete: boolean;
     checklist_incomplete: boolean;
   }>(
-    `SELECT trip.has_flights,trip.country_code,
+    `SELECT trip.has_flights,trip.country_code,trip.total_days,
       (SELECT count(*)::int FROM trip_flight_segments flight WHERE flight.trip_id=trip.id) AS flight_count,
+      (SELECT count(*)::int FROM trip_accommodations accommodation WHERE accommodation.trip_id=trip.id) AS accommodation_count,
       EXISTS(
         SELECT 1 FROM trip_travel_insurance insurance
         WHERE insurance.trip_id=trip.id
@@ -60,10 +63,11 @@ export async function GET(
   if (!status)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({
-    flightIncomplete:
-      status.has_flights &&
-      (Number(status.flight_count) === 0 ||
-        (status.country_code !== "TH" && !status.insurance_complete)),
+    flightIncomplete: status.has_flights && Number(status.flight_count) === 0,
+    accommodationIncomplete:
+      Number(status.total_days) > 1 && Number(status.accommodation_count) === 0,
+    insuranceIncomplete:
+      status.has_flights && status.country_code !== "TH" && !status.insurance_complete,
     checklistIncomplete: status.checklist_incomplete,
   });
 }

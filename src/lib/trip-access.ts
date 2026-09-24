@@ -73,6 +73,11 @@ export const tripIncompleteSetupSql=(alias="trips")=>`(
       SELECT 1 FROM trip_checklist_items checklist_item
       WHERE checklist_item.trip_id=${alias}.id AND checklist_item.completed_at IS NULL
     ) OR (
+      ${alias}.total_days>1 AND NOT EXISTS(
+        SELECT 1 FROM trip_accommodations accommodation
+        WHERE accommodation.trip_id=${alias}.id
+      )
+    ) OR (
       ${alias}.has_flights=true AND (
         NOT EXISTS(SELECT 1 FROM trip_flight_segments flight WHERE flight.trip_id=${alias}.id)
         OR (COALESCE(${alias}.country_code,'')<>'TH' AND NOT EXISTS(

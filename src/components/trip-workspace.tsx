@@ -13,6 +13,8 @@ import { useFormDirty } from "@/src/components/use-form-dirty";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { ChecklistCategoryIcon } from "@/src/components/checklist-category-icon";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
+import { TripSectionEmpty } from "@/src/components/trip-section-empty";
+import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import {
   MAX_SOURCE_IMAGE_BYTES,
   prepareDocumentFile,
@@ -1055,8 +1057,24 @@ export function TripWorkspace({
       />
       {error && <p className="workspace-error">{label(error)}</p>}
       {loading ? (
-        <p className="workspace-loading">{label("กำลังโหลด…")}</p>
+        <TripSectionSkeleton variant={tab === "checklist" ? "checklist" : "documents"} />
       ) : tab === "checklist" ? (
+        !data.checklist.length ? (
+          <TripSectionEmpty
+            icon={<ListChecks size={25} />}
+            title={label("Checklist ยังว่างอยู่")}
+            description={label("เพิ่มรายการแรกเพื่อเตรียมสิ่งที่ต้องทำและของที่ต้องใช้ก่อนเดินทาง")}
+            action={label("เพิ่ม Checklist")}
+            onClick={() => {
+              setError("");
+              setMasterOpen(false);
+              setEditingItemId(null);
+              setTitle("");
+              setAssignee("");
+              setChecklistSheetOpen(true);
+            }}
+          />
+        ) : (
         <div className="workspace-panel">
           <div className="checklist-master-actions">
             <label className="document-search checklist-search">
@@ -1298,7 +1316,20 @@ export function TripWorkspace({
             )}
           </div>
         </div>
+        )
       ) : (
+        !data.documents.length ? (
+          <TripSectionEmpty
+            icon={<FileText size={25} />}
+            title={label("เอกสารยังว่างอยู่")}
+            description={label("เพิ่มตั๋ว ใบจอง หรือเอกสารสำคัญ เพื่อเปิดเครื่องมือจัดการเอกสาร")}
+            action={label("เพิ่มเอกสาร")}
+            onClick={() => {
+              setError("");
+              setDocumentSheetOpen(true);
+            }}
+          />
+        ) : (
         <div className="workspace-panel">
           <div className={`document-quota ${quotaLevel}`}>
             <div>
@@ -1417,6 +1448,7 @@ export function TripWorkspace({
             )}
           </div>
         </div>
+        )
       )}
       {assigningItem && (
         <div

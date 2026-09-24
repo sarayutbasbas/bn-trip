@@ -3981,16 +3981,67 @@ function TripHeader({
 }
 
 type TripSectionView = "plan" | "expenses" | "flights" | "insurance" | "stays" | "workspace";
+type TripCompletionStatus = {
+  flightIncomplete: boolean;
+  accommodationIncomplete: boolean;
+  insuranceIncomplete: boolean;
+  checklistIncomplete: boolean;
+};
+function useTripCompletionStatus(
+  tripId: string,
+  hasFlights: boolean,
+  hasAccommodations: boolean,
+  totalDays: number,
+  countryCode?: string | null,
+) {
+  const [completion, setCompletion] = useState<TripCompletionStatus>({
+    flightIncomplete: false,
+    accommodationIncomplete: false,
+    insuranceIncomplete: false,
+    checklistIncomplete: false,
+  });
+  useEffect(() => {
+    let active = true;
+    async function loadCompletion() {
+      try {
+        const response = await fetch(`/api/trips/${tripId}/completion`, {
+          cache: "no-store",
+        });
+        const body = await response.json();
+        if (!active || !response.ok) return;
+        setCompletion({
+          flightIncomplete: Boolean(body.flightIncomplete),
+          accommodationIncomplete: Boolean(body.accommodationIncomplete),
+          insuranceIncomplete: Boolean(body.insuranceIncomplete),
+          checklistIncomplete: Boolean(body.checklistIncomplete),
+        });
+      } catch {
+        // Status dots are supplemental; navigation remains available offline.
+      }
+    }
+    const handleChanged = (event: Event) => {
+      const changedTripId = (event as CustomEvent<{ tripId?: string }>).detail?.tripId;
+      if (!changedTripId || changedTripId === tripId) void loadCompletion();
+    };
+    void loadCompletion();
+    window.addEventListener("trip-completion-changed", handleChanged);
+    return () => {
+      active = false;
+      window.removeEventListener("trip-completion-changed", handleChanged);
+    };
+  }, [tripId, hasFlights, hasAccommodations, totalDays, countryCode]);
+  return completion;
+}
 
 function TripSectionNav({
   trip,
-  hasAccommodations,
+  completion,
   active,
   select,
   workspaceTab,
 }: {
   trip: Trip;
-  hasAccommodations: boolean;
+  completion: TripCompletionStatus;
   active: TripSectionView;
   select: (view: TripSectionView, workspaceTab?: WorkspaceTab) => void;
   workspaceTab?: WorkspaceTab;
@@ -4026,6 +4077,7 @@ function TripSectionNav({
     action: () => void;
     active?: boolean;
     availableInTrip?: boolean;
+    hasNotification?: boolean;
   };
   const closeAndRun = (action: () => void) => {
     setMoreOpen(false);
@@ -4034,11 +4086,11 @@ function TripSectionNav({
   const sections: TripMenuItem[] = [
     { id: "plan", label: "แผน", Icon: MapIcon, active: active === "plan", action: () => select("plan") },
     { id: "expenses", label: "ค่าใช้จ่าย", Icon: WalletCards, active: active === "expenses", action: () => select("expenses") },
-    { id: "flights", label: "เที่ยวบิน", Icon: Plane, disabled: !trip.has_flights, availableInTrip: Boolean(trip.has_flights), active: active === "flights", action: () => select("flights") },
-    { id: "stays", label: "ที่พัก", Icon: BedDouble, disabled: trip.total_days <= 1, availableInTrip: hasAccommodations, active: active === "stays", action: () => select("stays") },
-    { id: "checklist", label: "Checklist", Icon: ClipboardList, active: active === "workspace" && workspaceTab === "checklist", action: () => select("workspace", "checklist") },
+    { id: "flights", label: "เที่ยวบิน", Icon: Plane, disabled: !trip.has_flights, availableInTrip: Boolean(trip.has_flights), hasNotification: completion.flightIncomplete, active: active === "flights", action: () => select("flights") },
+    { id: "stays", label: "ที่พัก", Icon: BedDouble, disabled: trip.total_days <= 1, availableInTrip: trip.total_days > 1, hasNotification: completion.accommodationIncomplete, active: active === "stays", action: () => select("stays") },
+    { id: "checklist", label: "Checklist", Icon: ClipboardList, hasNotification: completion.checklistIncomplete, active: active === "workspace" && workspaceTab === "checklist", action: () => select("workspace", "checklist") },
     { id: "photos", label: "รูปภาพ / Link", Icon: Images, disabled: !trip.google_photos_url, availableInTrip: Boolean(trip.google_photos_url), action: () => trip.google_photos_url && window.open(trip.google_photos_url, "_blank", "noopener,noreferrer") },
-    { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", availableInTrip: trip.country_code !== "TH", active: active === "insurance", action: () => select("insurance") },
+    { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", availableInTrip: trip.country_code !== "TH", hasNotification: completion.insuranceIncomplete, active: active === "insurance", action: () => select("insurance") },
     { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
     { id: "export", label: "Download", Icon: Download, action: () => { window.open(`/api/trips/${trip.id}/export-plan`, "_self"); } },
   ];
@@ -4049,17 +4101,20 @@ function TripSectionNav({
   const overflowIsActive = sections.some(
     ({ id, active: isActive }) => isActive && !primaryIds.has(id),
   );
+  const overflowHasNotification = sections.some(
+    ({ id, hasNotification }) => hasNotification && !primaryIds.has(id),
+  );
   return (
     <>
       <nav className="trip-section-nav has-5-items" aria-label={t("เลือกข้อมูลทริป")}>
-        {primary.map(({ id, label, Icon, action, active: isActive, disabled }) => (
+        {primary.map(({ id, label, Icon, action, active: isActive, disabled, hasNotification }) => (
           <button type="button" className={`trip-menu-${id}${isActive ? " active" : ""}`} key={id} onClick={action} disabled={disabled} aria-current={isActive ? "page" : undefined}>
-            <i className="trip-section-icon"><Icon className="trip-menu-fill-icon" size={26} aria-hidden="true" /></i>
+            <i className="trip-section-icon"><Icon className="trip-menu-fill-icon" size={26} aria-hidden="true" />{hasNotification ? <b className="notification-dot" aria-label={t("ข้อมูลยังไม่ครบ")} /> : null}</i>
             <span>{t(label)}</span>
           </button>
         ))}
         <button type="button" className={`trip-menu-more${overflowIsActive ? " active" : ""}`} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen}>
-          <i className="trip-section-icon"><Menu className="trip-menu-fill-icon" size={26} aria-hidden="true" /></i>
+          <i className="trip-section-icon"><Menu className="trip-menu-fill-icon" size={26} aria-hidden="true" />{overflowHasNotification ? <b className="notification-dot" aria-label={t("มีข้อมูลที่ต้องกรอกเพิ่มเติม")} /> : null}</i>
           <span>{t("อื่นๆ")}</span>
         </button>
       </nav>
@@ -4069,9 +4124,9 @@ function TripSectionNav({
             <span className="sheet-grabber" />
             <header><div><strong>{t("เมนูทั้งหมด")}</strong><small>{t("เลือกข้อมูลหรือเครื่องมือของทริป")}</small></div><button type="button" onClick={() => setMoreOpen(false)} aria-label={t("ปิด")}><X size={19} /></button></header>
             <div className="trip-menu-sheet-grid">
-              {sections.map(({ id, label, Icon, action, active: isActive, disabled }) => (
+              {sections.map(({ id, label, Icon, action, active: isActive, disabled, hasNotification }) => (
                 <button type="button" key={id} className={`trip-menu-${id}${isActive ? " active" : ""}`} disabled={disabled} onClick={() => closeAndRun(action)}>
-                  <i><Icon className="trip-menu-fill-icon" size={26} aria-hidden="true" /></i><span>{t(label)}</span>
+                  <i><Icon className="trip-menu-fill-icon" size={26} aria-hidden="true" />{hasNotification ? <b className="notification-dot" aria-label={t("ข้อมูลยังไม่ครบ")} /> : null}</i><span>{t(label)}</span>
                 </button>
               ))}
             </div>
@@ -4572,6 +4627,14 @@ function TripHub({
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
   const itinerariesByDay = useItinerariesByDay(items);
+  const hasAccommodations = items.some((item) => Boolean(item.accommodation_id));
+  const completion = useTripCompletionStatus(
+    trip.id,
+    Boolean(trip.has_flights),
+    hasAccommodations,
+    trip.total_days,
+    trip.country_code,
+  );
   function selectView(
     nextView: TripSectionView,
     nextWorkspaceTab = activeWorkspaceTab,
@@ -4650,7 +4713,7 @@ function TripHub({
       </div>
       <TripSectionNav
         trip={trip}
-        hasAccommodations={items.some((item) => Boolean(item.accommodation_id))}
+        completion={completion}
         active={view}
         workspaceTab={activeWorkspaceTab}
         select={(nextView, nextWorkspaceTab) => selectView(nextView, nextWorkspaceTab)}
@@ -4757,18 +4820,21 @@ function TripHub({
                         </div>
                         <article
                           className={`event-card editable-event-card${itemCosts.length ? " has-expenses" : ""}`}
-                          onClick={(event) => {
-                            if (
-                              !(event.target as HTMLElement).closest("button,a")
-                            ) {
-                              openTimelineItem();
-                            }
-                          }}
                         >
-                          <button
-                            type="button"
+                          <div
                             className="event-card-main"
-                            onClick={openTimelineItem}
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              if (!(event.target as HTMLElement).closest("button,a")) openTimelineItem();
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.target !== event.currentTarget) return;
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                openTimelineItem();
+                              }
+                            }}
                           >
                             <span className={`event-image ${item.image_url||item.location_image_url||item.accommodation_image_url?"":"is-placeholder"}`}>
                               <Image
@@ -4819,19 +4885,19 @@ function TripHub({
                                   {item.transport_note}
                                 </p>
                               )}
+                              {itemCosts.length > 0 && (
+                                <button
+                                  type="button"
+                                  className="timeline-expense-summary"
+                                  onClick={() => setOpenTimelineExpenseId(item.id)}
+                                  aria-label={`${t("เปิดรายการค่าใช้จ่าย")} · ${bahtFormat(itemExpenseTotal)} ${t("บาท")}`}
+                                >
+                                  <WalletCards size={12} aria-hidden="true" />
+                                  {t("ค่าใช้จ่ายรวม")} {bahtFormat(itemExpenseTotal)} {t("บาท")}
+                                </button>
+                              )}
                             </div>
-                          </button>
-                          {itemCosts.length > 0 && (
-                            <button
-                              type="button"
-                              className="timeline-expense-summary"
-                              onClick={() => setOpenTimelineExpenseId(item.id)}
-                              aria-label={`${t("เปิดรายการค่าใช้จ่าย")} · ${bahtFormat(itemExpenseTotal)} ${t("บาท")}`}
-                            >
-                              <WalletCards size={12} aria-hidden="true" />
-                              {t("ค่าใช้จ่ายรวม")} {bahtFormat(itemExpenseTotal)} {t("บาท")}
-                            </button>
-                          )}
+                          </div>
                           <div className="navigate-actions">
                             {previous && (
                               <a
@@ -5004,6 +5070,14 @@ function TimelineScreen({
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
   const itinerariesByDay = useItinerariesByDay(items);
+  const hasAccommodations = items.some((item) => Boolean(item.accommodation_id));
+  const completion = useTripCompletionStatus(
+    trip.id,
+    Boolean(trip.has_flights),
+    hasAccommodations,
+    trip.total_days,
+    trip.country_code,
+  );
   const [openAccommodationId, setOpenAccommodationId] = useState<string | null>(null);
   const [openAccommodationDay, setOpenAccommodationDay] = useState<number | null>(null);
   useEffect(
@@ -5037,7 +5111,7 @@ function TimelineScreen({
       </div>
       <TripSectionNav
         trip={trip}
-        hasAccommodations={items.some((item) => Boolean(item.accommodation_id))}
+        completion={completion}
         active="plan"
         select={(section, workspaceTab) => {
           if (section === "plan") return;
@@ -6201,6 +6275,14 @@ function ExpensesScreen({
   editTrip: () => void;
 }) {
   const router = useRouter();
+  const hasAccommodations = items.some((item) => Boolean(item.accommodation_id));
+  const completion = useTripCompletionStatus(
+    trip.id,
+    Boolean(trip.has_flights),
+    hasAccommodations,
+    trip.total_days,
+    trip.country_code,
+  );
   return (
     <ExpenseTripMembersContext.Provider value={trip.members || []}>
       <div className="screen trip-hub-screen">
@@ -6209,7 +6291,7 @@ function ExpensesScreen({
         </div>
         <TripSectionNav
           trip={trip}
-          hasAccommodations={items.some((item) => Boolean(item.accommodation_id))}
+          completion={completion}
           active="expenses"
           select={(section, workspaceTab) => {
             if (section === "expenses") return;

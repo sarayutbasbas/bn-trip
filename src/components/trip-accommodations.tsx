@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
+import { TripSectionEmpty } from "@/src/components/trip-section-empty";
+import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { compressImageFile } from "@/src/lib/client-image-compression";
 import {
   accommodationResourceKey,
@@ -799,6 +801,9 @@ export function TripAccommodations({
       );
       setEditing(null);
       await Promise.all([load(), onChanged()]);
+      window.dispatchEvent(
+        new CustomEvent("trip-completion-changed", { detail: { tripId } }),
+      );
       notify(
         isNew
           ? "เพิ่มที่พักใน Timeline และค่าใช้จ่ายแล้ว"
@@ -822,6 +827,9 @@ export function TripAccommodations({
       setDeleteTarget(null);
       setEditing(null);
       await Promise.all([load(), onChanged()]);
+      window.dispatchEvent(
+        new CustomEvent("trip-completion-changed", { detail: { tripId } }),
+      );
       notify("ลบที่พักออกจาก Timeline และค่าใช้จ่ายแล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "ลบที่พักไม่สำเร็จ");
@@ -854,7 +862,7 @@ export function TripAccommodations({
       {error && <div className="form-error">{error}</div>}
       {!overlayOnly &&
         (loading ? (
-          <div className="card accommodation-empty">กำลังโหลดที่พัก…</div>
+          <TripSectionSkeleton variant="accommodations" />
         ) : items.length ? (
           <div className="accommodation-list">
             {items.map((item) => {
@@ -912,15 +920,13 @@ export function TripAccommodations({
             })}
           </div>
         ) : (
-          <div className="card accommodation-empty">
-            <span>
-              <BedDouble size={25} />
-            </span>
-            <strong>ยังไม่ได้เพิ่มที่พัก</strong>
-            <p>
-              เพิ่มชื่อ โลเคชัน ช่วงวันที่พัก และราคา ระบบจะเชื่อมให้ทุกหน้า
-            </p>
-          </div>
+          <TripSectionEmpty
+            icon={<BedDouble size={25} />}
+            title="ที่พักยังว่างอยู่"
+            description="เพิ่มชื่อ โลเคชัน ช่วงวันที่พัก และราคา ระบบจะเชื่อมให้ทุกหน้า"
+            action="เพิ่มที่พัก"
+            onClick={openNew}
+          />
         ))}
       {editing && (
         <BottomSheet
