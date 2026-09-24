@@ -203,7 +203,7 @@
   top: auto;
   z-index: auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
@@ -9352,6 +9352,10 @@ html.dark .settings-liquid-glass .card {
   color: #fff;
   background: var(--brand-gradient);
 }
+.error-dialog-backdrop { z-index:110; }
+.error-dialog-icon { color:var(--orange);background:var(--brand-soft); }
+.error-dialog-actions { grid-template-columns:1fr; }
+.error-dialog-actions .confirm-delete { background:var(--brand-gradient); }
 
 .toast {
   position: fixed;
@@ -14594,13 +14598,20 @@ html.dark .dashboard-favorite-hotel-card > button { background:color-mix(in srgb
 .flight-page .flight-toolbar .page-sub,
 .insurance-page .flight-toolbar .page-sub { margin-top:2px;font-size:12px;line-height:1.45; }
 .flight-page .flight-panel { padding-bottom:48px; }
+.flight-group { --flight-journey-accent:#ff6b18;--flight-journey-soft:#fff0e7; }
+.flight-group.journey-return { --flight-journey-accent:#3478f6;--flight-journey-soft:#eaf2ff; }
+.flight-group.journey-internal { --flight-journey-accent:#8b5cf6;--flight-journey-soft:#f1ebff; }
 .flight-journey-heading { margin:18px 2px 8px;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:9px; }
-.flight-journey-heading > span { width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:var(--orange);background:var(--brand-soft); }
+.flight-journey-heading > span { width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:var(--flight-journey-accent);background:var(--flight-journey-soft); }
 .flight-journey-heading > div { min-width:0;display:grid;gap:1px; }
 .flight-journey-heading strong { font-size:14px;line-height:1.2; }
 .flight-journey-heading small { color:var(--muted);font-size:9px; }
 .flight-journey-heading > b { padding:6px 9px;border-radius:999px;color:#188568;background:#e7f8f1;font-size:8px;font-weight:700; }
-.flight-page .flight-card-compact { padding:13px 13px 12px 16px;border:.5px solid var(--line);border-left:4px solid var(--orange);border-radius:18px;background:var(--surface-solid);box-shadow:0 6px 18px rgba(35,42,53,.08); }
+.flight-page .flight-card-compact { padding:13px 13px 12px 16px;border:.5px solid var(--line);border-left:4px solid var(--flight-journey-accent);border-radius:18px;background:var(--surface-solid);box-shadow:0 6px 18px rgba(35,42,53,.08); }
+.flight-page .flight-group .flight-route-path,
+.flight-page .flight-group .flight-route-label { color:var(--flight-journey-accent); }
+.flight-page .flight-group .flight-route-track > span { background:color-mix(in srgb,var(--flight-journey-accent) 38%,transparent); }
+.flight-page .flight-group .flight-card-compact:focus-visible { outline-color:var(--flight-journey-accent); }
 .flight-page .flight-card-compact::after { display:block; }
 .flight-page .flight-card-compact::before { display:none; }
 .flight-airline-mark { width:38px;height:38px;flex:0 0 38px;padding:0;border:1px solid color-mix(in srgb,var(--line) 82%,transparent);border-radius:50%;display:grid;place-items:center;overflow:hidden;color:var(--ink);background:#fff;box-shadow:0 4px 10px rgba(30,42,60,.1);font-size:9px;font-weight:800; }
@@ -14616,6 +14627,7 @@ html.dark .dashboard-favorite-hotel-card > button { background:color-mix(in srgb
 html.dark .flight-card-compact::after,
 html.dark .nearby-flight-card::after { filter:grayscale(1) invert(1) contrast(.8);opacity:.11; }
 html.dark .flight-page .flight-card-compact { background:#1c1c1e;box-shadow:0 7px 20px rgba(0,0,0,.3); }
+html.dark .flight-group { --flight-journey-soft:color-mix(in srgb,var(--flight-journey-accent) 19%,#1c1c1e); }
 html.dark .flight-page .flight-terminal-grid,
 html.dark .flight-page .flight-passenger-info-group { color:#a1a1a6;background:#2c2c2e; }
 html.dark .flight-page .flight-terminal-grid b,

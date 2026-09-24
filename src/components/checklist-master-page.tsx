@@ -33,7 +33,9 @@ import {
 } from "lucide-react";
 import { ChecklistCategoryIcon, ChecklistCategoryIconPicker } from "@/src/components/checklist-category-icon";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
+import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { normalizeChecklistCategoryIcon, type ChecklistCategoryIconKey } from "@/src/lib/checklist-category-icons";
+import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 
 type Category = { id: string; name: string; icon_key: string | null; sort_order: number };
 type Item = {
@@ -90,7 +92,6 @@ export function ChecklistMasterPage({
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     formRef: itemFormRef,
-    hasChanges: itemHasChanges,
     checkForChanges: checkItemChanges,
   } = useFormDirty(
     `${itemSheetOpen}:${editingItemId || "new"}`,
@@ -217,12 +218,10 @@ export function ChecklistMasterPage({
   async function saveItem(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const title = itemTitle.trim();
-    if (
-      !title ||
-      !itemCategoryId ||
-      (itemCategoryId === NEW_CATEGORY && !newCategoryName.trim())
-    )
+    if (!title || !itemCategoryId || (itemCategoryId === NEW_CATEGORY && !newCategoryName.trim())) {
+      setError(!title ? "กรุณากรอกชื่อ Checklist" : !itemCategoryId ? "กรุณาเลือกหมวดหมู่" : "กรุณากรอกชื่อหมวดหมู่ใหม่");
       return;
+    }
     if (demo) {
       router.push("/?authError=demo_login_required");
       return;
@@ -259,6 +258,7 @@ export function ChecklistMasterPage({
       invalidateClientResourcesContaining(":workspace:checklist");
       const wasEditing = Boolean(editingItemId);
       closeItemSheet();
+      scrollPageToTopAfterOverlay();
       setOpen((current) =>
         current.includes(categoryId) ? current : [...current, categoryId],
       );
@@ -624,14 +624,7 @@ export function ChecklistMasterPage({
             <div className="modal-submit-actions checklist-sheet-actions">
               <button
                 className="primary-btn"
-                disabled={
-                  Boolean(busy) ||
-                  !itemTitle.trim() ||
-                  !itemCategoryId ||
-                  (itemCategoryId === NEW_CATEGORY &&
-                    !newCategoryName.trim()) ||
-                  !itemHasChanges
-                }
+                disabled={Boolean(busy)}
               >
                 {busy ? "กำลังบันทึก…" : "บันทึก Checklist"}
               </button>
@@ -659,6 +652,8 @@ export function ChecklistMasterPage({
           </form>
         </div>
       )}
+
+      {itemSheetOpen && error && <FormErrorDialog title="ตรวจสอบข้อมูล Checklist" description={error} onClose={() => setError("")} />}
 
       {deleteTarget && (
         <div

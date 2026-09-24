@@ -18,10 +18,12 @@ import {
   XCircle,
 } from "lucide-react";
 import { BottomSheet } from "@/src/components/bottom-sheet";
+import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionEmpty } from "@/src/components/trip-section-empty";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { compressImageFile } from "@/src/lib/client-image-compression";
+import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 import {
   accommodationResourceKey,
   invalidateClientResource,
@@ -800,6 +802,7 @@ export function TripAccommodations({
         },
       );
       setEditing(null);
+      scrollPageToTopAfterOverlay();
       await Promise.all([load(), onChanged()]);
       window.dispatchEvent(
         new CustomEvent("trip-completion-changed", { detail: { tripId } }),
@@ -859,7 +862,7 @@ export function TripAccommodations({
           actions={<button className="trip-section-add" type="button" onClick={openNew} aria-label="เพิ่มที่พัก" title="เพิ่มที่พัก"><Plus size={21} /><span>เพิ่มที่พัก</span></button>}
         />
       )}
-      {error && <div className="form-error">{error}</div>}
+      {error && !editing && <div className="form-error">{error}</div>}
       {!overlayOnly &&
         (loading ? (
           <TripSectionSkeleton variant="accommodations" />
@@ -1271,6 +1274,7 @@ export function TripAccommodations({
           </div>
         </BottomSheet>
       )}
+      {editing && error && <FormErrorDialog title="บันทึกที่พักไม่สำเร็จ" description={error} onClose={() => setError("")} />}
       {deleteTarget && (
         <div
           className="confirm-backdrop"

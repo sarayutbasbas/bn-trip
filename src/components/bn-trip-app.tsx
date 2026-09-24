@@ -30,6 +30,7 @@ import {
 } from "@/src/components/attachment-preview-overlay";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications } from "@/src/components/invitation-notifications";
+import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import type {
   CountryHighlight,
   FavoriteAccommodation,
@@ -49,6 +50,7 @@ import {
 } from "@/src/lib/client-account";
 import { optimizedCanvasFile, prepareDocumentFile } from "@/src/lib/client-image-compression";
 import { uploadPrivateDocument } from "@/src/lib/client-blob-upload";
+import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 import {
   invalidateClientResourcesContaining,
 } from "@/src/lib/client-resource-cache";
@@ -6467,9 +6469,7 @@ function CardSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const { formRef, hasChanges, checkForChanges } = useFormDirty(
-    card?.id || "new-card",
-  );
+  const { formRef, checkForChanges } = useFormDirty(card?.id || "new-card");
   useEffect(() => {
     const root = document.documentElement;
     root.classList.add("sheet-open");
@@ -6585,9 +6585,8 @@ function CardSheet({
             )}
           </p>
         </div>
-        {error && <p className="login-error">{error}</p>}
         <div className="modal-submit-actions">
-          <button className="primary-btn" disabled={saving || !hasChanges}>
+          <button className="primary-btn" disabled={saving}>
             {t(saving ? "กำลังบันทึกบัตร…" : "บันทึกบัตร")}
           </button>
           {card && (
@@ -6604,6 +6603,7 @@ function CardSheet({
           )}
         </div>
       </form>
+      {error && <FormErrorDialog title={t("ตรวจสอบข้อมูลบัตร")} description={error} onClose={() => setError("")} />}
       {confirmDelete && card && (
         <ConfirmDialog
           confirmation={{
@@ -8410,7 +8410,7 @@ function CostSheet({
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [splitPickerOpen]);
-  const { formRef, hasChanges, checkForChanges } = useFormDirty(
+  const { formRef, checkForChanges } = useFormDirty(
     `${modal.item?.id || "new"}:${modal.costIndex ?? "cost"}`,
   );
   useEffect(() => {
@@ -8580,6 +8580,7 @@ function CostSheet({
     try {
       await saveCost(modal.item, modal.costIndex, target, cost);
       close();
+      scrollPageToTopAfterOverlay();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "บันทึกค่าใช้จ่ายไม่สำเร็จ",
@@ -8616,7 +8617,7 @@ function CostSheet({
         busy={saving}
         className="cost-sheet"
         submitLabel={t(saving ? "กำลังบันทึก…" : "บันทึกค่าใช้จ่าย")}
-        submitDisabled={saving || rateLoading || !targetId || !hasChanges}
+        submitDisabled={saving || rateLoading}
         onDelete={canDelete && existing && modal.item && modal.costIndex !== undefined ? () => setConfirmDelete(true) : undefined}
         deleteDisabled={saving}
         deleteLabel={t("ลบค่าใช้จ่ายนี้")}
@@ -8913,8 +8914,8 @@ function CostSheet({
             ))}
           </fieldset>
         </div>
-        {error && <p className="login-error">{t(error)}</p>}
       </BottomSheet>
+      {error && <FormErrorDialog title={t("ตรวจสอบข้อมูลค่าใช้จ่าย")} description={t(error)} onClose={() => setError("")} />}
       {canDelete &&
         confirmDelete &&
         modal.item &&
@@ -9072,24 +9073,22 @@ export function TripDestinationPicker({
       (!normalized || [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => term.toLowerCase().includes(normalized)))
     ).slice(0, 12);
   }, [countryCode, query, selected]);
-  const optionLabel = (option: TripDestinationOption) =>
-    lang === "EN" ? option.nameEn : option.nameTh;
   const matchesQuery = (option: TripDestinationOption, value: string) =>
     [option.nameTh, option.nameEn, ...option.searchTerms].some(
       (term) => term.trim().toLowerCase() === value.trim().toLowerCase(),
     );
   const add = (option: TripDestinationOption) => {
     if (!selected.some((item) => item.id === option.id)) onChange([...selected, option]);
-    setQuery(optionLabel(option));
-    setFocused(false);
+    setQuery("");
+    setFocused(true);
   };
   const commitQuery = () => {
     const normalized = query.trim().replace(/\s+/g, " ");
     if (!normalized) return;
     const alreadySelected = selected.find((option) => matchesQuery(option, normalized));
     if (alreadySelected) {
-      setQuery(optionLabel(alreadySelected));
-      setFocused(false);
+      setQuery("");
+      setFocused(true);
       return;
     }
     const exact = options.find((option) =>
@@ -9951,8 +9950,14 @@ function ModalForm({
             </>
           )}
         </div>
-        {error && <p className="login-error">{t(error)}</p>}
       </BottomSheet>
+      {error && (
+        <FormErrorDialog
+          title={modal.type === "trip" ? "บันทึกการแก้ไขทริปไม่สำเร็จ" : "ดำเนินการไม่สำเร็จ"}
+          description={error}
+          onClose={() => setError("")}
+        />
+      )}
       {canDeleteCurrent && pendingDelete && modal.type === "place" && modal.item && (
         <ConfirmDialog
           confirmation={{
@@ -11028,7 +11033,9 @@ export function BNTripApp({
       items={itineraries}
       close={(reason) => {
         const returnToIdeas = reason !== "saved" && modal.type === "trip" && !modal.trip && Boolean(modal.preset?.sourceIdeaId);
+        const scrollTimelineToTop = reason === "saved" && (page === "trip" || page === "timeline");
         setModal(null);
+        if (scrollTimelineToTop) scrollPageToTopAfterOverlay();
         if (returnToIdeas) router.push("/trip-ideas");
       }}
       submit={saveModal}

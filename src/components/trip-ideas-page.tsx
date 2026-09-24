@@ -13,6 +13,8 @@ import { ConfirmDialog,CountryFlagImage,CountryPicker,CoverImagePicker,TripDesti
 import { PageIntro } from "@/src/components/page-intro";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications,type InvitationNotification } from "@/src/components/invitation-notifications";
+import { FormErrorDialog } from "@/src/components/form-error-dialog";
+import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 
 type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
@@ -80,15 +82,19 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   const [targetMonth,setTargetMonth]=useState<number|null>(promote?null:current?.target_month||new Date().getMonth()+1);
   const [targetYear,setTargetYear]=useState<number|null>(promote?null:current?.target_year||new Date().getFullYear()+1);
   const [note,setNote]=useState(current?.note||"");const [coverFile,setCoverFile]=useState<File|null>(null);const [error,setError]=useState("");
-  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");let coverImageUrl=current?.cover_image_url||"/travel-postcard-fallback.jpg";if(coverFile){const upload=new FormData();upload.set("file",coverFile);const uploaded=await readResponse(await fetch("/api/uploads",{method:"POST",body:upload}));if(typeof uploaded.url!=="string"||!uploaded.url)throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");coverImageUrl=uploaded.url}await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl})}catch(caught){setError((caught as Error).message)}}
-  return <BottomSheet
+  const validationIncomplete=!name.trim()||!locations.length||(kind==="planned"&&(!targetMonth||!targetYear));
+  const locationIds=locations.map(location=>location.id).sort();
+  const originalLocationIds=(current?.trip_destinations||[]).map(location=>location.id).sort();
+  const unchanged=Boolean(current)&&!coverFile&&name.trim()===(current?.name||"").trim()&&countryCode===(current?.country_code||initialCountry.code)&&locationIds.join("|")===originalLocationIds.join("|")&&kind===current?.kind&&targetMonth===(current?.target_month||null)&&targetYear===(current?.target_year||null)&&note.trim()===(current?.note||"").trim();
+  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");let coverImageUrl=current?.cover_image_url||"/travel-postcard-fallback.jpg";if(coverFile){const upload=new FormData();upload.set("file",coverFile);const uploaded=await readResponse(await fetch("/api/uploads",{method:"POST",body:upload}));if(typeof uploaded.url!=="string"||!uploaded.url)throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");coverImageUrl=uploaded.url}await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl});scrollPageToTopAfterOverlay()}catch(caught){setError((caught as Error).message)}}
+  return <><BottomSheet
     title={promote?"กำหนดช่วงเวลาที่อยากไป":current?"แก้ไขรายการ":"เพิ่มสถานที่ที่อยากไป"}
     subtitle={promote?"เลือกเดือนและปีเพื่อย้ายมาเป็นทริปที่เล็งไว้":current?"แก้ไขข้อมูลของทริปที่เล็งไว้หรือลิสต์สักวันหนึ่ง":"บันทึกสถานที่ที่อยากเดินทางไปในอนาคต"}
     onClose={close}
     onSubmit={submit}
     busy={busy}
     submitLabel={busy?"กำลังบันทึก…":promote?"เลื่อนขึ้นและบันทึกช่วงเวลา":"บันทึก"}
-    submitDisabled={busy||!name.trim()||(kind==="planned"&&(!targetMonth||!targetYear))}
+    submitDisabled={busy||(!validationIncomplete&&unchanged)}
     onDelete={current?requestDelete:undefined}
     deleteDisabled={busy}
     deleteLabel={current?.access_role==="owner"?"ลบรายการ":"ออกจากทริปที่เล็งไว้"}
@@ -102,9 +108,8 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     <fieldset className="trip-idea-kind-picker"><legend>วางไว้ในลิสต์ไหน</legend><button type="button" className={kind==="planned"?"active":""} onClick={()=>{setKind("planned");setTargetMonth(targetMonth||1);setTargetYear(targetYear||new Date().getFullYear()+1)}}><CalendarRange size={17}/><span>ทริปที่เล็งไว้<small>มีเดือนและปีคร่าว ๆ</small></span></button><button type="button" className={kind==="someday"?"active":""} onClick={()=>{setKind("someday");setTargetMonth(null);setTargetYear(null)}}><Compass size={17}/><span>ลิสต์สักวันหนึ่ง<small>ยังไม่รู้ว่าจะไปเมื่อไร</small></span></button></fieldset>
     {kind==="planned"?<div className="trip-idea-date-row"><label className="trip-idea-field"><span>เดือน</span><select required value={targetMonth||""} onChange={event=>setTargetMonth(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกเดือน</option>{monthNames.map((month,index)=><option key={month} value={index+1}>{month}</option>)}</select></label><label className="trip-idea-field"><span>ปี ค.ศ.</span><input required type="number" min="2020" max="2200" value={targetYear||""} onChange={event=>setTargetYear(event.target.value?Number(event.target.value):null)}/></label></div>:null}
     <label className="trip-idea-field"><span>โน้ต <small>(ไม่บังคับ)</small></span><textarea maxLength={500} value={note} onChange={event=>setNote(event.target.value)} placeholder="สิ่งที่อยากทำ เหตุผลที่อยากไป หรือไอเดียคร่าว ๆ"/></label>
-    {error?<p className="trip-idea-error">{error}</p>:null}
     </div>
-  </BottomSheet>;
+  </BottomSheet>{error?<FormErrorDialog title="บันทึกทริปที่เล็งไว้ไม่สำเร็จ" description={error} onClose={()=>setError("")}/>:null}</>;
 }
 
 function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:TripIdea;close:()=>void;onChanged:()=>void;confirm:(value:Confirmation)=>void;notify:(message:string)=>void}){
@@ -114,7 +119,7 @@ function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:Trip
   async function remove(item:IdeaCollaborator){await readResponse(await fetch(`/api/trip-ideas/${idea.id}/collaborators/${item.id}`,{method:"DELETE"}));setItems(old=>old.filter(row=>row.id!==item.id));onChanged();notify("ลบผู้ร่วมวางแผนแล้ว")}
   const suggestions=recent.filter(value=>!items.some(item=>item.email===value));
   return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)close()}}><section className="modal collaborators-sheet"><div className="modal-head"><div><h2>ผู้ร่วมวางแผน</h2><p>{canManage?"แชร์รายการนี้ให้เพื่อนช่วยดูและแก้ไขข้อมูลร่วมกัน":"รายชื่อผู้ที่วางแผนรายการนี้ร่วมกัน"}</p></div><button type="button" className="icon-btn" onClick={close} aria-label="ปิด"><X size={18}/></button></div>
-    {canManage?<form className="collaborator-form" onSubmit={add}><div className="field"><label>อีเมลผู้ร่วมวางแผน</label><input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="friend@gmail.com" value={email} onChange={event=>setEmail(event.target.value)} required/></div><button className="primary-btn" disabled={saving||!email.trim()}><UserPlus size={16}/>{saving?"กำลังเพิ่ม…":"เพิ่มผู้ร่วมวางแผน"}</button>{suggestions.length?<div className="recent-collaborators"><small>เลือกจากคนที่เพิ่มล่าสุด</small><div>{suggestions.map(value=><button type="button" key={value} onClick={()=>setEmail(value)}>{value}</button>)}</div></div>:null}</form>:null}
+    {canManage?<form className="collaborator-form" onSubmit={add}><div className="field"><label>อีเมลผู้ร่วมวางแผน</label><input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="friend@gmail.com" value={email} onChange={event=>setEmail(event.target.value)} required/></div><button className="primary-btn" disabled={saving}><UserPlus size={16}/>{saving?"กำลังเพิ่ม…":"เพิ่มผู้ร่วมวางแผน"}</button>{suggestions.length?<div className="recent-collaborators"><small>เลือกจากคนที่เพิ่มล่าสุด</small><div>{suggestions.map(value=><button type="button" key={value} onClick={()=>setEmail(value)}>{value}</button>)}</div></div>:null}</form>:null}
     {error?<p className="login-error">{error}</p>:null}<div className="collaborator-list">{loading?<p>กำลังโหลด…</p>:items.length?items.map(item=><div className={`collaborator-row idea-collaborator-row ${canManage?"":"is-readonly"}`} key={item.id}><span className="collaborator-avatar" style={item.avatar_url?{backgroundImage:`url("${item.avatar_url}")`}:undefined}>{!item.avatar_url&&(item.display_name||item.email).charAt(0).toUpperCase()}</span><div className="collaborator-copy"><strong>{item.display_name||item.email}</strong><small>{item.display_name?item.email:item.joined?"เข้าร่วมแล้ว":"แชร์ด้วยอีเมลแล้ว"}</small></div>{canManage?<button type="button" className="delete-record-btn" onClick={()=>confirm({title:`ลบผู้ร่วมวางแผน “${item.email}”?`,description:"บุคคลนี้จะไม่สามารถเปิดหรือแก้ไขรายการนี้ได้อีก",confirmLabel:"ลบผู้ร่วมวางแผน",onConfirm:()=>remove(item)})} aria-label="ลบผู้ร่วมวางแผน"><Trash2 size={17}/></button>:<span className="collaborator-access-badge is-view">ร่วมวางแผน</span>}</div>):<p className="collaborator-empty">ยังไม่มีผู้ร่วมวางแผน</p>}</div>
   </section></div>;
 }
@@ -128,7 +133,7 @@ export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:
   useEffect(()=>{const root=document.documentElement;const sheetOpen=Boolean(editing||sharing);root.classList.toggle("sheet-open",sheetOpen);root.classList.toggle("confirm-open",Boolean(confirmation));return()=>root.classList.remove("sheet-open","confirm-open")},[editing,sharing,confirmation]);
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(""),2400)}
   function openForm(idea:TripIdea|null,promote=false){if(demo){notify("เข้าสู่ระบบเพื่อเพิ่มหรือแก้ไขรายการ");return}setEditing({idea,promote})}
-  async function save(draft:IdeaDraft){setBusy(true);try{const current=editing?.idea||null;const saved=await readResponse(await fetch(current?`/api/trip-ideas/${current.id}`:"/api/trip-ideas",{method:current?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)})) as TripIdea;setIdeas(items=>sortIdeas(current?items.map(item=>item.id===saved.id?saved:item):[...items,saved]));setEditing(undefined);notify(current?"บันทึกการแก้ไขแล้ว":"เพิ่มลงลิสต์แล้ว")}finally{setBusy(false)}}
+  async function save(draft:IdeaDraft){setBusy(true);try{const current=editing?.idea||null;const saved=await readResponse(await fetch(current?`/api/trip-ideas/${current.id}`:"/api/trip-ideas",{method:current?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)})) as TripIdea;setIdeas(items=>sortIdeas(current?items.map(item=>item.id===saved.id?saved:item):[...items,saved]));setEditing(undefined);notify(current?"บันทึกทริปที่เล็งไว้แล้ว":"เพิ่มทริปที่เล็งไว้แล้ว")}finally{setBusy(false)}}
   async function remove(idea:TripIdea){await readResponse(await fetch(`/api/trip-ideas/${idea.id}`,{method:"DELETE"}));setIdeas(items=>items.filter(item=>item.id!==idea.id));setEditing(undefined);notify("ลบออกจากลิสต์แล้ว")}
   async function leave(idea:TripIdea){await readResponse(await fetch(`/api/trip-ideas/${idea.id}`,{method:"DELETE"}));setIdeas(items=>items.filter(item=>item.id!==idea.id));setEditing(undefined);notify("ออกจากทริปที่เล็งไว้แล้ว")}
   function askRemove(idea:TripIdea){

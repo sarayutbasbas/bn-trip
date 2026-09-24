@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
+import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { ChecklistCategoryIcon } from "@/src/components/checklist-category-icon";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionEmpty } from "@/src/components/trip-section-empty";
@@ -24,6 +25,7 @@ import {
   prepareDocumentFile,
 } from "@/src/lib/client-image-compression";
 import { uploadPrivateDocument } from "@/src/lib/client-blob-upload";
+import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 import {
   flightResourceKey,
   insuranceResourceKey,
@@ -214,21 +216,18 @@ export function TripWorkspace({
   const editDocumentFileRef = useRef<HTMLInputElement>(null);
   const {
     formRef: checklistFormRef,
-    hasChanges: checklistHasChanges,
     checkForChanges: checkChecklistChanges,
   } = useFormDirty(
     `${checklistSheetOpen}:${editingItemId || "new"}`,
   );
   const {
     formRef: documentEditFormRef,
-    hasChanges: documentEditHasChanges,
     checkForChanges: checkDocumentEditChanges,
   } = useFormDirty(
     `document-edit:${editingDocument?.id || "closed"}`,
   );
   const {
     formRef: documentCreateFormRef,
-    hasChanges: documentCreateHasChanges,
     checkForChanges: checkDocumentCreateChanges,
   } = useFormDirty(
     `document-create:${documentSheetOpen}`,
@@ -338,7 +337,10 @@ export function TripWorkspace({
   }
   async function addChecklist(event: React.FormEvent) {
     event.preventDefault();
-    if (!title.trim() || !categoryId) return;
+    if (!title.trim() || !categoryId) {
+      setError(!title.trim() ? "กรุณากรอกชื่อ Checklist" : "กรุณาเลือกหมวดหมู่ Checklist");
+      return;
+    }
     const editingItem = data.checklist.find(
       (item) => item.id === editingItemId,
     );
@@ -363,6 +365,7 @@ export function TripWorkspace({
       setAssignee("");
       setEditingItemId(null);
       setChecklistSheetOpen(false);
+      scrollPageToTopAfterOverlay();
       invalidateWorkspaceTabs("history");
       invalidateClientResource(MASTER_CHECKLIST_RESOURCE_KEY);
       await load("checklist");
@@ -385,6 +388,7 @@ export function TripWorkspace({
       });
       setSelectedMaster([]);
       setMasterOpen(false);
+      scrollPageToTopAfterOverlay();
       invalidateWorkspaceTabs("history");
       await load("checklist");
       signalCompletionChanged();
@@ -560,7 +564,10 @@ export function TripWorkspace({
     const form = new FormData(formElement);
     const sourceFile = fileRef.current?.files?.[0];
     const documentTitle = String(form.get("title") || "").trim();
-    if (!sourceFile) return;
+    if (!sourceFile) {
+      setError("กรุณาเลือกรูปหรือไฟล์ที่ต้องการอัปโหลด");
+      return;
+    }
     const sourceLimit =
       sourceFile.type === "application/pdf"
         ? 10 * 1024 * 1024
@@ -620,6 +627,7 @@ export function TripWorkspace({
       setDocumentTitle("");
       setDocumentFileName("");
       setDocumentSheetOpen(false);
+      scrollPageToTopAfterOverlay();
       invalidateWorkspaceTabs("history");
       invalidateClientResource(
         flightResourceKey(tripId),
@@ -667,7 +675,11 @@ export function TripWorkspace({
   }
   async function saveDocumentEdit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editingDocument || !editingDocumentTitle.trim()) return;
+    if (!editingDocument) return;
+    if (!editingDocumentTitle.trim()) {
+      setError("กรุณากรอกชื่อไฟล์");
+      return;
+    }
     const sourceFile = editDocumentFileRef.current?.files?.[0];
     if (sourceFile) {
       const sourceLimit =
@@ -749,6 +761,7 @@ export function TripWorkspace({
       if (file) await removeOffline(editingDocument);
       setEditingDocument(null);
       setEditingDocumentFileName("");
+      scrollPageToTopAfterOverlay();
       invalidateWorkspaceTabs("history");
       invalidateClientResource(
         flightResourceKey(tripId),
@@ -1004,6 +1017,14 @@ export function TripWorkspace({
       mimeType: item.mime_type,
     });
   }
+  function openMasterChecklist() {
+    setError("");
+    setChecklistSheetOpen(false);
+    setCollapsedMasterCategories(
+      new Set(data.masterCategories.map((category) => category.id)),
+    );
+    setMasterOpen(true);
+  }
 
   return (
     <section className="trip-workspace">
@@ -1023,24 +1044,37 @@ export function TripWorkspace({
             : "รวมเอกสารสำคัญของทริปไว้ในที่เดียว",
         )}
         actions={tab === "checklist" ? (
-          <button
-            type="button"
-            className="trip-section-add"
-            disabled={loading}
-            onClick={() => {
-              setError("");
-              setMasterOpen(false);
-              setEditingItemId(null);
-              setTitle("");
-              setAssignee("");
-              setChecklistSheetOpen(true);
-            }}
-            aria-label={label("เพิ่ม Checklist")}
-            title={label("เพิ่ม Checklist")}
-          >
-            <Plus size={21} />
-            <span>{label("เพิ่ม Checklist")}</span>
-          </button>
+          <>
+            <button
+              type="button"
+              className="trip-section-add"
+              disabled={loading}
+              onClick={openMasterChecklist}
+              aria-label={label("เลือกจาก Master Checklist")}
+              title={label("เลือกจาก Master Checklist")}
+            >
+              <ListChecks size={20} />
+              <span>{label("เลือกจาก Master Checklist")}</span>
+            </button>
+            <button
+              type="button"
+              className="trip-section-add"
+              disabled={loading}
+              onClick={() => {
+                setError("");
+                setMasterOpen(false);
+                setEditingItemId(null);
+                setTitle("");
+                setAssignee("");
+                setChecklistSheetOpen(true);
+              }}
+              aria-label={label("เพิ่ม Checklist")}
+              title={label("เพิ่ม Checklist")}
+            >
+              <Plus size={21} />
+              <span>{label("เพิ่ม Checklist")}</span>
+            </button>
+          </>
         ) : (
           <button
             type="button"
@@ -1099,21 +1133,6 @@ export function TripWorkspace({
                 </button>
               )}
             </label>
-            <button
-              type="button"
-              className="checklist-master-trigger"
-              onClick={() => {
-                setError("");
-                setChecklistSheetOpen(false);
-                setCollapsedMasterCategories(
-                  new Set(data.masterCategories.map((category) => category.id)),
-                );
-                setMasterOpen(true);
-              }}
-            >
-              <ListChecks size={15} />
-              {label("Master")}
-            </button>
           </div>
           <div className="checklist-groups">
             {checklistView.categories.map((category, categoryIndex) => {
@@ -1816,12 +1835,7 @@ export function TripWorkspace({
             <div className="modal-submit-actions checklist-sheet-actions">
               <button
                 className="primary-btn"
-                disabled={
-                  busy === (editingItem?.id || "checklist") ||
-                  !title.trim() ||
-                  !categoryId ||
-                  !checklistHasChanges
-                }
+                disabled={busy === (editingItem?.id || "checklist")}
               >
                 {label(
                   busy === (editingItem?.id || "checklist")
@@ -1937,11 +1951,7 @@ export function TripWorkspace({
             <div className="modal-submit-actions">
               <button
                 className="primary-btn"
-                disabled={
-                  busy === `document:${editingDocument.id}` ||
-                  !editingDocumentTitle.trim() ||
-                  !documentEditHasChanges
-                }
+                disabled={busy === `document:${editingDocument.id}`}
               >
                 {label(
                   busy === `document:${editingDocument.id}`
@@ -2044,13 +2054,7 @@ export function TripWorkspace({
             <div className="modal-submit-actions">
               <button
                 className="primary-btn document-upload-submit"
-                disabled={
-                  busy === "document" ||
-                  !documentTitle.trim() ||
-                  !documentFileName ||
-                  !documentCreateHasChanges ||
-                  usagePercent >= 100
-                }
+                disabled={busy === "document" || usagePercent >= 100}
               >
                 <Upload size={16} />
                 {label(
@@ -2060,6 +2064,13 @@ export function TripWorkspace({
             </div>
           </form>
         </div>
+      )}
+      {error && (checklistSheetOpen || documentSheetOpen || Boolean(editingDocument)) && (
+        <FormErrorDialog
+          title={documentSheetOpen || editingDocument ? label("ตรวจสอบข้อมูลเอกสาร") : label("ตรวจสอบข้อมูล Checklist")}
+          description={label(error)}
+          onClose={() => setError("")}
+        />
       )}
       {deleteTarget && (
         <div

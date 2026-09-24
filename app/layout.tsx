@@ -10,6 +10,7 @@ import "@fontsource/ibm-plex-sans/latin-700.css";
 import "./globals.css";
 import { AppGlassScene } from "@/src/components/app-glass-scene";
 import { PwaRuntime } from "@/src/components/pwa-runtime";
+import { GlobalFormValidationDialog } from "@/src/components/form-error-dialog";
 
 export const metadata: Metadata = {
   title: { default: "RouteRao", template: "%s · RouteRao" },
@@ -52,6 +53,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         <AppGlassScene>{children}</AppGlassScene>
+        <GlobalFormValidationDialog />
         <PwaRuntime />
       </body>
     </html>
