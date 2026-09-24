@@ -4106,9 +4106,12 @@ function TimelineExpenseMenu({
       <button
         type="button"
         className="timeline-expense-trigger"
-        onClick={onOpen}
-        aria-label={t("รายการค่าใช้จ่าย")}
-        aria-expanded={open}
+        onClick={() => {
+          onClose();
+          openCost(item);
+        }}
+        aria-label={t("เพิ่มค่าใช้จ่าย")}
+        title={t("เพิ่มค่าใช้จ่าย")}
       >
         <WalletCards size={17} />
       </button>
@@ -4701,9 +4704,7 @@ function TripHub({
                     0,
                   );
                   const openTimelineItem = () => {
-                    if (itemCosts.length) {
-                      setOpenTimelineExpenseId(item.id);
-                    } else if (item.accommodation_id) {
+                    if (item.accommodation_id) {
                       setOpenAccommodationDay(item.day_number);
                       setOpenAccommodationId(item.accommodation_id);
                     } else {
@@ -4755,7 +4756,7 @@ function TripHub({
                           {item.accommodation_id ? <BedDouble size={16} /> : <MapPin size={16} />}
                         </div>
                         <article
-                          className="event-card editable-event-card"
+                          className={`event-card editable-event-card${itemCosts.length ? " has-expenses" : ""}`}
                           onClick={(event) => {
                             if (
                               !(event.target as HTMLElement).closest("button,a")
@@ -4818,14 +4819,19 @@ function TripHub({
                                   {item.transport_note}
                                 </p>
                               )}
-                              {itemCosts.length > 0 && (
-                                <span className="timeline-expense-summary">
-                                  <WalletCards size={12} aria-hidden="true" />
-                                  {t("ค่าใช้จ่ายรวม")} {bahtFormat(itemExpenseTotal)} {t("บาท")}
-                                </span>
-                              )}
                             </div>
                           </button>
+                          {itemCosts.length > 0 && (
+                            <button
+                              type="button"
+                              className="timeline-expense-summary"
+                              onClick={() => setOpenTimelineExpenseId(item.id)}
+                              aria-label={`${t("เปิดรายการค่าใช้จ่าย")} · ${bahtFormat(itemExpenseTotal)} ${t("บาท")}`}
+                            >
+                              <WalletCards size={12} aria-hidden="true" />
+                              {t("ค่าใช้จ่ายรวม")} {bahtFormat(itemExpenseTotal)} {t("บาท")}
+                            </button>
+                          )}
                           <div className="navigate-actions">
                             {previous && (
                               <a

@@ -5671,10 +5671,15 @@ html.dark .trip-section-nav button.active {
   max-height: 2.7em;
 }
 .timeline-expense-summary {
+  position: absolute;
+  z-index: 3;
+  right: 46px;
+  bottom: 8px;
+  left: 120px;
   width: fit-content;
-  max-width: 100%;
+  max-width: calc(100% - 166px);
   min-height: 22px;
-  margin-top: auto;
+  margin: 0;
   padding: 4px 8px;
   border: 1px solid color-mix(in srgb,#139889 18%,var(--line));
   border-radius: 999px;
