@@ -4759,8 +4759,6 @@ function TripHub({
     number | null
   >(null);
   const [openTimelineExpenseId, setOpenTimelineExpenseId] = useState<string | null>(null);
-  const [timelineImagePreview, setTimelineImagePreview] =
-    useState<AttachmentMediaPreview | null>(null);
   const now = useMinuteClock();
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
@@ -4979,19 +4977,9 @@ function TripHub({
                             <button
                               type="button"
                               className={`event-image ${item.image_url||item.location_image_url||item.accommodation_image_url?"":"is-placeholder"}`}
-                              onClick={() =>
-                                setTimelineImagePreview({
-                                  url:
-                                    item.image_url ||
-                                    item.location_image_url ||
-                                    item.accommodation_image_url ||
-                                    "/travel-postcard-fallback.jpg",
-                                  title: item.place_name,
-                                  mimeType: "image/jpeg",
-                                })
-                              }
-                              aria-label={`${t("เปิดรูปเต็มจอ")} ${item.place_name}${imageUsage.kind === "shared" ? ` · ใช้รูปจาก ${imageUsage.sourceName}` : imageUsage.followers > 0 ? ` · รูปต้นทาง มีอีก ${imageUsage.followers} รายการใช้รูปนี้` : ""}`}
-                              title={t("เปิดรูปเต็มจอ")}
+                              onClick={openTimelineItem}
+                              aria-label={`${t("แก้ไขรายการ")} ${item.place_name}`}
+                              title={t("แก้ไขรายการ")}
                             >
                               <Image
                                 src={item.image_url||item.location_image_url||item.accommodation_image_url||"/travel-postcard-fallback.jpg"}
@@ -5211,13 +5199,6 @@ function TripHub({
         )}
       </div>
       </div>
-      {timelineImagePreview && (
-        <AttachmentPreviewOverlay
-          preview={timelineImagePreview}
-          onClose={() => setTimelineImagePreview(null)}
-          closeLabel={t("ปิดรูป")}
-        />
-      )}
     </>
   );
 }

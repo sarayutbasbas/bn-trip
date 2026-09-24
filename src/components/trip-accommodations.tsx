@@ -15,7 +15,6 @@ import {
   Plus,
   ReceiptText,
   Trash2,
-  XCircle,
 } from "lucide-react";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { AttachmentPreviewOverlay } from "@/src/components/attachment-preview-overlay";
@@ -877,6 +876,7 @@ export function TripAccommodations({
               const isBaht = item.currency === "THB";
               const bahtAmount =
                 Number(item.foreign_amount) * Number(item.exchange_rate || 1);
+              const totalAmount = Number(isBaht ? item.foreign_amount : bahtAmount);
               const bookingPlatform = bookingPlatformByValue(
                 item.booking_platform,
               );
@@ -914,13 +914,30 @@ export function TripAccommodations({
                       <span><b>{item.nights} คืน</b></span>
                     </div>
                     <footer>
-                      <span className={`accommodation-breakfast-status ${item.includes_breakfast ? "is-included" : "is-excluded"}`}>
-                        <Coffee size={14} />
-                        {item.includes_breakfast ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                        <span>{item.includes_breakfast ? "รวมอาหารเช้า" : "ไม่รวมอาหารเช้า"}</span>
-                      </span>
-                      {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={36} height={36} /></span>}
-                      <strong className="accommodation-total-price"><small>{isBaht ? "THB" : `${item.currency} · ≈ THB`}</small>{Number(isBaht ? item.foreign_amount : bahtAmount).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</strong>
+                      {(bookingPlatform || item.includes_breakfast) && (
+                        <div className="accommodation-card-icons">
+                          {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={36} height={36} /></span>}
+                          {item.includes_breakfast && (
+                            <span className="accommodation-breakfast-icon" role="img" aria-label="รวมอาหารเช้า" title="รวมอาหารเช้า">
+                              <Coffee size={23} aria-hidden="true" />
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <strong className="accommodation-total-price">
+                        <small>{isBaht ? "THB" : `${item.currency} · ≈ THB`}</small>
+                        {totalAmount.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
+                        {item.nights > 1 && Number.isFinite(totalAmount) && (
+                          <small className="accommodation-nightly-price">
+                            ราคาต่อคืน {(
+                              totalAmount / item.nights
+                            ).toLocaleString("th-TH", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </small>
+                        )}
+                      </strong>
                     </footer>
                   </div>
                 </article>

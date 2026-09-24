@@ -13806,18 +13806,17 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-stay-dates > span:last-child { display:flex;align-items:center;justify-content:center;align-self:stretch;gap:4px;text-align:center; }
 .accommodation-stay-dates > span:last-child svg { grid-row:auto; }
 .accommodation-card-copy footer { min-width:0;margin-top:auto;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 5px; }
-.accommodation-breakfast-status { grid-column:1;min-width:0;min-height:18px;display:flex;align-items:center;gap:3px;overflow:hidden;font-size:10px;font-weight:650;white-space:nowrap; }
-.accommodation-breakfast-status svg { width:14px;height:14px;flex:0 0 14px; }
-.accommodation-breakfast-status.is-included { color:#13875f; }
-.accommodation-breakfast-status.is-excluded { color:#a45a52; }
-.accommodation-breakfast-status > span { overflow:hidden;text-overflow:ellipsis; }
+.accommodation-card-icons { grid-column:1;grid-row:1;min-width:0;display:flex;align-items:center;gap:6px; }
+.accommodation-breakfast-icon { width:36px;height:36px;flex:0 0 36px;border-radius:9px;display:grid;place-items:center;color:#13875f;background:#e7f8f1;box-shadow:0 4px 11px rgba(20,30,50,.18); }
+.dark .accommodation-breakfast-icon { color:#7ee3c5;background:rgba(27,142,107,.2); }
 .accommodation-booking-badge,.accommodation-payment-badge { min-width:0;display:inline-flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.accommodation-booking-badge { grid-column:1;width:36px;height:36px;border-radius:9px;align-self:center;justify-self:start;font-size:7px;box-shadow:0 4px 11px rgba(20,30,50,.18); }
+.accommodation-booking-badge { width:36px;height:36px;border-radius:9px;align-self:center;justify-self:start;font-size:7px;box-shadow:0 4px 11px rgba(20,30,50,.18); }
 .accommodation-booking-badge img { width:36px;height:36px;border-radius:9px;object-fit:contain;object-position:left center; }
 .accommodation-booking-badge svg { color:#ff6718; }
 .accommodation-payment-badge { width:fit-content;max-width:100%;padding:3px 6px;border-radius:999px;color:#188568;background:#e7f8f1;font-size:6px; }
-.accommodation-total-price { grid-column:2;grid-row:1 / span 2;align-self:center;margin:0;text-align:right;color:var(--ink);font-size:20px;line-height:1;white-space:nowrap; }
+.accommodation-total-price { grid-column:2;grid-row:1;align-self:center;margin:0;text-align:right;color:var(--ink);font-size:20px;line-height:1;white-space:nowrap; }
 .accommodation-total-price small { margin:0;display:block;color:var(--muted);font-size:12px;font-weight:600;line-height:1; }
+.accommodation-total-price .accommodation-nightly-price { margin-top:4px;font-size:9px;font-weight:500;line-height:1.2; }
 .accommodation-more-card { width:100%;min-height:62px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line-strong);border-radius:16px;display:grid;grid-template-columns:35px minmax(0,1fr) 20px;align-items:center;gap:9px;color:var(--ink);background:transparent;text-align:left; }
 .accommodation-more-card > span { position:relative;width:35px;height:35px;border-radius:11px;display:grid;place-items:center;color:var(--orange);background:var(--brand-soft); }
 .accommodation-more-card > span svg:last-child { position:absolute;right:3px;bottom:3px;padding:1px;border-radius:50%;color:#fff;background:var(--orange); }
