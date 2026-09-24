@@ -18,7 +18,9 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   if(session.isDemo)return isDemoTrip(id)?NextResponse.json(getDemoItineraries(id)):NextResponse.json({error:"Not found"},{status:404});
   await ensureLatestDatabaseSchema();
   if(!await getTripRole(id,session.userId))return NextResponse.json({error:"Not found"},{status:404});
-  const result=await query(`SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
+  const result=await query(`SELECT i.*,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('id',document.id,'title',document.title,'original_filename',document.original_filename,'mime_type',document.mime_type,'file_size',document.file_size,'itinerary_id',document.itinerary_id) ORDER BY document.created_at,document.id) FROM trip_documents document WHERE document.itinerary_id=i.id),'[]'::jsonb) AS documents,
+      COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
       COALESCE(accommodation.image_url,address_accommodation.image_url) AS accommodation_image_url,
       COALESCE(accommodation.image_url,address_itinerary.image_url,address_accommodation.image_url) AS location_image_url
     FROM itineraries i
@@ -58,7 +60,9 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
     const duplicate=await query("SELECT 1 FROM itineraries WHERE trip_id=$1 AND day_number=$2 AND start_time=$3::time LIMIT 1",[id,x.dayNumber,x.startTime]);if(duplicate.rowCount)return NextResponse.json({error:"วันและเวลานี้มีแผนอยู่แล้ว กรุณาเลือกเวลาอื่น"},{status:409});
     const hour=Number(x.startTime.slice(0,2));const timeSlot=x.timeSlot??(hour<12?"morning":hour<17?"afternoon":"evening");
     const result=await query("INSERT INTO itineraries (trip_id,day_number,time_slot,start_time,place_name,address,image_url,transport_mode,transport_note,cost_items,sort_order) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,COALESCE((SELECT max(sort_order)+1 FROM itineraries WHERE trip_id=$1 AND day_number=$2),0) FROM trips WHERE id=$1 AND $2 BETWEEN 1 AND total_days RETURNING *",[id,x.dayNumber,timeSlot,x.startTime,x.placeName,x.address||null,x.imageUrl||null,x.transportMode||null,x.transportNote||null,JSON.stringify(x.costItems||[])]);
-    if(!result.rows[0])return NextResponse.json({error:"Trip not found or day is outside the trip"},{status:404});await clearFirstItineraryTransport(id,[x.dayNumber]);const saved=await query(`SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
+    if(!result.rows[0])return NextResponse.json({error:"Trip not found or day is outside the trip"},{status:404});await clearFirstItineraryTransport(id,[x.dayNumber]);const saved=await query(`SELECT i.*,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('id',document.id,'title',document.title,'original_filename',document.original_filename,'mime_type',document.mime_type,'file_size',document.file_size,'itinerary_id',document.itinerary_id) ORDER BY document.created_at,document.id) FROM trip_documents document WHERE document.itinerary_id=i.id),'[]'::jsonb) AS documents,
+      COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
       COALESCE(accommodation.image_url,address_accommodation.image_url) AS accommodation_image_url,
       COALESCE(accommodation.image_url,address_itinerary.image_url,address_accommodation.image_url) AS location_image_url
       FROM itineraries i

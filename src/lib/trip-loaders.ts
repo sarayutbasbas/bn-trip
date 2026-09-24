@@ -719,7 +719,23 @@ export async function loadItineraries(session: SessionUser, id: string) {
   await ensureLatestDatabaseSchema();
   if (!(await getTripRole(id, session.userId))) return [];
   const result = await query(
-    `SELECT i.*,COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
+    `SELECT i.*,
+       COALESCE((
+         SELECT jsonb_agg(
+           jsonb_build_object(
+             'id',document.id,
+             'title',document.title,
+             'original_filename',document.original_filename,
+             'mime_type',document.mime_type,
+             'file_size',document.file_size,
+             'itinerary_id',document.itinerary_id
+           )
+           ORDER BY document.created_at,document.id
+         )
+         FROM trip_documents document
+         WHERE document.itinerary_id=i.id
+       ),'[]'::jsonb) AS documents,
+       COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
        COALESCE(accommodation.image_url,address_accommodation.image_url) AS accommodation_image_url,
        COALESCE(accommodation.image_url,address_itinerary.image_url,address_accommodation.image_url) AS location_image_url
      FROM itineraries i

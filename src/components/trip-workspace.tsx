@@ -16,6 +16,10 @@ import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionEmpty } from "@/src/components/trip-section-empty";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import {
+  AttachmentPreviewOverlay,
+  type AttachmentMediaPreview,
+} from "@/src/components/attachment-preview-overlay";
+import {
   MAX_SOURCE_IMAGE_BYTES,
   prepareDocumentFile,
 } from "@/src/lib/client-image-compression";
@@ -184,6 +188,8 @@ export function TripWorkspace({
   );
   const [editingDocumentTitle, setEditingDocumentTitle] = useState("");
   const [editingDocumentFileName, setEditingDocumentFileName] = useState("");
+  const [documentPreview, setDocumentPreview] =
+    useState<AttachmentMediaPreview | null>(null);
   const [assigningItemId, setAssigningItemId] = useState<string | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [openChecklistActionMenu, setOpenChecklistActionMenu] = useState<
@@ -991,15 +997,12 @@ export function TripWorkspace({
       }),
     );
   }
-  function openDocument(documentId: string) {
-    const sourceUrl = new URL(window.location.href);
-    sourceUrl.searchParams.set("workspace", "documents");
-    window.history.replaceState(
-      window.history.state,
-      "",
-      `${sourceUrl.pathname}${sourceUrl.search}${sourceUrl.hash}`,
-    );
-    window.location.assign(`/trips/${tripId}/documents/${documentId}`);
+  function openDocument(item: DocumentItem) {
+    setDocumentPreview({
+      url: fileUrl(item),
+      title: item.title,
+      mimeType: item.mime_type,
+    });
   }
 
   return (
@@ -1396,7 +1399,7 @@ export function TripWorkspace({
                 <button
                   type="button"
                   className="document-view-button"
-                  onClick={() => openDocument(item.id)}
+                  onClick={() => openDocument(item)}
                   aria-label={label(`ดูไฟล์ ${item.title}`)}
                   title={label("ดูไฟล์")}
                 >
@@ -1449,6 +1452,13 @@ export function TripWorkspace({
           </div>
         </div>
         )
+      )}
+      {documentPreview && (
+        <AttachmentPreviewOverlay
+          preview={documentPreview}
+          onClose={() => setDocumentPreview(null)}
+          closeLabel={label("ปิดตัวอย่างเอกสาร")}
+        />
       )}
       {assigningItem && (
         <div

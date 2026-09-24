@@ -1139,19 +1139,37 @@
 .timeline-document-list { display: grid; gap: 6px; }
 .timeline-document-row {
   min-width: 0;
-  min-height: 48px;
-  padding: 7px 8px;
+  min-height: 58px;
+  padding: 0 8px 0 0;
+  overflow: hidden;
   border: .5px solid var(--line);
   border-radius: 13px;
   display: grid;
-  grid-template-columns: 24px minmax(0,1fr) 32px;
+  grid-template-columns: 58px minmax(0,1fr) 32px;
   align-items: center;
   gap: 7px;
   background: var(--surface-solid);
 }
-.timeline-document-row > svg { color: var(--orange); }
+.timeline-document-thumbnail {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-right: .5px solid var(--line);
+  border-radius: 12px 0 0 12px;
+  display: grid;
+  place-items: center;
+  color: #4d73d8;
+  background: color-mix(in srgb,#5b8def 10%,var(--surface-2));
+}
+button.timeline-document-thumbnail { cursor: zoom-in; }
+.timeline-document-thumbnail img { object-fit: cover; }
 .timeline-document-open {
   min-width: 0;
+  width: 100%;
+  height: auto;
   padding: 0;
   overflow: hidden;
   color: inherit;
@@ -1162,7 +1180,7 @@
 .timeline-document-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-document-row strong { font-size: 11px; }
 .timeline-document-row small { margin-top: 2px; color: var(--muted); font-size: 8px; }
-.timeline-document-row > button {
+.timeline-document-row > button:last-child {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -5686,7 +5704,7 @@ html.dark .trip-section-nav button.active {
   width: fit-content;
   max-width: 100%;
   min-height: 22px;
-  margin: auto 0 0;
+  margin: 0;
   padding: 4px 8px;
   border: 1px solid color-mix(in srgb,#139889 18%,var(--line));
   border-radius: 999px;
@@ -5701,6 +5719,50 @@ html.dark .trip-section-nav button.active {
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.timeline-card-badges {
+  min-width: 0;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.editable-event-card .timeline-card-badges { margin-top: auto; }
+.timeline-document-badges {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.timeline-document-badge {
+  width: fit-content;
+  max-width: min(100%,150px);
+  min-height: 22px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb,#547fea 20%,var(--line));
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: color-mix(in srgb,#315fcf 88%,var(--ink));
+  background: color-mix(in srgb,#688ff0 11%,var(--surface-solid));
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+.timeline-document-badge svg { flex: 0 0 auto; }
+.timeline-document-badge span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dark .timeline-document-badge {
+  color: #9db8ff;
+  background: color-mix(in srgb,#547fea 16%,#1c1c1e);
 }
 .timeline-expense-summary svg {
   flex: 0 0 auto;

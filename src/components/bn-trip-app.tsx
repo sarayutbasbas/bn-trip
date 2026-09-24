@@ -24,6 +24,10 @@ import { PageIntro } from "@/src/components/page-intro";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
+import {
+  AttachmentPreviewOverlay,
+  type AttachmentMediaPreview,
+} from "@/src/components/attachment-preview-overlay";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications } from "@/src/components/invitation-notifications";
 import type {
@@ -341,6 +345,15 @@ type NearbyFlight = {
   }>;
   trip_name: string;
 };
+type TimelineDocument = {
+  id: string;
+  title: string;
+  original_filename: string;
+  mime_type: string;
+  file_size: number;
+  itinerary_id: string | null;
+};
+
 export type Itinerary = {
   id: string;
   day_number: number;
@@ -358,6 +371,7 @@ export type Itinerary = {
   accommodation_booking_platform?: string | null;
   accommodation_image_url?: string | null;
   location_image_url?: string | null;
+  documents?: TimelineDocument[];
 };
 type Modal =
   | { type: "trip"; trip?: Trip; preset?: TripCreationPreset }
@@ -1809,6 +1823,111 @@ function EmptyState({
         {t(action)}
       </button>
     </article>
+  );
+}
+
+function TimelineDocumentThumbnail({
+  url,
+  title,
+  mimeType,
+  onClick,
+}: {
+  url: string;
+  title: string;
+  mimeType: string;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      {mimeType.startsWith("image/") ? (
+        <Image src={url} alt={title} fill sizes="58px" unoptimized />
+      ) : (
+        <FileText size={19} />
+      )}
+    </>
+  );
+  const className = `timeline-document-thumbnail ${mimeType.startsWith("image/") ? "is-image" : "is-file"}`;
+  return onClick ? (
+    <button
+      type="button"
+      className={className}
+      onClick={onClick}
+      aria-label={`เปิดเอกสาร ${title}`}
+      title={title}
+    >
+      {content}
+    </button>
+  ) : (
+    <span className={className}>{content}</span>
+  );
+}
+
+function PendingTimelineDocumentThumbnail({
+  document: item,
+  onClick,
+}: {
+  document: PendingTimelineDocument;
+  onClick?: () => void;
+}) {
+  const previewUrl = useMemo(
+    () =>
+      typeof window !== "undefined" && item.file.type.startsWith("image/")
+        ? URL.createObjectURL(item.file)
+        : "",
+    [item.file],
+  );
+  useEffect(
+    () => () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl],
+  );
+  return (
+    <TimelineDocumentThumbnail
+      url={previewUrl}
+      title={item.title}
+      mimeType={item.file.type}
+      onClick={onClick}
+    />
+  );
+}
+
+function TimelineDocumentBadges({
+  tripId,
+  documents,
+}: {
+  tripId: string;
+  documents?: TimelineDocument[];
+}) {
+  const [preview, setPreview] = useState<AttachmentMediaPreview | null>(null);
+  if (!documents?.length) return null;
+  return (
+    <>
+      <div className="timeline-document-badges">
+        {documents.map((item) => (
+          <button
+            type="button"
+            className="timeline-document-badge"
+            key={item.id}
+            title={item.title}
+            onClick={(event) => {
+              event.stopPropagation();
+              setPreview({
+                url: `/api/trips/${tripId}/documents/${item.id}/file`,
+                title: item.title,
+                mimeType: item.mime_type,
+              });
+            }}
+          >
+            <FileText size={11} aria-hidden="true" />
+            <span>{item.title}</span>
+          </button>
+        ))}
+      </div>
+      {preview ? (
+        <AttachmentPreviewOverlay preview={preview} onClose={() => setPreview(null)} />
+      ) : null}
+    </>
   );
 }
 
@@ -4886,16 +5005,21 @@ function TripHub({
                                   {item.transport_note}
                                 </p>
                               )}
-                              {itemCosts.length > 0 && (
-                                <button
-                                  type="button"
-                                  className="timeline-expense-summary"
-                                  onClick={() => setOpenTimelineExpenseId(item.id)}
-                                  aria-label={`${t("เปิดรายการค่าใช้จ่าย")} · ${bahtFormat(itemExpenseTotal)} ${t("บาท")}`}
-                                >
-                                  <WalletCards size={12} aria-hidden="true" />
-                                  {t("ค่าใช้จ่ายรวม")} {bahtFormat(itemExpenseTotal)} {t("บาท")}
-                                </button>
+                              {(itemCosts.length > 0 || Boolean(item.documents?.length)) && (
+                                <div className="timeline-card-badges">
+                                  {itemCosts.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className="timeline-expense-summary"
+                                      onClick={() => setOpenTimelineExpenseId(item.id)}
+                                      aria-label={`${t("เปิดรายการค่าใช้จ่าย")} · ${bahtFormat(itemExpenseTotal)} ${t("บาท")}`}
+                                    >
+                                      <WalletCards size={12} aria-hidden="true" />
+                                      {t("ค่าใช้จ่ายรวม")} {bahtFormat(itemExpenseTotal)} {t("บาท")}
+                                    </button>
+                                  )}
+                                  <TimelineDocumentBadges tripId={trip.id} documents={item.documents} />
+                                </div>
                               )}
                             </div>
                           </div>
@@ -5232,6 +5356,11 @@ function TimelineScreen({
                       {!item.accommodation_id && item.transport_note && (
                         <p className="event-detail">{item.transport_note}</p>
                       )}
+                      {item.documents?.length ? (
+                        <div className="timeline-card-badges">
+                          <TimelineDocumentBadges tripId={trip.id} documents={item.documents} />
+                        </div>
+                      ) : null}
                     </div>
                   </article>
                 </div>
@@ -9043,15 +9172,6 @@ export function TripDestinationPicker({
   );
 }
 
-type TimelineDocument = {
-  id: string;
-  title: string;
-  original_filename: string;
-  mime_type: string;
-  file_size: number;
-  itinerary_id: string | null;
-};
-
 type PendingTimelineDocument = {
   id: string;
   title: string;
@@ -9087,6 +9207,7 @@ function ModalForm({
   deleteItem,
   deleteTrip,
   canDelete,
+  onDocumentsChanged,
 }: {
   modal: Extract<NonNullable<Modal>, { type: "trip" | "place" }>;
   trip: Trip | null;
@@ -9097,6 +9218,7 @@ function ModalForm({
   deleteItem: (item: Itinerary) => Promise<void>;
   deleteTrip: (trip: Trip) => Promise<void>;
   canDelete: boolean;
+  onDocumentsChanged: () => Promise<void>;
 }) {
   const t = useT();
   const [saving, setSaving] = useState(false);
@@ -9122,7 +9244,7 @@ function ModalForm({
   const [pendingDelete, setPendingDelete] = useState(false);
   const [confirmDisableFlights, setConfirmDisableFlights] = useState(false);
   const [fileRemovalConfirmation,setFileRemovalConfirmation]=useState<Confirmation|null>(null);
-  const [mediaPreview,setMediaPreview]=useState<{url:string;title:string;mimeType:string;temporary:boolean}|null>(null);
+  const [mediaPreview,setMediaPreview]=useState<AttachmentMediaPreview|null>(null);
   const flightDisableConfirmed = useRef(false);
   const modalBackdropRef = useRef<HTMLDivElement>(null);
   const focusedTripFieldRef = useRef<HTMLElement | null>(null);
@@ -9382,6 +9504,7 @@ function ModalForm({
       if(!response.ok)throw new Error(body.error||"ลบเอกสารไม่สำเร็จ");
       setTimelineDocuments(current=>current.filter(document=>document.id!==documentId));
       invalidateClientResourcesContaining(`trip:${trip.id}:`);
+      await onDocumentsChanged();
     }catch(reason){setError(reason instanceof Error?reason.message:"ลบเอกสารไม่สำเร็จ")}
     finally{setDocumentDeletingId(null)}
   }
@@ -9483,6 +9606,7 @@ function ModalForm({
             setPendingTimelineDocuments(current=>current.filter(item=>item.id!==document.id));
           }
           invalidateClientResourcesContaining(`trip:${trip.id}:`);
+          await onDocumentsChanged();
         }
       }
       close("saved");
@@ -9817,8 +9941,8 @@ function ModalForm({
                 <div className="timeline-document-heading"><div><strong>{t("เอกสารแนบ")}</strong><small>{t("เพิ่มรูปหรือ PDF พร้อมตั้งชื่อไฟล์")}</small></div></div>
                 {documentsLoading?<p className="timeline-document-loading">{t("กำลังโหลดเอกสาร…")}</p>:null}
                 {(timelineDocuments.length>0||pendingTimelineDocuments.length>0)&&<div className="timeline-document-list">
-                  {timelineDocuments.map(document=><div className="timeline-document-row" key={document.id}><FileText size={17}/><button type="button" className="timeline-document-open" onClick={()=>openStoredDocument(document)}><strong>{document.title}</strong><small>{document.original_filename}</small></button>{canDeleteCurrent?<button type="button" disabled={documentDeletingId===document.id} onClick={()=>askRemoveExistingDocument(document)} aria-label={t("ลบเอกสาร")}><Trash2 size={15}/></button>:null}</div>)}
-                  {pendingTimelineDocuments.map(document=><div className="timeline-document-row is-pending" key={document.id}><FileText size={17}/><button type="button" className="timeline-document-open" onClick={()=>openPendingDocument(document)}><strong>{document.title}</strong><small>{document.file.name} · {t("พร้อมอัปโหลดเมื่อกดบันทึก")}</small></button><button type="button" onClick={()=>askRemovePendingDocument(document)} aria-label={t("นำออกจากลิสต์")}><Trash2 size={15}/></button></div>)}
+                  {timelineDocuments.map(document=><div className="timeline-document-row" key={document.id}><TimelineDocumentThumbnail url={`/api/trips/${trip?.id}/documents/${document.id}/file`} title={document.title} mimeType={document.mime_type} onClick={()=>openStoredDocument(document)}/><button type="button" className="timeline-document-open" onClick={()=>openStoredDocument(document)}><strong>{document.title}</strong></button>{canDeleteCurrent?<button type="button" disabled={documentDeletingId===document.id} onClick={()=>askRemoveExistingDocument(document)} aria-label={t("ลบเอกสาร")}><Trash2 size={15}/></button>:null}</div>)}
+                  {pendingTimelineDocuments.map(document=><div className="timeline-document-row is-pending" key={document.id}><PendingTimelineDocumentThumbnail document={document} onClick={()=>openPendingDocument(document)}/><button type="button" className="timeline-document-open" onClick={()=>openPendingDocument(document)}><strong>{document.title}</strong><small>{t("พร้อมอัปโหลดเมื่อกดบันทึก")}</small></button><button type="button" onClick={()=>askRemovePendingDocument(document)} aria-label={t("นำออกจากลิสต์")}><Trash2 size={15}/></button></div>)}
                 </div>}
                 <div className="field"><label>{t("ชื่อไฟล์")}</label><input value={documentTitle} onChange={event=>setDocumentTitle(event.target.value)} maxLength={180} placeholder={t("เช่น ใบจองโรงแรม")}/></div>
                 <DocumentFilePicker fileName={documentFile?.name||""} inputRef={documentInputRef} onFileChange={file=>{setDocumentFile(file);if(file&&!documentTitle.trim())setDocumentTitle(file.name.replace(/\.[^.]+$/,"").slice(0,180))}} selectedNote={t("พร้อมอัปโหลดเมื่อกดบันทึก")}/>
@@ -9878,10 +10002,7 @@ function ModalForm({
         />
       )}
       {fileRemovalConfirmation&&<ConfirmDialog confirmation={fileRemovalConfirmation} close={()=>setFileRemovalConfirmation(null)}/>}
-      {mediaPreview&&<div className="attachment-preview-overlay" role="dialog" aria-modal="true" aria-label={mediaPreview.title} onMouseDown={event=>{if(event.target===event.currentTarget)closeMediaPreview()}}>
-        <header><strong>{mediaPreview.title}</strong><button type="button" onClick={closeMediaPreview} aria-label={t("ปิดรูปเต็มจอ")}><X size={20}/></button></header>
-        <div className="attachment-preview-content">{mediaPreview.mimeType.startsWith("image/")?<Image src={mediaPreview.url} alt={mediaPreview.title} fill sizes="100vw" unoptimized/>:<iframe src={mediaPreview.url} title={mediaPreview.title}/>}</div>
-      </div>}
+      {mediaPreview&&<AttachmentPreviewOverlay preview={mediaPreview} onClose={closeMediaPreview}/>}
     </>
   );
 }
@@ -10914,6 +11035,7 @@ export function BNTripApp({
       deleteItem={removeItinerary}
       deleteTrip={removeTrip}
       canDelete={selected?.access_role !== "view"}
+      onDocumentsChanged={() => selected ? refreshActiveTrip(selected.id) : Promise.resolve()}
     />
   );
   const label = (value: string) => value;
