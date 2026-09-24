@@ -3812,6 +3812,24 @@ button:disabled {
   text-overflow: clip;
   white-space: normal;
 }
+.compact-trip-body .trip-card-facts {
+  margin-top: 7px;
+  gap: 4px;
+  color: var(--muted-2);
+  font-size: 9px;
+}
+.compact-trip-body .trip-card-facts span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compact-trip-body .trip-card-facts span:last-child {
+  flex: 0 0 auto;
+}
+.compact-trip-body .trip-card-flights {
+  color: var(--muted-2);
+  font-size: 9px;
+}
 .compact-trip-meta {
   margin-top: 8px;
   display: flex;

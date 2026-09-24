@@ -2003,18 +2003,6 @@ function displayTripDay(
 ) {
   return storedDay - Number(Boolean(trip?.has_day_zero));
 }
-function tripRangeLabel(trip: Trip) {
-  const label = (value: string | null) => {
-    if (!value) return activeLang === "EN" ? "Not specified" : "ยังไม่ระบุ";
-    const [date, time = ""] = value.split("T");
-    const dateLabel = new Date(`${date}T00:00:00`).toLocaleDateString(
-      activeLang === "EN" ? "en-GB" : "th-TH",
-      { day: "numeric", month: "short", year: "2-digit" },
-    );
-    return `${dateLabel} (${time.slice(0, 5)})`;
-  };
-  return `${label(trip.outbound_departure_at)} - ${label(trip.return_departure_at)}`;
-}
 function tripDateRangeLabel(trip: Trip) {
   const label = (value: string | null) => {
     if (!value) return "";
@@ -2412,6 +2400,63 @@ function LoginScreen({ authError }: { authError?: string }) {
   );
 }
 
+function TripCardFacts({ trip }: { trip: Trip }) {
+  const t = useT();
+  const dateRangeLabel = tripDateRangeLabel(trip);
+  const hasDuration = Number(trip.total_days || 0) > 0;
+  if (!dateRangeLabel && !hasDuration) return null;
+  return (
+    <div className="trip-card-facts">
+      {dateRangeLabel && <span><CalendarDays size={11} />{dateRangeLabel}</span>}
+      {dateRangeLabel && hasDuration && <i className="trip-card-facts-separator" aria-hidden="true">•</i>}
+      {hasDuration && <span><Moon size={11} fill="currentColor" />{t(`${trip.total_days} วัน`)}</span>}
+    </div>
+  );
+}
+
+function TripCardFlights({ trip }: { trip: Trip }) {
+  const t = useT();
+  const flightSummaries = (trip.flight_summaries || []).filter(
+    (flight) => flight.airline_code && flight.flight_number,
+  );
+  if (!flightSummaries.length) return null;
+  const flightTypeCounts = flightSummaries.reduce((counts, flight) => {
+    counts.set(flight.journey_type, (counts.get(flight.journey_type) || 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const flightTypeIndexes = new Map<string, number>();
+  const flightLabels = flightSummaries.map((flight) => {
+    const index = flightTypeIndexes.get(flight.journey_type) || 0;
+    flightTypeIndexes.set(flight.journey_type, index + 1);
+    const baseLabel = flight.journey_type === "outbound"
+      ? "ขาไป"
+      : flight.journey_type === "return"
+        ? "ขากลับ"
+        : "ระหว่างทริป";
+    return {
+      key: `${flight.journey_type}-${flight.segment_order}-${flight.airline_code}-${flight.flight_number}`,
+      label: (flightTypeCounts.get(flight.journey_type) || 0) > 1
+        ? `${baseLabel} ${index + 1}`
+        : baseLabel,
+      number: `${flight.airline_code} ${flight.flight_number}`,
+      showIcon: index === 0,
+      direction: flight.journey_type === "return" ? "return" : "outbound",
+    };
+  });
+  return (
+    <div className="trip-card-flights">
+      {flightLabels.map((flight) => (
+        <span className="trip-card-flight" key={flight.key}>
+          <i aria-hidden="true">
+            {flight.showIcon && <Plane className={`trip-card-flight-plane is-${flight.direction}`} size={12} fill="currentColor" />}
+          </i>
+          <span><b>{t(flight.label)} :</b> {flight.number}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function TripCard({
   trip,
   past,
@@ -2439,37 +2484,6 @@ function TripCard({
     trip.country_name,
     trip.trip_destinations,
   );
-  const dateRangeLabel = tripDateRangeLabel(trip);
-  const hasDuration = Number(trip.total_days || 0) > 0;
-  const flightSummaries = (trip.flight_summaries || []).filter(
-    (flight) => flight.airline_code && flight.flight_number,
-  );
-  const flightTypeCounts = flightSummaries.reduce((counts, flight) => {
-    counts.set(flight.journey_type, (counts.get(flight.journey_type) || 0) + 1);
-    return counts;
-  }, new Map<string, number>());
-  const flightTypeIndexes = new Map<string, number>();
-  const flightLabels = flightSummaries.map((flight) => {
-    const index = flightTypeIndexes.get(flight.journey_type) || 0;
-    flightTypeIndexes.set(flight.journey_type, index + 1);
-    const baseLabel =
-      flight.journey_type === "outbound"
-        ? "ขาไป"
-        : flight.journey_type === "return"
-          ? "ขากลับ"
-          : "ระหว่างทริป";
-    return {
-      key: `${flight.journey_type}-${flight.segment_order}-${flight.airline_code}-${flight.flight_number}`,
-      label:
-        (flightTypeCounts.get(flight.journey_type) || 0) > 1
-          ? `${baseLabel} ${index + 1}`
-          : baseLabel,
-      number: `${flight.airline_code} ${flight.flight_number}`,
-      showIcon: index === 0,
-      direction:
-        flight.journey_type === "return" ? "return" : "outbound",
-    };
-  });
   const hasBudget = budget > 0 || actualSpent > 0;
   const countdownLabel = !trip.outbound_departure_at
     ? t("ยังไม่กำหนดวัน")
@@ -2524,47 +2538,8 @@ function TripCard({
             {destinationLabel}
           </p>
         )}
-        {(dateRangeLabel || hasDuration) && (
-          <div className="trip-card-facts">
-            {dateRangeLabel && (
-              <span>
-                <CalendarDays size={11} />
-                {dateRangeLabel}
-              </span>
-            )}
-            {dateRangeLabel && hasDuration && (
-              <i className="trip-card-facts-separator" aria-hidden="true">
-                •
-              </i>
-            )}
-            {hasDuration && (
-              <span>
-                <Moon size={11} fill="currentColor" />
-                {t(`${trip.total_days} วัน`)}
-              </span>
-            )}
-          </div>
-        )}
-        {flightLabels.length > 0 && (
-          <div className="trip-card-flights">
-            {flightLabels.map((flight) => (
-              <span className="trip-card-flight" key={flight.key}>
-                <i aria-hidden="true">
-                  {flight.showIcon && (
-                    <Plane
-                      className={`trip-card-flight-plane is-${flight.direction}`}
-                      size={12}
-                      fill="currentColor"
-                    />
-                  )}
-                </i>
-                <span>
-                  <b>{t(flight.label)} :</b> {flight.number}
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
+        <TripCardFacts trip={trip} />
+        <TripCardFlights trip={trip} />
         {hasBudget && (
           <div className="trip-meta">
             {budget > 0 && (
@@ -3662,9 +3637,8 @@ function CompactTripCard({
             )}
           </span>
         </p>
-        <small>
-          {tripRangeLabel(trip)} · ({t(`${trip.total_days} วัน`)})
-        </small>
+        <TripCardFacts trip={trip} />
+        <TripCardFlights trip={trip} />
         <div className="compact-trip-meta">
           <span className={amountState}>
             <WalletCards size={12} />
@@ -5038,15 +5012,13 @@ function TripHub({
                                   </>
                                 )}
                               </span>
-                              {imageUsage.kind === "shared" || imageUsage.followers > 0 ? (
+                              {imageUsage.kind === "own" && imageUsage.followers > 0 ? (
                                 <span
-                                  className={`event-image-source-badge ${imageUsage.kind === "own" ? "is-source" : "is-shared"}`}
-                                  title={imageUsage.kind === "own"
-                                    ? `รูปต้นทาง · หากเปลี่ยนรูป รายการอีก ${imageUsage.followers} รายการจะเปลี่ยนตาม`
-                                    : `ใช้รูปจาก ${imageUsage.sourceName} · จะเปลี่ยนตามรูปต้นทาง`}
+                                  className="event-image-source-badge is-source"
+                                  title={`รูปต้นทาง · หากเปลี่ยนรูป รายการอีก ${imageUsage.followers} รายการจะเปลี่ยนตาม`}
                                 >
                                   <Images size={10} />
-                                  {imageUsage.kind === "own" ? "รูปต้นทาง" : "ตามรูปต้นทาง"}
+                                  รูปต้นทาง
                                 </span>
                               ) : null}
                             </button>
@@ -5085,10 +5057,10 @@ function TripHub({
                                       type="button"
                                       className="timeline-expense-summary"
                                       onClick={() => setOpenTimelineExpenseId(item.id)}
-                                      aria-label={`${t("เปิดรายการค่าใช้จ่าย")} · ${bahtFormat(itemExpenseTotal)} ${t("บาท")}`}
+                                      aria-label={`${t("เปิดรายการค่าใช้จ่าย")} · ฿${bahtFormat(itemExpenseTotal)}`}
                                     >
                                       <WalletCards size={12} aria-hidden="true" />
-                                      {t("ค่าใช้จ่ายรวม")} {bahtFormat(itemExpenseTotal)} {t("บาท")}
+                                      {t("ค่าใช้จ่ายรวม")} ฿{bahtFormat(itemExpenseTotal)}
                                     </button>
                                   )}
                                   <TimelineDocumentBadges tripId={trip.id} documents={item.documents} />
