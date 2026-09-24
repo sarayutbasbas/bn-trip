@@ -22,6 +22,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { PageIntro } from "@/src/components/page-intro";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
+import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications } from "@/src/components/invitation-notifications";
@@ -134,19 +135,19 @@ const TripWorkspace = dynamic(
     import("@/src/components/trip-workspace").then(
       (module) => module.TripWorkspace,
     ),
-  { loading: () => <div className="card">กำลังเปิดพื้นที่ทริป…</div> },
+  { loading: () => <TripSectionSkeleton variant="checklist" /> },
 );
 const TripFlights = dynamic(
   () => import("@/src/components/trip-flights").then((module) => module.TripFlights),
-  { loading: () => <div className="card">กำลังเปิดข้อมูลเที่ยวบิน…</div> },
+  { loading: () => <TripSectionSkeleton variant="flights" /> },
 );
 const TripInsurance = dynamic(
   () => import("@/src/components/trip-flights").then((module) => module.TripFlights),
-  { loading: () => <div className="card">กำลังเปิดข้อมูลประกัน…</div> },
+  { loading: () => <TripSectionSkeleton variant="insurance" /> },
 );
 const TripAccommodations = dynamic(
   () => import("@/src/components/trip-accommodations").then((module) => module.TripAccommodations),
-  { loading: () => <div className="card">กำลังเปิดข้อมูลที่พัก…</div> },
+  { loading: () => <TripSectionSkeleton variant="accommodations" /> },
 );
 
 type Screen =
