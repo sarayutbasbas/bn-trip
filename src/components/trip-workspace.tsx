@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
@@ -161,6 +162,9 @@ export function TripWorkspace({
   label: (value: string) => string;
   initialTab?: "checklist" | "documents";
 }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const workspaceReturnTo = `${pathname}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
   const initialCachedWorkspace = peekClientResource<Partial<Workspace>>(
     workspaceResourceKey(tripId, initialTab),
   );
@@ -1140,7 +1144,9 @@ export function TripWorkspace({
                 checklistView.groups.get(category) || [];
               const visibleCategoryItems =
                 checklistView.visibleGroups.get(category) || [];
-              const collapsed = collapsedCategories.has(category);
+              const collapsed = checklistKeyword
+                ? false
+                : collapsedCategories.has(category);
               const completedCount = checklistView.completed.get(category) || 0;
               const progress = Math.round(
                 (completedCount / categoryItems.length) * 100,
@@ -1583,7 +1589,7 @@ export function TripWorkspace({
               <div className="modal-head-actions">
                 <a
                   className="icon-btn"
-                  href={`/settings/checklists?returnTo=${encodeURIComponent(`/trips/${tripId}?workspace=checklist`)}`}
+                  href={`/settings/checklists?returnTo=${encodeURIComponent(workspaceReturnTo)}`}
                   aria-label={label("จัดการ Master")}
                   title={label("จัดการ Master")}
                 >

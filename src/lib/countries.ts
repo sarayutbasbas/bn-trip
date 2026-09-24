@@ -60,6 +60,15 @@ export function countryByCode(code?: string | null) {
   return TRIP_COUNTRIES.find((country) => country.code === code?.toUpperCase());
 }
 
+export function countryCodesMatchingSearch(value: string) {
+  const normalized = value.trim().toLocaleLowerCase();
+  if (!normalized) return [];
+  return TRIP_COUNTRIES.filter((country) =>
+    [country.code, country.nameTh, country.nameEn, ...(country.aliases || [])]
+      .some((term) => term.toLocaleLowerCase().includes(normalized)),
+  ).map((country) => country.code);
+}
+
 export function inferTripCountry(destination?: string | null, timezone?: string | null) {
   const normalized = (destination || "").trim().toLowerCase();
   const byName = TRIP_COUNTRIES.find((country) =>

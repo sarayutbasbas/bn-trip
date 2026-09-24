@@ -391,7 +391,7 @@ export function ChecklistMasterPage({
           <div className="checklist-groups master-checklist-groups">
             {masterView.categories.map((category, categoryIndex) => {
                 const categoryItems = masterView.items.get(category.id) || [];
-                const expanded = keyword ? true : open.includes(category.id);
+                const expanded = Boolean(keyword) || open.includes(category.id);
                 const isEditingCategory = editingCategory?.id === category.id;
                 return (
                   <section

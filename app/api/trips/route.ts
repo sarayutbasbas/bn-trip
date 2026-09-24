@@ -5,7 +5,7 @@ import { query,transaction } from "@/src/lib/db";
 import { tripAccessSql,tripActualExpenseSql,tripIncompleteSetupSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { getDemoTrips } from "@/src/lib/demo-data";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
-import { countryByCode,formatTripDestination } from "@/src/lib/countries";
+import { countryByCode,countryCodesMatchingSearch,formatTripDestination } from "@/src/lib/countries";
 import { loadDashboard } from "@/src/lib/trip-loaders";
 import { resolveTripDestinations } from "@/src/lib/travel-badges";
 
@@ -30,7 +30,8 @@ export async function GET(request:Request) {
     const sort=params.get("sort")||"latest";
     const limit=Math.min(50,Math.max(1,Number(params.get("limit")||20)));
     const offset=Math.max(0,Number(params.get("offset")||0));
-    const values:Array<string|number|number[]>=[session.userId];
+    const matchingCountryCodes=countryCodesMatchingSearch(search);
+    const values:Array<string|number|number[]|string[]>=[session.userId];
     const where=[access];
     if(status==="ongoing")where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
     if(status==="upcoming")where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
@@ -38,13 +39,31 @@ export async function GET(request:Request) {
     if(tripType==="domestic")where.push("t.country_code='TH'");
     if(tripType==="international")where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
     if(filterYears.length){values.push(filterYears);where.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${values.length}::int[])`)}
-    if(search){values.push(`%${search}%`);where.push(`(name ILIKE $${values.length} OR destination ILIKE $${values.length} OR country_name ILIKE $${values.length})`)}
-    const statusCountValues:Array<string|number|number[]>=[session.userId];
+    if(search){
+      values.push(`%${search}%`);
+      const textSearchIndex=values.length;
+      if(matchingCountryCodes.length){
+        values.push(matchingCountryCodes);
+        where.push(`(name ILIKE $${textSearchIndex} OR destination ILIKE $${textSearchIndex} OR country_name ILIKE $${textSearchIndex} OR t.country_code=ANY($${values.length}::text[]))`);
+      }else{
+        where.push(`(name ILIKE $${textSearchIndex} OR destination ILIKE $${textSearchIndex} OR country_name ILIKE $${textSearchIndex})`);
+      }
+    }
+    const statusCountValues:Array<string|number|number[]|string[]>=[session.userId];
     const statusCountWhere=[access];
     if(tripType==="domestic")statusCountWhere.push("t.country_code='TH'");
     if(tripType==="international")statusCountWhere.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
     if(filterYears.length){statusCountValues.push(filterYears);statusCountWhere.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${statusCountValues.length}::int[])`)}
-    if(search){statusCountValues.push(`%${search}%`);statusCountWhere.push(`(name ILIKE $${statusCountValues.length} OR destination ILIKE $${statusCountValues.length} OR country_name ILIKE $${statusCountValues.length})`)}
+    if(search){
+      statusCountValues.push(`%${search}%`);
+      const textSearchIndex=statusCountValues.length;
+      if(matchingCountryCodes.length){
+        statusCountValues.push(matchingCountryCodes);
+        statusCountWhere.push(`(name ILIKE $${textSearchIndex} OR destination ILIKE $${textSearchIndex} OR country_name ILIKE $${textSearchIndex} OR t.country_code=ANY($${statusCountValues.length}::text[]))`);
+      }else{
+        statusCountWhere.push(`(name ILIKE $${textSearchIndex} OR destination ILIKE $${textSearchIndex} OR country_name ILIKE $${textSearchIndex})`);
+      }
+    }
     const order=sort==="oldest"?"t.start_date ASC,t.id ASC":sort==="name"?"t.name ASC,t.id ASC":sort==="nearest"?"ABS(EXTRACT(EPOCH FROM (COALESCE(t.outbound_departure_at,t.start_date::timestamp)-(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))))) ASC,t.id ASC":"CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 0 WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 1 ELSE 2 END ASC,CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.outbound_departure_at,t.start_date::timestamp) END ASC,CASE WHEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) END DESC,t.id DESC";
     const clause=where.join(" AND ");
     const [items,total,years,statusCounts]=await Promise.all([

@@ -3288,7 +3288,7 @@ function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
               key={`${item.countryCode}:${item.country}`}
               onClick={() =>
                 router.push(
-                  `/trips?status=past&q=${encodeURIComponent(country.nameEn)}`,
+                  `/trips?status=past&q=${encodeURIComponent(country.nameTh)}`,
                 )
               }
               title={`${name} · ${item.averageRating.toFixed(1)}`}
@@ -4211,7 +4211,16 @@ function TripSectionNav({
     { id: "flights", label: "เที่ยวบิน", Icon: Plane, disabled: !trip.has_flights, availableInTrip: Boolean(trip.has_flights), hasNotification: completion.flightIncomplete, active: active === "flights", action: () => select("flights") },
     { id: "stays", label: "ที่พัก", Icon: BedDouble, disabled: trip.total_days <= 1, availableInTrip: trip.total_days > 1, hasNotification: completion.accommodationIncomplete, active: active === "stays", action: () => select("stays") },
     { id: "checklist", label: "Checklist", Icon: ClipboardList, hasNotification: completion.checklistIncomplete, active: active === "workspace" && workspaceTab === "checklist", action: () => select("workspace", "checklist") },
-    { id: "photos", label: "รูปภาพ / Link", Icon: Images, disabled: !trip.google_photos_url, availableInTrip: Boolean(trip.google_photos_url), action: () => trip.google_photos_url && window.open(trip.google_photos_url, "_blank", "noopener,noreferrer") },
+    {
+      id: "photos",
+      label: "รูปภาพ / Link",
+      Icon: Images,
+      disabled: !trip.google_photos_url,
+      availableInTrip: Boolean(trip.google_photos_url),
+      action: () => {
+        if (trip.google_photos_url) window.location.assign(trip.google_photos_url);
+      },
+    },
     { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", availableInTrip: trip.country_code !== "TH", hasNotification: completion.insuranceIncomplete, active: active === "insurance", action: () => select("insurance") },
     { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
     { id: "export", label: "Download", Icon: Download, action: () => { window.open(`/api/trips/${trip.id}/export-plan`, "_self"); } },
@@ -4700,6 +4709,7 @@ function TripHub({
   initialWorkspaceTab,
   initialView,
   initialAccommodationId,
+  backHref,
 }: {
   trip: Trip;
   items: Itinerary[];
@@ -4723,6 +4733,7 @@ function TripHub({
   initialWorkspaceTab?: WorkspaceTab;
   initialView?: "plan" | "flights" | "insurance" | "stays";
   initialAccommodationId?: string;
+  backHref: string;
 }) {
   const t = useT();
   const router = useRouter();
@@ -4824,7 +4835,7 @@ function TripHub({
         <TripHeader
           trip={trip}
           openReviews={openReviews}
-          goBack={() => router.back()}
+          goBack={() => router.replace(backHref)}
           editTrip={editTrip}
           manageMembers={
             trip.access_role !== "owner"
@@ -5180,6 +5191,7 @@ function TimelineScreen({
   editTrip,
   notify,
   onChanged,
+  backHref,
 }: {
   trip: Trip;
   items: Itinerary[];
@@ -5190,6 +5202,7 @@ function TimelineScreen({
   editTrip: () => void;
   notify: (message: string) => void;
   onChanged: () => void | Promise<void>;
+  backHref: string;
 }) {
   const t = useT();
   const router = useRouter();
@@ -5234,7 +5247,7 @@ function TimelineScreen({
   return (
       <div className="screen timeline-screen">
       <div className="trip-cover-region">
-        <TripHeader trip={trip} goBack={() => router.back()} editTrip={editTrip} />
+        <TripHeader trip={trip} goBack={() => router.replace(backHref)} editTrip={editTrip} />
       </div>
       <TripSectionNav
         trip={trip}
@@ -6399,12 +6412,14 @@ function ExpensesScreen({
   cards,
   openCost,
   editTrip,
+  backHref,
 }: {
   trip: Trip;
   items: Itinerary[];
   cards: PaymentCard[];
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
   editTrip: () => void;
+  backHref: string;
 }) {
   const router = useRouter();
   const hasAccommodations = items.some((item) => Boolean(item.accommodation_id));
@@ -6419,7 +6434,7 @@ function ExpensesScreen({
     <ExpenseTripMembersContext.Provider value={trip.members || []}>
       <div className="screen trip-hub-screen">
         <div className="trip-cover-region">
-          <TripHeader trip={trip} goBack={() => router.back()} editTrip={editTrip} />
+          <TripHeader trip={trip} goBack={() => router.replace(backHref)} editTrip={editTrip} />
         </div>
         <TripSectionNav
           trip={trip}
@@ -10919,6 +10934,7 @@ export function BNTripApp({
       initialWorkspaceTab={workspaceTab}
       initialView={tripView}
       initialAccommodationId={accommodationId}
+      backHref={returnTo || "/"}
     />
   ) : page === "timeline" && selected ? (
     <TimelineScreen
@@ -10934,6 +10950,7 @@ export function BNTripApp({
       editTrip={protect(() => setModal({ type: "trip", trip: selected }))}
       notify={flash}
       onChanged={() => refreshActiveTrip(selected.id)}
+      backHref={returnTo || "/"}
     />
   ) : page === "expenses" && selected ? (
     <ExpensesScreen
@@ -10942,6 +10959,7 @@ export function BNTripApp({
       cards={tripCards}
       openCost={protect(openCost)}
       editTrip={protect(() => setModal({ type: "trip", trip: selected }))}
+      backHref={returnTo || "/"}
     />
   ) : page === "settings" ? (
     <SettingsScreen
