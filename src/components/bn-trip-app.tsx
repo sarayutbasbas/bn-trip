@@ -10662,7 +10662,7 @@ export function BNTripApp({
       setActiveDay(saved.day_number);
       flash(
         editing
-          ? "อัปเดตวัน เวลา และรายละเอียดแล้ว"
+          ? "บันทึกสำเร็จ"
           : "เพิ่มแผนเที่ยวและเรียง Timeline แล้ว",
       );
       return saved;
@@ -11150,7 +11150,7 @@ export function BNTripApp({
       items={itineraries}
       close={(reason) => {
         const returnToIdeas = reason !== "saved" && modal.type === "trip" && !modal.trip && Boolean(modal.preset?.sourceIdeaId);
-        const scrollTimelineToTop = reason === "saved" && (page === "trip" || page === "timeline");
+        const scrollTimelineToTop = reason === "saved" && (page === "trip" || page === "timeline") && !(modal.type === "place" && modal.item);
         setModal(null);
         if (scrollTimelineToTop) scrollPageToTopAfterOverlay();
         if (returnToIdeas) router.push("/trip-ideas");
@@ -11177,11 +11177,12 @@ export function BNTripApp({
       <div
         className={`app-shell flow-shell ${page === "dashboard" ? "dashboard-page-shell" : ""} ${mainNavigationPage ? "main-nav-page-shell" : ""} ${page === "trip" || page === "expenses" ? "trip-page-shell" : ""} ${page === "timeline" ? "timeline-page-shell" : ""} ${demo ? "demo-mode" : ""}`}
       >
-        {toast && (
+        {toast && typeof document !== "undefined" && createPortal(
           <div className="toast toast-success" role="status">
             <CheckCircle2 size={17} />
             {toast}
-          </div>
+          </div>,
+          document.body,
         )}
         <main>
           {!tripNavigationPage && (
