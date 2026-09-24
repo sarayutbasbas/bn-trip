@@ -1,7 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
   <title id="title">จองเองหรือโทรจอง</title>
-  <rect width="96" height="64" rx="14" fill="#fff3ea"/>
-  <rect x="18" y="17" width="31" height="31" rx="7" fill="#ff6817"/>
-  <path d="M27 38V27h13v11M31 38v-5h5v5M25 38h17" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M59 20c2 8 8 14 16 16l-5 7c-1 2-4 2-6 1-7-4-13-10-17-17-1-2-1-5 1-6l7-5 4 4Z" fill="#ff6817"/>
+  <rect width="64" height="64" rx="12" fill="#fff"/>
+  <path d="M16 20c0-4 3-7 7-7h18c4 0 7 3 7 7v4c0 2-2 4-4 4h-4c-2 0-4-2-4-4v-2h-8v2c0 2-2 4-4 4h-4c-2 0-4-2-4-4v-4Z" fill="#ff6817"/>
+  <path d="M24 30h16l9 17c1 2-1 4-3 4H18c-2 0-4-2-3-4l9-17Z" fill="#ff6817"/>
+  <circle cx="27" cy="38" r="2" fill="#fff"/>
+  <circle cx="37" cy="38" r="2" fill="#fff"/>
+  <circle cx="27" cy="45" r="2" fill="#fff"/>
+  <circle cx="37" cy="45" r="2" fill="#fff"/>
 </svg>

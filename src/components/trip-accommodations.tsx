@@ -15,6 +15,7 @@ import {
   Plus,
   ReceiptText,
   Trash2,
+  Utensils,
 } from "lucide-react";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { AttachmentPreviewOverlay } from "@/src/components/attachment-preview-overlay";
@@ -919,7 +920,7 @@ export function TripAccommodations({
                           {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={36} height={36} /></span>}
                           {item.includes_breakfast && (
                             <span className="accommodation-breakfast-icon" role="img" aria-label="รวมอาหารเช้า" title="รวมอาหารเช้า">
-                              <Coffee size={23} aria-hidden="true" />
+                              <Utensils size={23} aria-hidden="true" />
                             </span>
                           )}
                         </div>
