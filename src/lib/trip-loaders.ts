@@ -12,6 +12,7 @@ import {
   getTripRole,
   tripAccessSql,
   tripActualExpenseSql,
+  tripFlightSummariesSql,
   tripIncompleteSetupSql,
   tripMembersSql,
   tripReviewSummarySql,
@@ -488,22 +489,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
   const reviews = tripReviewSummarySql("t");
   const actualExpense = tripActualExpenseSql("t");
   const incomplete = tripIncompleteSetupSql("t");
-  const flightSummaries = `COALESCE((
-    SELECT jsonb_agg(
-      jsonb_build_object(
-        'journey_type',flight.journey_type,
-        'segment_order',flight.segment_order,
-        'airline_code',flight.airline_code,
-        'flight_number',flight.flight_number
-      )
-      ORDER BY
-        CASE flight.journey_type WHEN 'outbound' THEN 0 WHEN 'internal' THEN 1 ELSE 2 END,
-        flight.segment_order,
-        flight.scheduled_departure_at
-    )
-    FROM trip_flight_segments flight
-    WHERE flight.trip_id=t.id
-  ),'[]'::jsonb) AS flight_summaries`;
+  const flightSummaries = tripFlightSummariesSql("t");
   const destinationAccess = tripAccessSql("destination_trip");
   const [ongoing, upcoming, past, favoriteAccommodations, counts, countries, destinations] = await Promise.all([
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
@@ -624,6 +610,7 @@ export async function loadTripDirectory(
   const reviews = tripReviewSummarySql("t");
   const actualExpense = tripActualExpenseSql("t");
   const incomplete = tripIncompleteSetupSql("t");
+  const flightSummaries = tripFlightSummariesSql("t");
   const status = params.get("status") || "all";
   const tripType = params.get("type") || "all";
   const selectedYears = [...new Set(params.getAll("year").flatMap((value) => value.split(",")).map(Number).filter((year) => Number.isInteger(year) && year >= 2000 && year <= 2200))].slice(0, 50);
@@ -671,7 +658,7 @@ export async function loadTripDirectory(
           : "CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 0 WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 1 ELSE 2 END ASC,CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.outbound_departure_at,t.start_date::timestamp) END ASC,CASE WHEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) END DESC,t.id DESC";
   const clause = where.join(" AND ");
   const [items, total, years, statusCounts] = await Promise.all([
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, 0]),
+    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, 0]),
     query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`, values),
     query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`, [session.userId]),
     query(`SELECT count(*)::int AS total,

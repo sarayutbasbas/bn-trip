@@ -3726,7 +3726,7 @@ button:disabled {
   padding: 13px 14px 12px 12px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 .compact-trip-status {
   position: absolute;

@@ -45,7 +45,7 @@ function buildItineraries(){
 export function isDemoTrip(id:string){return buildTrips().some(trip=>trip.id===id)}
 export function getDemoProfile(){return demoProfile}
 export function getDemoCards(){return demoCards}
-export function getDemoTrip(id:string){return buildTrips().find(trip=>trip.id===id)??null}
+export function getDemoTrip(id:string){const trip=buildTrips().find(item=>item.id===id);return trip?{...trip,flight_summaries:getDemoFlightSegments(id).map(flight=>({journey_type:flight.journey_type,segment_order:flight.segment_order,airline_code:flight.airline_code,flight_number:flight.flight_number}))}:null}
 export function getDemoItineraries(id:string){return (buildItineraries() as Record<string,unknown[]>)[id]??[]}
 
 export function getDemoFlightSegments(id:string){

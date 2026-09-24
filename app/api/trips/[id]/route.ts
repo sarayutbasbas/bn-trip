@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/lib/auth";
 import { query, transaction } from "@/src/lib/db";
 import { getDemoTrip } from "@/src/lib/demo-data";
-import { getTripRole,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
+import { getTripRole,tripFlightSummariesSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode,formatTripDestination } from "@/src/lib/countries";
@@ -18,7 +18,7 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   const {id}=await params;
   if(session.isDemo){const trip=getDemoTrip(id);return trip?NextResponse.json(trip):NextResponse.json({error:"Not found"},{status:404})}
   await ensureLatestDatabaseSchema();
-  const result=await query(`SELECT t.*,${tripRoleSql("t")},${tripMembersSql("t")},${tripReviewSummarySql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,[session.userId,id]);
+  const result=await query(`SELECT t.*,${tripRoleSql("t")},${tripMembersSql("t")},${tripReviewSummarySql("t")},${tripFlightSummariesSql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,[session.userId,id]);
   return result.rows[0]?NextResponse.json(result.rows[0]):NextResponse.json({error:"Not found"},{status:404});
 }
 
@@ -37,7 +37,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   const destination=formatTripDestination(tripDestinations.map(item=>item.nameTh).join(" · "),country.code,country.nameTh,tripDestinations);
   const before=await query("SELECT * FROM trips WHERE id=$1",[id]);const changed=await transaction(async client=>{let insuranceDocuments:Array<{stored_filename:string;blob_url:string|null}>=[];if(body.hasFlights===false){const removed=await removeAllFlightRecords(client,id);insuranceDocuments=removed.insuranceDocuments;await clearFirstItineraryTransport(id,removed.affectedDays,client)}const updated=await client.query(`UPDATE trips SET name=COALESCE($1,name),destination=COALESCE($2,destination),country_code=$3,country_name=$4,trip_destinations=$5::jsonb,start_date=$6,total_days=$7,budget_thb=COALESCE($8,budget_thb),shopping_budget_thb=COALESCE($9,shopping_budget_thb),outbound_departure_at=$10,return_departure_at=$11,cover_image_url=COALESCE($12,cover_image_url),summary_image_url=CASE WHEN $13 THEN $14 ELSE summary_image_url END,google_photos_url=$15,timezone=$16,has_flights=COALESCE($17,has_flights),updated_at=now() WHERE id=$18 RETURNING *,CASE WHEN owner_id=$19 THEN 'owner' ELSE COALESCE((SELECT access_level FROM trip_collaborators WHERE trip_id=$18 AND user_id=$19 LIMIT 1),'view') END AS access_role`,[body.name??null,destination||null,country.code,country.nameTh,JSON.stringify(tripDestinations),body.outboundDate,totalDays,body.budgetThb??null,body.shoppingBudgetThb??null,`${body.outboundDate} ${body.outboundTime}:00`,`${body.returnDate} ${body.returnTime}:00`,body.coverImageUrl??null,Object.prototype.hasOwnProperty.call(body,"summaryImageUrl"),body.summaryImageUrl??null,googlePhotosUrl||null,country.timezone,typeof body.hasFlights==="boolean"?body.hasFlights:null,id,session.userId]);if(updated.rows[0])updated.rows[0].has_day_zero=await syncTripDayZero(client,id);return {updated,insuranceDocuments}});const result=changed.updated;
   await Promise.all(changed.insuranceDocuments.map(document=>deleteUpload(document.stored_filename,document.blob_url).catch(error=>console.error("Delete insurance upload failed",{filename:document.stored_filename,error}))));
-  if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await logTripActivity({tripId:id,actorUserId:session.userId,entityType:"trip",entityId:id,action:"update",summary:"แก้ไขข้อมูลทริป",before:before.rows[0],after:result.rows[0]});return NextResponse.json(result.rows[0]);
+  if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await logTripActivity({tripId:id,actorUserId:session.userId,entityType:"trip",entityId:id,action:"update",summary:"แก้ไขข้อมูลทริป",before:before.rows[0],after:result.rows[0]});const flightSummaries=await query(`SELECT ${tripFlightSummariesSql("t")} FROM trips t WHERE t.id=$1`,[id]);return NextResponse.json({...result.rows[0],flight_summaries:flightSummaries.rows[0]?.flight_summaries||[]});
 }
 
 export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){

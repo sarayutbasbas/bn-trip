@@ -68,6 +68,22 @@ export const tripActualExpenseSql=(alias="trips")=>`COALESCE((
     WHERE itinerary.trip_id=${alias}.id
       AND lower(COALESCE(cost.item->>'category',''))<>'shopping'
   ),0)::float AS actual_spent_thb`;
+export const tripFlightSummariesSql=(alias="trips")=>`COALESCE((
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'journey_type',flight.journey_type,
+        'segment_order',flight.segment_order,
+        'airline_code',flight.airline_code,
+        'flight_number',flight.flight_number
+      )
+      ORDER BY
+        CASE flight.journey_type WHEN 'outbound' THEN 0 WHEN 'internal' THEN 1 ELSE 2 END,
+        flight.segment_order,
+        flight.scheduled_departure_at
+    )
+    FROM trip_flight_segments flight
+    WHERE flight.trip_id=${alias}.id
+  ),'[]'::jsonb) AS flight_summaries`;
 export const tripIncompleteSetupSql=(alias="trips")=>`(
     EXISTS(
       SELECT 1 FROM trip_checklist_items checklist_item
