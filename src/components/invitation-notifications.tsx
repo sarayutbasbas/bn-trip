@@ -70,7 +70,10 @@ export function InvitationNotifications({onChanged}:{onChanged?:(result:Invitati
       const next=items.filter(item=>item.id!==invitation.id);
       setItems(next);
       if(!next.length)setOpen(false);
-      if(method==="PATCH")await onChanged?.(result);
+      if(method==="PATCH"){
+        sessionStorage.setItem(`invitation:accepted:${result.invitation_type}`,"1");
+        await onChanged?.(result);
+      }
     }catch(caught){setError(caught instanceof Error?caught.message:"ดำเนินการไม่สำเร็จ")}
     finally{setBusyId("")}
   }

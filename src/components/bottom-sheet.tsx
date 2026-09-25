@@ -1,12 +1,14 @@
 "use client";
 
 import type {
+  FormEvent,
   FormEventHandler,
   HTMLAttributes,
   ReactNode,
   Ref,
 } from "react";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Trash2, X } from "lucide-react";
 
 type BottomSheetCommonProps = {
@@ -43,6 +45,58 @@ type BottomSheetSectionProps = BottomSheetCommonProps & {
 };
 
 export type BottomSheetProps = BottomSheetFormProps | BottomSheetSectionProps;
+
+type SaveHandler = (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+
+export function useBlockingSubmit() {
+  const locked = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const guard = useCallback((event: FormEvent<HTMLFormElement>, submit: SaveHandler) => {
+    event.preventDefault();
+    if (locked.current) return;
+    locked.current = true;
+    setSaving(true);
+    try {
+      void Promise.resolve(submit(event))
+        .catch((error) => console.error("Save failed", error))
+        .finally(() => {
+          locked.current = false;
+          setSaving(false);
+        });
+    } catch (error) {
+      locked.current = false;
+      setSaving(false);
+      console.error("Save failed", error);
+    }
+  }, []);
+  return { saving, guard };
+}
+
+export function BlockingSaveOverlay({ visible }: { visible: boolean }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!visible) return;
+    dialogRef.current?.focus();
+    const blockKeys = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" && event.key !== "Enter") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+    document.addEventListener("keydown", blockKeys, true);
+    return () => document.removeEventListener("keydown", blockKeys, true);
+  }, [visible]);
+  if (!visible || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="save-progress-backdrop" role="presentation">
+      <div ref={dialogRef} className="save-progress-dialog" role="alertdialog" aria-modal="true" aria-labelledby="save-progress-title" aria-describedby="save-progress-description" tabIndex={-1}>
+        <span className="save-progress-spinner" aria-hidden="true" />
+        <strong id="save-progress-title">กำลังบันทึก…</strong>
+        <span id="save-progress-description">กรุณารอสักครู่</span>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 export function BottomSheetHeader({
   title,
@@ -141,6 +195,8 @@ export function BottomSheet(props: BottomSheetProps) {
     formRef,
     onChange,
   } = props;
+  const { saving: submitting, guard } = useBlockingSubmit();
+  const locked = busy || submitting;
   useEffect(() => {
     const root = document.documentElement;
     const wasLocked = root.classList.contains("sheet-open");
@@ -155,7 +211,7 @@ export function BottomSheet(props: BottomSheetProps) {
     onMouseDown: (event) => {
       if (
         closeOnBackdrop &&
-        !busy &&
+        !locked &&
         event.target === event.currentTarget
       )
         onClose();
@@ -168,18 +224,18 @@ export function BottomSheet(props: BottomSheetProps) {
         subtitle={subtitle}
         closeLabel={closeLabel}
         onClose={onClose}
-        busy={busy}
+        busy={locked}
         actions={headerActions}
       />
       <div className={bodyClassName}>{children}</div>
       {submitLabel ? (
         <BottomSheetFooter
           submitLabel={submitLabel}
-          submitDisabled={submitDisabled}
+          submitDisabled={submitDisabled || locked}
           deleteLabel={deleteLabel}
           deleteIcon={deleteIcon}
           onDelete={onDelete}
-          deleteDisabled={deleteDisabled}
+          deleteDisabled={deleteDisabled || locked}
         />
       ) : null}
     </>
@@ -192,7 +248,7 @@ export function BottomSheet(props: BottomSheetProps) {
           ref={formRef}
           className={`modal bottom-sheet ${className}`.trim()}
           onChange={onChange}
-          onSubmit={onSubmit}
+          onSubmit={(event) => guard(event, onSubmit)}
           role="dialog"
           aria-modal="true"
         >
@@ -207,6 +263,7 @@ export function BottomSheet(props: BottomSheetProps) {
           {content}
         </section>
       )}
+      <BlockingSaveOverlay visible={submitting} />
     </div>
   );
 }

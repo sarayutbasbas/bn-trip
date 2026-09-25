@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
+import { BlockingSaveOverlay, useBlockingSubmit } from "@/src/components/bottom-sheet";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import {
   invalidateClientResourcesContaining,
@@ -59,6 +60,7 @@ export function ChecklistMasterPage({
   demo?: boolean;
   returnTo?: string;
 }) {
+  const { saving: saveInFlight, guard: guardSave } = useBlockingSubmit();
   const router = useRouter();
   const cachedMaster = peekClientResource<MasterPayload>(
     MASTER_CHECKLIST_RESOURCE_KEY,
@@ -354,6 +356,7 @@ export function ChecklistMasterPage({
 
   return (
     <div className="app-shell flow-shell dashboard-page-shell master-page-shell">
+      <BlockingSaveOverlay visible={saveInFlight} />
       {toast && (
         <div className="toast toast-success" role="status" aria-live="polite">
           <Check size={16} />
@@ -536,7 +539,7 @@ export function ChecklistMasterPage({
             aria-modal="true"
             aria-labelledby="master-item-sheet-title"
             onChange={checkItemChanges}
-            onSubmit={saveItem}
+            onSubmit={(event) => guardSave(event, saveItem)}
           >
             <div className="modal-head">
               <div>

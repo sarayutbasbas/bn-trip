@@ -131,6 +131,17 @@ export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:
   const plannedIdeas=filteredIdeas.filter(idea=>idea.kind==="planned");
   const somedayIdeas=filteredIdeas.filter(idea=>idea.kind==="someday");
   useEffect(()=>{let active=true;getCurrentAccount().then(account=>{if(active)setProfile(account)}).catch(()=>{});return()=>{active=false}},[]);
+  useEffect(()=>{
+    if(sessionStorage.getItem("invitation:accepted:trip_idea")!=="1")return;
+    const controller=new AbortController();
+    void (async()=>{
+      const fresh=await readResponse(await fetch("/api/trip-ideas",{cache:"no-store",signal:controller.signal})) as TripIdea[];
+      if(controller.signal.aborted)return;
+      setIdeas(sortIdeas(fresh));
+      sessionStorage.removeItem("invitation:accepted:trip_idea");
+    })().catch(()=>{});
+    return()=>controller.abort();
+  },[]);
   useEffect(()=>{const root=document.documentElement;const sheetOpen=Boolean(editing||sharing);root.classList.toggle("sheet-open",sheetOpen);root.classList.toggle("confirm-open",Boolean(confirmation));return()=>root.classList.remove("sheet-open","confirm-open")},[editing,sharing,confirmation]);
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(""),2400)}
   function openForm(idea:TripIdea|null,promote=false){if(demo){notify("เข้าสู่ระบบเพื่อเพิ่มหรือแก้ไขรายการ");return}setEditing({idea,promote})}
@@ -146,7 +157,14 @@ export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:
   }
   async function refreshIdea(id:string){try{const fresh=await readResponse(await fetch(`/api/trip-ideas/${id}`,{cache:"no-store"})) as TripIdea;setIdeas(items=>items.map(item=>item.id===id?fresh:item));setSharing(current=>current?.id===id?fresh:current)}catch{}}
   async function refreshAll(){if(refreshing)return;setRefreshing(true);try{const fresh=await readResponse(await fetch("/api/trip-ideas",{cache:"no-store"})) as TripIdea[];setIdeas(sortIdeas(fresh));window.dispatchEvent(new Event("invitation-notifications:refresh"));notify("อัปเดตทริปที่เล็งไว้แล้ว")}catch(error){notify(error instanceof Error?error.message:"อัปเดตไม่สำเร็จ")}finally{setRefreshing(false)}}
-  async function invitationChanged(result:Pick<InvitationNotification,"invitation_type">){if(result.invitation_type!=="trip_idea")return;const fresh=await readResponse(await fetch("/api/trip-ideas",{cache:"no-store"})) as TripIdea[];setIdeas(sortIdeas(fresh));notify("เพิ่มทริปที่เล็งไว้จากคำเชิญแล้ว")}
+  async function invitationChanged(result:Pick<InvitationNotification,"invitation_type">){
+    router.refresh();
+    if(result.invitation_type!=="trip_idea"){notify("ตอบรับคำเชิญทริปแล้ว");return}
+    const fresh=await readResponse(await fetch("/api/trip-ideas",{cache:"no-store"})) as TripIdea[];
+    setIdeas(sortIdeas(fresh));
+    sessionStorage.removeItem("invitation:accepted:trip_idea");
+    notify("เพิ่มทริปที่เล็งไว้จากคำเชิญแล้ว");
+  }
   function convertToTrip(idea:TripIdea){if(demo){notify("เข้าสู่ระบบเพื่อสร้างทริปจริง");return}router.push(`/?tripIdea=${encodeURIComponent(idea.id)}`)}
   const avatarLabel=(profile?.display_name||profile?.email||"?").trim();
   return <div className="app-shell flow-shell trip-ideas-page-shell">

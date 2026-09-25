@@ -7,6 +7,7 @@ import { logTripActivity } from "@/src/lib/activity";
 import { clearFirstItineraryTransport } from "@/src/lib/itinerary-order";
 import { syncAccommodationCostsFromItineraries } from "@/src/lib/accommodation-linked-records";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
+import { linkedExpenseIds } from "@/src/lib/linked-expense";
 import { deleteUpload,uploadFilenameFromUrl } from "@/src/lib/storage";
 
 const schema=z.object({
@@ -39,6 +40,14 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     const accommodationCosts=await query<{cost_item_id:string}>("SELECT cost_item_id::text FROM trip_accommodations WHERE trip_id=$1",[existing.trip_id]);
     const accommodationCostIds=new Set(accommodationCosts.rows.map(row=>row.cost_item_id));
     const costItems=x.costItems.map(item=>item.id&&accommodationCostIds.has(item.id)?{...item,category:"ที่พัก"}:item);
+    const linked_cost_item_ids=await linkedExpenseIds(existing.trip_id);
+    const nextCostIds=new Set(costItems.map(item=>item.id).filter(Boolean));
+    const removedLinkedIds=existing.cost_items.flatMap(item=>item.id&&linked_cost_item_ids.includes(item.id)&&!nextCostIds.has(item.id)?[item.id]:[]);
+    if(removedLinkedIds.length){
+      const moved=await query<{id:string}>("SELECT DISTINCT cost->>'id' AS id FROM itineraries other CROSS JOIN LATERAL jsonb_array_elements(other.cost_items) cost WHERE other.trip_id=$1 AND other.id<>$2 AND cost->>'id'=ANY($3::text[])",[existing.trip_id,id,removedLinkedIds]);
+      const movedIds=new Set(moved.rows.map(row=>row.id));
+      if(removedLinkedIds.some(costId=>!movedIds.has(costId)))return NextResponse.json({error:"ค่าใช้จ่ายที่ลิงก์กับที่พักหรือเที่ยวบิน ต้องจัดการจากหน้าที่พักหรือเที่ยวบิน"},{status:409});
+    }
     if(!await tripCardIdsAreMembers(existing.trip_id,costItems.flatMap(item=>item.creditCardId?[item.creditCardId]:[])))return NextResponse.json({error:"บัตรนี้ไม่ได้เป็นของสมาชิกในทริป"},{status:400});
     if(!await tripMemberIdsAreMembers(existing.trip_id,costItems.flatMap(item=>item.splitMemberIds||[])))return NextResponse.json({error:"ผู้หารค่าใช้จ่ายต้องเป็นสมาชิกในทริป"},{status:400});
     if(!await tripExpenseGuestIdsBelongToTrip(existing.trip_id,costItems.flatMap(item=>item.splitGuestIds||[])))return NextResponse.json({error:"คนนอกที่เลือกไม่ได้อยู่ในทริปนี้"},{status:400});
@@ -71,7 +80,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
       ) address_accommodation ON true
       WHERE i.id=$1`,[id]);await logTripActivity({tripId:existing.trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"update",summary:`แก้ไขแผน “${x.placeName}”`,before:current.rows[0],after:saved.rows[0]});
     if(hasImageUrl&&existing.image_url&&existing.image_url!==saved.rows[0]?.image_url){const filename=uploadFilenameFromUrl(existing.image_url);if(filename)await deleteUpload(filename).catch(error=>console.error("Delete replaced itinerary image failed",{filename,error}));}
-    return NextResponse.json(saved.rows[0]);
+    return NextResponse.json({...saved.rows[0],linked_cost_item_ids});
   }catch{return NextResponse.json({error:"ข้อมูลรายการไม่ถูกต้อง"},{status:400});}
 }
 

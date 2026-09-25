@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -29,7 +30,7 @@ import {
   AttachmentPreviewOverlay,
   type AttachmentMediaPreview,
 } from "@/src/components/attachment-preview-overlay";
-import { BottomSheet } from "@/src/components/bottom-sheet";
+import { BlockingSaveOverlay, BottomSheet, useBlockingSubmit } from "@/src/components/bottom-sheet";
 import { InvitationNotifications } from "@/src/components/invitation-notifications";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import type {
@@ -385,6 +386,7 @@ export type Itinerary = {
   transport_mode: string | null;
   transport_note: string | null;
   cost_items: CostItem[];
+  linked_cost_item_ids?: string[];
   accommodation_id?: string | null;
   accommodation_night?: number | null;
   accommodation_nights?: number | null;
@@ -657,6 +659,7 @@ const EN_TEXT: Record<string, string> = {
   ค่าใช้จ่าย: "Expenses",
   แพลน: "Plan",
   วันนี้: "Today",
+  พรุ่งนี้: "Tomorrow",
   เพิ่มสถานที่: "Add place",
   เพิ่มสถานที่ระหว่างจุด: "Add place between stops",
   เพิ่มสถานที่ถัดไป: "Add next place",
@@ -1340,8 +1343,6 @@ async function fetchFreshDashboardSnapshot(): Promise<DashboardSnapshot> {
     },
     countryHighlights: data.countryHighlights || [],
   };
-  tripListCache = trips;
-  dashboardSnapshotCache = snapshot;
   return snapshot;
 }
 const itineraryCache = new Map<string, Itinerary[]>();
@@ -2082,6 +2083,10 @@ function costSourceLabel(cost: CostItem) {
   return `${Number(cost.foreignAmount ?? cost.value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })} ${cost.currency || "THB"}`;
 }
 
+function isLinkedExpense(item: Itinerary | undefined, cost: CostItem | undefined) {
+  return Boolean(cost?.id && item?.linked_cost_item_ids?.includes(cost.id));
+}
+
 function costSplitCount(cost: CostItem, fallback = 1) {
   if (Array.isArray(cost.splitGuestIds)) {
     return Math.max(
@@ -2284,6 +2289,11 @@ function tripTemporalStatus(trip: Trip, nowValue: Date | number) {
       ),
     ),
   };
+}
+function tripDaysUntilLabel(daysUntil: number) {
+  if (daysUntil === 0) return "วันนี้";
+  if (daysUntil === 1) return "พรุ่งนี้";
+  return `อีก ${daysUntil} วัน`;
 }
 function timeInMinutes(value: string | null) {
   if (!value) return null;
@@ -2521,7 +2531,7 @@ function TripCard({
     ? t("ยังไม่กำหนดวัน")
     : ongoing
       ? t("กำลังเดินทาง")
-      : t(`อีก ${temporal.daysUntil} วัน`);
+      : t(tripDaysUntilLabel(temporal.daysUntil));
   return (
     <article
       className={`trip-card ${past ? "past" : ""} ${trip.members?.length ? "has-shared-members" : ""}`}
@@ -2813,7 +2823,7 @@ function FlightSnapshotCard({
         <div className="nearby-flight-head-badges">
           <div className="nearby-flight-status-stack">
             <span className={`flight-status status-${flight.status.toLowerCase().replace(/\s/g, "-")}`}>{isActive ? t("กำลังบิน") : flight.status || "scheduled"}</span>
-            <b>{isActive ? t("กำลังเดินทาง") : hasEnded ? t("เดินทางแล้ว") : hours < 24 ? t(`อีก ${hours} ชม.`) : t(`อีก ${Math.ceil(hours / 24)} วัน`)}</b>
+            <b>{isActive ? t("กำลังเดินทาง") : hasEnded ? t("เดินทางแล้ว") : hours < 24 ? t(`อีก ${hours} ชม.`) : t(tripDaysUntilLabel(Math.ceil(hours / 24)))}</b>
           </div>
           {onSync && !hasEnded && <button type="button" className={`icon-btn nearby-flight-sync ${syncing ? "is-syncing" : ""}`} disabled={syncDisabled} onClick={(event) => { event.stopPropagation(); onSync(flight); }} aria-label={t("อัปเดตข้อมูลเที่ยวบินทันที")}><RefreshCw size={15} /></button>}
         </div>
@@ -3625,7 +3635,7 @@ function CompactTripCard({
     ? t("ที่ผ่านมาแล้ว")
     : ongoing
       ? t("กำลังเดินทาง")
-      : t(`อีก ${temporal.daysUntil} วัน`);
+      : t(tripDaysUntilLabel(temporal.daysUntil));
   return (
     <article
       id={`trip-card-${trip.id}`}
@@ -4069,7 +4079,7 @@ function TripHeader({
     ? t("ยังไม่กำหนดวัน")
     : temporal.ongoing
       ? t("กำลังเดินทาง")
-      : t(`อีก ${temporal.daysUntil} วัน`);
+      : t(tripDaysUntilLabel(temporal.daysUntil));
   return (
     <div className="trip-detail-head has-cover">
       <div className="trip-detail-image-frame">
@@ -4305,6 +4315,8 @@ function TripSectionNav({
 function TimelineExpenseMenu({
   item,
   openCost,
+  deleteCost,
+  canDelete,
   open,
   onOpen,
   onClose,
@@ -4316,12 +4328,16 @@ function TimelineExpenseMenu({
     defaultDay?: number,
     returnToExpenseList?: () => void,
   ) => void;
+  deleteCost: (item: Itinerary, index: number) => Promise<void>;
+  canDelete: boolean;
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
 }) {
   const t = useT();
   const costs = item.cost_items || [];
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
     if (!open) return;
     const body = document.body;
@@ -4353,7 +4369,7 @@ function TimelineExpenseMenu({
       >
         <WalletCards size={17} />
       </button>
-      {open && typeof document !== "undefined" && createPortal(
+      {open && typeof document !== "undefined" && createPortal(<>
         <BottomSheet
           title={t("รายการค่าใช้จ่าย")}
           subtitle={item.place_name}
@@ -4364,18 +4380,27 @@ function TimelineExpenseMenu({
         >
           <div className="timeline-expense-list">
             {costs.length ? costs.map((cost, index) => (
-              <button
-                type="button"
-                key={cost.id || `${cost.key}-${index}`}
-                onClick={() => {
-                  onClose();
-                  openCost(item, index, undefined, onOpen);
-                }}
-              >
-                <ExpenseCategoryIcon category={cost.category} />
-                <span><b>{cost.key}</b><small>{costSourceLabel(cost)}</small></span>
-                <em>฿{bahtFormat(cost.value)}</em>
-              </button>
+              <div className="timeline-expense-row" key={cost.id || `${cost.key}-${index}`}>
+                <button
+                  type="button"
+                  className="timeline-expense-row-main"
+                  onClick={() => {
+                    onClose();
+                    openCost(item, index, undefined, onOpen);
+                  }}
+                >
+                  <ExpenseCategoryIcon category={cost.category} />
+                  <span><b>{cost.key}</b><small>{costSourceLabel(cost)}</small></span>
+                  <em>฿{bahtFormat(cost.value)}</em>
+                </button>
+                {canDelete && !isLinkedExpense(item, cost) && <button
+                  type="button"
+                  className="timeline-expense-row-delete"
+                  onClick={() => setDeleteIndex(index)}
+                  aria-label={`${t("ลบค่าใช้จ่ายนี้")} ${cost.key}`}
+                  title={t("ลบค่าใช้จ่ายนี้")}
+                ><Trash2 size={16} /></button>}
+              </div>
             )) : <div className="timeline-expense-empty"><WalletCards size={24} /><strong>{t("ยังไม่มีค่าใช้จ่าย")}</strong><small>{t("เพิ่มค่าใช้จ่ายของสถานที่นี้ได้เลย")}</small></div>}
           </div>
           <button
@@ -4389,7 +4414,26 @@ function TimelineExpenseMenu({
             <Plus size={17} />
             {t("เพิ่มค่าใช้จ่าย")}
           </button>
-        </BottomSheet>,
+        </BottomSheet>
+        {deleteIndex !== null && costs[deleteIndex] && !isLinkedExpense(item, costs[deleteIndex]) && <ConfirmDialog
+          confirmation={{
+            title: `ลบ “${costs[deleteIndex].key}”?`,
+            description: "ค่าใช้จ่ายนี้จะถูกลบออกจาก Timeline และหน้าสรุป",
+            confirmLabel: "ลบค่าใช้จ่าย",
+            onConfirm: async () => {
+              try {
+                await deleteCost(item, deleteIndex);
+                setDeleteIndex(null);
+              } catch (error) {
+                setDeleteError(error instanceof Error ? error.message : "ลบค่าใช้จ่ายไม่สำเร็จ");
+                throw error;
+              }
+            },
+          }}
+          close={() => setDeleteIndex(null)}
+        />}
+        {deleteError && <FormErrorDialog title={t("ลบค่าใช้จ่ายไม่สำเร็จ")} description={deleteError} onClose={() => setDeleteError("")} />}
+        </>,
         document.body,
       )}
     </div>
@@ -4469,7 +4513,6 @@ function SwipeableTimelineDay({
     if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
     if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
   }, []);
-  if (totalDays <= 1) return <>{children(day)}</>;
   const centerTrack = () => {
     const track = trackRef.current;
     if (!track) return;
@@ -4504,6 +4547,25 @@ function SwipeableTimelineDay({
       suppressClick.current = false;
     }, 80);
   }
+  const queueDrag = () => {
+    if (dragFrame.current !== null) return;
+    dragFrame.current = requestAnimationFrame(() => {
+      dragFrame.current = null;
+      const active = pointerStart.current;
+      const track = trackRef.current;
+      if (active && track)
+        track.style.transform = `translate3d(${active.deltaX - active.width}px, 0, 0)`;
+    });
+  };
+  const cancelSwipe = () => {
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = null;
+    pointerStart.current = null;
+    targetDay.current = null;
+    settling.current = false;
+    suppressClick.current = false;
+    centerTrack();
+  };
   const finishSwipe = (clientX: number, clientY: number) => {
     const start = pointerStart.current;
     pointerStart.current = null;
@@ -4540,13 +4602,79 @@ function SwipeableTimelineDay({
       nextDay,
     );
   };
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || totalDays <= 1) return;
+    const findTouch = (touches: TouchList) => {
+      const id = pointerStart.current?.id;
+      for (let index = 0; index < touches.length; index++) {
+        const touch = touches.item(index);
+        if (touch && touch.identifier === id) return touch;
+      }
+      return null;
+    };
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.target instanceof Element && event.target.closest(".timeline-day-shortcuts")) return;
+      if (event.touches.length !== 1) {
+        cancelSwipe();
+        return;
+      }
+      if (settling.current) return;
+      const touch = event.touches.item(0);
+      if (!touch) return;
+      pointerStart.current = {
+        id: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+        width: container.clientWidth || 320,
+        startedAt: performance.now(),
+        axis: null,
+        deltaX: 0,
+      };
+      centerTrack();
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      const start = pointerStart.current;
+      if (!start || event.touches.length !== 1) return;
+      const touch = findTouch(event.touches);
+      if (!touch) return;
+      const deltaX = touch.clientX - start.x;
+      const deltaY = touch.clientY - start.y;
+      if (!start.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 4)
+        start.axis = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
+      if (start.axis !== "horizontal") return;
+      if (event.cancelable) event.preventDefault();
+      suppressClick.current = true;
+      const atBoundary =
+        (day === 1 && deltaX > 0) ||
+        (day === totalDays && deltaX < 0);
+      start.deltaX = atBoundary ? deltaX * 0.2 : deltaX;
+      queueDrag();
+    };
+    const onTouchEnd = (event: TouchEvent) => {
+      const touch = findTouch(event.changedTouches);
+      if (touch) finishSwipe(touch.clientX, touch.clientY);
+    };
+    const onTouchCancel = () => cancelSwipe();
+    container.addEventListener("touchstart", onTouchStart, { passive: true });
+    container.addEventListener("touchmove", onTouchMove, { passive: false });
+    container.addEventListener("touchend", onTouchEnd, { passive: true });
+    container.addEventListener("touchcancel", onTouchCancel, { passive: true });
+    return () => {
+      container.removeEventListener("touchstart", onTouchStart);
+      container.removeEventListener("touchmove", onTouchMove);
+      container.removeEventListener("touchend", onTouchEnd);
+      container.removeEventListener("touchcancel", onTouchCancel);
+    };
+  }, [day, totalDays, setDay]);
+  if (totalDays <= 1) return <>{children(day)}</>;
   const panels = [day - 1, day, day + 1];
   return (
     <div
       ref={containerRef}
       className="timeline-day-swipe"
       onPointerDown={(event) => {
-        if (!event.isPrimary || settling.current) return;
+        if (event.pointerType === "touch" || !event.isPrimary || settling.current) return;
         pointerStart.current = {
           id: event.pointerId,
           x: event.clientX,
@@ -4559,6 +4687,7 @@ function SwipeableTimelineDay({
         centerTrack();
       }}
       onPointerMove={(event) => {
+        if (event.pointerType === "touch") return;
         const start = pointerStart.current;
         if (!start || start.id !== event.pointerId) return;
         const deltaX = event.clientX - start.x;
@@ -4579,28 +4708,17 @@ function SwipeableTimelineDay({
           (day === 1 && deltaX > 0) ||
           (day === totalDays && deltaX < 0);
         start.deltaX = atBoundary ? deltaX * 0.2 : deltaX;
-        if (dragFrame.current === null) {
-          dragFrame.current = requestAnimationFrame(() => {
-            dragFrame.current = null;
-            const active = pointerStart.current;
-            const track = trackRef.current;
-            if (active && track)
-              track.style.transform = `translate3d(${active.deltaX - active.width}px, 0, 0)`;
-          });
-        }
+        queueDrag();
       }}
-      onPointerUp={(event) => finishSwipe(event.clientX, event.clientY)}
-      onPointerCancel={() => {
-        if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
-        dragFrame.current = null;
-        pointerStart.current = null;
-        targetDay.current = null;
-        settling.current = false;
-        suppressClick.current = false;
+      onPointerUp={(event) => {
+        if (event.pointerType !== "touch") finishSwipe(event.clientX, event.clientY);
+      }}
+      onPointerCancel={(event) => {
+        if (event.pointerType === "touch") return;
         // Native vertical scrolling cancels the active pointer. Reset
         // immediately because a centered track has no transition to finish;
         // waiting for transitionend here would leave swiping locked forever.
-        centerTrack();
+        cancelSwipe();
       }}
       onClickCapture={(event) => {
         if (!suppressClick.current) return;
@@ -4628,6 +4746,87 @@ function SwipeableTimelineDay({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function TimelineDayShortcuts({
+  trip,
+  day,
+  setDay,
+}: {
+  trip: Trip;
+  day: number;
+  setDay: (day: number) => void;
+}) {
+  const t = useT();
+  const railRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const selected = rail.querySelector<HTMLElement>("[aria-current='date']");
+    if (!selected) return;
+    const left = selected.offsetLeft - rail.scrollLeft;
+    if (left < 0 || left + selected.offsetWidth > rail.clientWidth)
+      rail.scrollLeft = selected.offsetLeft - (rail.clientWidth - selected.offsetWidth) / 2;
+  }, [day]);
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    let gesture: { id: number; x: number; y: number; scrollLeft: number; axis: "horizontal" | "vertical" | null } | null = null;
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) { gesture = null; return; }
+      const touch = event.touches[0];
+      gesture = { id: touch.identifier, x: touch.clientX, y: touch.clientY, scrollLeft: rail.scrollLeft, axis: null };
+    };
+    const onMove = (event: TouchEvent) => {
+      if (!gesture || event.touches.length !== 1) return;
+      const touch = Array.from(event.touches).find((entry) => entry.identifier === gesture?.id);
+      if (!touch) return;
+      const deltaX = touch.clientX - gesture.x;
+      const deltaY = touch.clientY - gesture.y;
+      if (!gesture.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 4)
+        gesture.axis = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
+      if (gesture.axis !== "horizontal") return;
+      if (event.cancelable) event.preventDefault();
+      rail.scrollLeft = gesture.scrollLeft - deltaX;
+    };
+    const onEnd = () => { gesture = null; };
+    rail.addEventListener("touchstart", onStart, { passive: true });
+    rail.addEventListener("touchmove", onMove, { passive: false });
+    rail.addEventListener("touchend", onEnd);
+    rail.addEventListener("touchcancel", onEnd);
+    return () => {
+      rail.removeEventListener("touchstart", onStart);
+      rail.removeEventListener("touchmove", onMove);
+      rail.removeEventListener("touchend", onEnd);
+      rail.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+  return (
+    <div ref={railRef} className={`timeline-day-shortcuts${trip.total_days <= 3 ? " is-short" : ""}`} role="group" aria-label={t("เลือกวัน")}>
+      {Array.from({ length: trip.total_days }, (_, index) => index + 1).map((number) => (
+        <button
+          type="button"
+          key={number}
+          className={`timeline-day-shortcut${number === day ? " is-active" : ""}`}
+          aria-label={t(`แผนวันที่ ${displayTripDay(trip, number)}`)}
+          aria-current={number === day ? "date" : undefined}
+          onClick={() => {
+            if (number === day) return;
+            const sticky = railRef.current?.closest<HTMLElement>(".timeline-day-shortcuts-sticky");
+            const swipe = sticky?.nextElementSibling;
+            const dayStart = sticky && swipe
+              ? swipe.getBoundingClientRect().top + window.scrollY - parseFloat(getComputedStyle(sticky).top) - sticky.offsetHeight - 8
+              : window.scrollY;
+            flushSync(() => setDay(number));
+            if (window.scrollY > dayStart) window.scrollTo(0, Math.max(0, dayStart));
+          }}
+        >
+          <small>{t("วัน")}</small>
+          <strong>{displayTripDay(trip, number)}</strong>
+        </button>
+      ))}
     </div>
   );
 }
@@ -4715,7 +4914,7 @@ function TimelineDayPicker({
             subtitle={t(`แผนและค่าใช้จ่ายของวันที่ ${displayTripDay(trip, day)} จะสลับกับวันที่เลือก`)}
             closeLabel={t("ยกเลิก")}
             onClose={() => setPickerMode(null)}
-            onSubmit={(event) => { event.preventDefault(); void confirmSwap(); }}
+            onSubmit={(event) => { event.preventDefault(); return confirmSwap(); }}
             busy={busyDay !== null}
             className="timeline-day-sheet"
             bodyClassName="bottom-sheet-body timeline-day-sheet-body"
@@ -4783,6 +4982,7 @@ function TripHub({
   addPlace,
   editPlace,
   openCost,
+  deleteCost,
   onFlightChanged,
   notify,
   initialWorkspaceTab,
@@ -4807,6 +5007,7 @@ function TripHub({
     defaultDay?: number,
     returnToExpenseList?: () => void,
   ) => void;
+  deleteCost: (item: Itinerary, index: number) => Promise<void>;
   onFlightChanged: () => void | Promise<void>;
   notify: (message: string) => void;
   initialWorkspaceTab?: WorkspaceTab;
@@ -4933,6 +5134,24 @@ function TripHub({
       />
       <div className="trip-hub-body">
         {view === "plan" ? (
+          <>
+          <div className="section-head timeline-heading">
+            <TimelineDayPicker
+              trip={trip}
+              day={day}
+              setDay={setDay}
+              dateLabel={tripDayLabel(baseDate, day)}
+              itemCount={(itinerariesByDay.get(day) || EMPTY_ITINERARIES).length}
+              dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
+              swapDay={trip.access_role === "view" ? undefined : swapDay}
+              addPlace={() => addPlace(day)}
+            />
+          </div>
+          {trip.total_days > 1 && (
+            <div className="timeline-day-shortcuts-sticky">
+              <TimelineDayShortcuts trip={trip} day={day} setDay={setDay} />
+            </div>
+          )}
           <SwipeableTimelineDay day={day} totalDays={trip.total_days} setDay={setDay}>
           {(day) => {
             const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
@@ -4950,18 +5169,6 @@ function TripHub({
                 : -1;
             return (
             <>
-            <div className="section-head timeline-heading">
-              <TimelineDayPicker
-                trip={trip}
-                day={day}
-                setDay={setDay}
-                dateLabel={tripDayLabel(baseDate, day)}
-                itemCount={dayItems.length}
-                dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
-                swapDay={trip.access_role === "view" ? undefined : swapDay}
-                addPlace={() => addPlace(day)}
-              />
-            </div>
             {dayItems.length === 0 ? (
               <EmptyState
                 title={t(`Day ${displayTripDay(trip, day)} ยังว่างอยู่`)}
@@ -5160,6 +5367,8 @@ function TripHub({
                         <TimelineExpenseMenu
                           item={item}
                           openCost={openCost}
+                          deleteCost={deleteCost}
+                          canDelete={trip.access_role !== "view"}
                           open={openTimelineExpenseId === item.id}
                           onOpen={() => setOpenTimelineExpenseId(item.id)}
                           onClose={() => setOpenTimelineExpenseId(null)}
@@ -5180,6 +5389,7 @@ function TripHub({
             );
           }}
           </SwipeableTimelineDay>
+          </>
         ) : view === "flights" || view === "insurance" || view === "stays" ? (
           <div className="travel-stay-section">
             {view === "flights" ? <TripFlights
@@ -5358,6 +5568,23 @@ function TimelineScreen({
           else router.push(`/trips/${trip.id}?view=${section}`);
         }}
       />
+      <div className="section-head timeline-heading">
+        <TimelineDayPicker
+          trip={trip}
+          day={day}
+          setDay={setDay}
+          dateLabel={tripDayLabel(baseDate, day)}
+          itemCount={(itinerariesByDay.get(day) || EMPTY_ITINERARIES).length}
+          dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
+          swapDay={trip.access_role === "view" ? undefined : swapDay}
+          addPlace={() => addPlace(day)}
+        />
+      </div>
+      {trip.total_days > 1 && (
+        <div className="timeline-day-shortcuts-sticky">
+          <TimelineDayShortcuts trip={trip} day={day} setDay={setDay} />
+        </div>
+      )}
       <SwipeableTimelineDay day={day} totalDays={trip.total_days} setDay={setDay}>
       {(day) => {
         const dayItems = itinerariesByDay.get(day) || EMPTY_ITINERARIES;
@@ -5372,18 +5599,6 @@ function TimelineScreen({
             : -1;
         return (
       <>
-      <div className="section-head timeline-heading">
-        <TimelineDayPicker
-          trip={trip}
-          day={day}
-          setDay={setDay}
-          dateLabel={tripDayLabel(baseDate, day)}
-          itemCount={dayItems.length}
-          dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
-          swapDay={trip.access_role === "view" ? undefined : swapDay}
-          addPlace={() => addPlace(day)}
-        />
-      </div>
       {dayItems.length === 0 ? (
         <EmptyState
           title={t(`Day ${displayTripDay(trip, day)} ยังว่างอยู่`)}
@@ -6560,6 +6775,7 @@ function CardSheet({
   remove: (card: PaymentCard) => Promise<void>;
 }) {
   const t = useT();
+  const { saving: saveInFlight, guard: guardSave } = useBlockingSubmit();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -6601,11 +6817,12 @@ function CardSheet({
         if (event.target === event.currentTarget) close();
       }}
     >
+      <BlockingSaveOverlay visible={saveInFlight} />
       <form
         ref={formRef}
         className="modal card-sheet"
         onChange={checkForChanges}
-        onSubmit={submit}
+        onSubmit={(event) => guardSave(event, submit)}
       >
         <div className="modal-head">
           <h2>{t(card ? "แก้ไขบัตร" : "เพิ่มบัตร")}</h2>
@@ -8740,7 +8957,7 @@ function CostSheet({
         className="cost-sheet"
         submitLabel={t(saving ? "กำลังบันทึก…" : "บันทึกค่าใช้จ่าย")}
         submitDisabled={saving || rateLoading}
-        onDelete={canDelete && existing && modal.item && modal.costIndex !== undefined ? () => setConfirmDelete(true) : undefined}
+        onDelete={canDelete && existing && modal.item && modal.costIndex !== undefined && !isLinkedExpense(modal.item, existing) ? () => setConfirmDelete(true) : undefined}
         deleteDisabled={saving}
         deleteLabel={t("ลบค่าใช้จ่ายนี้")}
       >
@@ -9039,6 +9256,7 @@ function CostSheet({
       </BottomSheet>
       {error && <FormErrorDialog title={t("ตรวจสอบข้อมูลค่าใช้จ่าย")} description={t(error)} onClose={() => setError("")} />}
       {canDelete &&
+        !isLinkedExpense(modal.item, existing) &&
         confirmDelete &&
         modal.item &&
         modal.costIndex !== undefined && (
@@ -10276,6 +10494,7 @@ export function BNTripApp({
   const [tripRevision, setTripRevision] = useState(0);
   const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0);
   const [refreshingDashboard, setRefreshingDashboard] = useState(false);
+  const dashboardRefreshRequestRef = useRef(0);
   const [tripDirectoryRefreshToken, setTripDirectoryRefreshToken] = useState(0);
   const [refreshingTripDirectory, setRefreshingTripDirectory] = useState(false);
   const tripDirectoryRefreshRequestedRef = useRef(false);
@@ -10494,12 +10713,17 @@ export function BNTripApp({
   }, [selected]);
   async function refreshDashboard({
     announce = true,
-  }: { announce?: boolean } = {}) {
-    if (refreshingDashboard) return;
+    force = false,
+  }: { announce?: boolean; force?: boolean } = {}) {
+    if (refreshingDashboard && !force) return false;
+    const requestId = ++dashboardRefreshRequestRef.current;
     setRefreshingDashboard(true);
     if (announce) clearCurrentAccount();
     try {
       const snapshot = await fetchFreshDashboardSnapshot();
+      if (requestId !== dashboardRefreshRequestRef.current) return false;
+      tripListCache = snapshot.trips;
+      dashboardSnapshotCache = snapshot;
       startTransition(() => {
         setTrips(snapshot.trips);
         setDashboardCounts(snapshot.counts);
@@ -10511,15 +10735,29 @@ export function BNTripApp({
         setToast("อัปเดตหน้าแรกแล้ว");
         window.setTimeout(() => setToast(""), 1800);
       }
+      return true;
     } catch {
+      if (requestId !== dashboardRefreshRequestRef.current) return false;
       if (announce) {
         setToast("รีเฟรชไม่สำเร็จ กรุณาลองอีกครั้ง");
         window.setTimeout(() => setToast(""), 2400);
       }
+      return false;
     } finally {
-      setRefreshingDashboard(false);
+      if (requestId === dashboardRefreshRequestRef.current) setRefreshingDashboard(false);
     }
   }
+  useEffect(() => {
+    if (!authenticated || (page !== "dashboard" && page !== "trips")) return;
+    if (sessionStorage.getItem("invitation:accepted:trip") !== "1") return;
+    const timer = window.setTimeout(() => {
+      setTripRevision((value) => value + 1);
+      void refreshDashboard({ announce: false, force: true }).then((refreshed) => {
+        if (refreshed) sessionStorage.removeItem("invitation:accepted:trip");
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [authenticated, page]);
   useEffect(() => {
     if (page !== "dashboard") return;
     if (sessionStorage.getItem("bn-trip-favorites-changed") !== "1") return;
@@ -10762,6 +11000,9 @@ export function BNTripApp({
     );
   }
   async function deleteCost(item: Itinerary, index: number) {
+    if (isLinkedExpense(item, item.cost_items[index])) {
+      throw new Error("ค่าใช้จ่ายนี้ลิงก์กับที่พักหรือเที่ยวบิน กรุณาจัดการจากหน้าต้นทาง");
+    }
     await updateItineraryCosts(
       item,
       (item.cost_items || []).filter((_, costIndex) => costIndex !== index),
@@ -11046,6 +11287,7 @@ export function BNTripApp({
         setModal({ type: "place", item });
       })}
       openCost={protect(openCost)}
+      deleteCost={deleteCost}
       onFlightChanged={async () => {
         const response = await fetch(`/api/trips/${selected.id}/itineraries`, {
           cache: "no-store",
@@ -11242,11 +11484,19 @@ export function BNTripApp({
                       }} disabled={refreshingMainPage || refreshingAnalytics} aria-label={label(refreshingMainPage || refreshingAnalytics ? "กำลังอัปเดต…" : "รีเฟรช")} title={label(refreshingMainPage || refreshingAnalytics ? "กำลังอัปเดต…" : "รีเฟรช")}>
                         <RefreshCw className={refreshingMainPage || refreshingAnalytics ? "analytics-refresh-spinning" : ""} size={24} />
                       </button> : null}
-                      <InvitationNotifications onChanged={async()=>{
+                      <InvitationNotifications onChanged={async(result)=>{
+                        if(result.invitation_type!=="trip"){
+                          router.refresh();
+                          flash("ตอบรับคำเชิญแล้ว");
+                          return;
+                        }
                         tripListCache=null;
                         dashboardSnapshotCache=null;
                         setTripRevision(value=>value+1);
-                        await refreshDashboard({announce:false});
+                        const refreshed=await refreshDashboard({announce:false,force:true});
+                        if(refreshed) sessionStorage.removeItem("invitation:accepted:trip");
+                        router.refresh();
+                        flash(refreshed?"เพิ่มทริปจากคำเชิญแล้ว":"รับคำเชิญแล้ว แต่โหลดรายการไม่สำเร็จ กรุณาลองรีเฟรช");
                       }}/>
                       <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์">
                         <AccountAvatar profile={headerProfile} size="small" />

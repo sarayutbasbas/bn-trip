@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
+import { BlockingSaveOverlay, useBlockingSubmit } from "@/src/components/bottom-sheet";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { ChecklistCategoryIcon } from "@/src/components/checklist-category-icon";
@@ -164,6 +165,7 @@ export function TripWorkspace({
   initialTab?: "checklist" | "documents";
   onDocumentsChanged?: () => void | Promise<void>;
 }) {
+  const { saving: saveInFlight, guard: guardSave } = useBlockingSubmit();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const workspaceReturnTo = `${pathname}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
@@ -1045,6 +1047,7 @@ export function TripWorkspace({
 
   return (
     <section className="trip-workspace">
+      <BlockingSaveOverlay visible={saveInFlight} />
       {toast &&
         createPortal(
           <div className="toast toast-success" role="status" aria-live="polite">
@@ -1731,7 +1734,7 @@ export function TripWorkspace({
             aria-modal="true"
             aria-labelledby="checklist-sheet-title"
             onChange={checkChecklistChanges}
-            onSubmit={addChecklist}
+            onSubmit={(event) => guardSave(event, addChecklist)}
           >
             <div className="modal-head">
               <div>
@@ -1899,7 +1902,7 @@ export function TripWorkspace({
             aria-modal="true"
             aria-labelledby="document-edit-title"
             onChange={checkDocumentEditChanges}
-            onSubmit={saveDocumentEdit}
+            onSubmit={(event) => guardSave(event, saveDocumentEdit)}
           >
             <div className="modal-head">
               <div>
@@ -2010,7 +2013,7 @@ export function TripWorkspace({
             aria-modal="true"
             aria-labelledby="document-upload-title"
             onChange={checkDocumentCreateChanges}
-            onSubmit={uploadDocument}
+            onSubmit={(event) => guardSave(event, uploadDocument)}
           >
             <div className="modal-head">
               <div>

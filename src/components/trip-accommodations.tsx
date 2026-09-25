@@ -990,16 +990,6 @@ export function TripAccommodations({
           deleteLabel="ลบที่พัก"
         >
           <div className="form-grid">
-                <div className="field">
-                  <label>ชื่อที่พัก</label>
-                  <input
-                    name="name"
-                    required
-                    maxLength={180}
-                    defaultValue={edit?.name || ""}
-                    placeholder="เช่น APA Hotel Hakata"
-                  />
-                </div>
                 <section className="accommodation-image-field">
                   <div><strong>รูปที่พัก</strong><small>ไม่บังคับ · หากไม่เพิ่มจะแสดงรูปเริ่มต้น</small></div>
                   <div className={`cover-picker accommodation-cover-picker ${imagePreview ? "has-image" : ""}`}>
@@ -1026,31 +1016,41 @@ export function TripAccommodations({
                     {imagePreview && <button type="button" className="cover-picker-remove" onClick={() => setImageRemovalPending(true)} aria-label="ลบรูปที่พัก" title="ลบรูปที่พัก"><Trash2 size={16} /></button>}
                   </div>
                 </section>
-                <div className="form-row accommodation-booking-row">
-                  <LocationSearch
-                    options={locations}
-                    defaultValue={edit?.location || ""}
+                <div className="field">
+                  <label>ชื่อที่พัก</label>
+                  <input
+                    name="name"
+                    required
+                    maxLength={180}
+                    defaultValue={edit?.name || ""}
+                    placeholder="เช่น APA Hotel Hakata"
                   />
+                </div>
+                <LocationSearch
+                  options={locations}
+                  defaultValue={edit?.location || ""}
+                />
+                <div className="form-row accommodation-booking-row">
                   <BookingPlatformPicker
                     value={bookingPlatform}
                     onChange={setBookingPlatform}
                   />
+                  <label className="trip-flight-checkbox accommodation-breakfast-toggle">
+                    <input
+                      key={`breakfast-${edit?.id || "new"}`}
+                      name="includesBreakfast"
+                      type="checkbox"
+                      value="true"
+                      defaultChecked={Boolean(edit?.includes_breakfast)}
+                    />
+                    <span className="split-checkmark" aria-hidden="true" />
+                    <BreakfastPlateIcon size={19} />
+                    <span>
+                      <strong>มีอาหารเช้า</strong>
+                      <small>ที่พักรวมอาหารเช้าไว้ในการจอง</small>
+                    </span>
+                  </label>
                 </div>
-                <label className="trip-flight-checkbox accommodation-breakfast-toggle">
-                  <input
-                    key={`breakfast-${edit?.id || "new"}`}
-                    name="includesBreakfast"
-                    type="checkbox"
-                    value="true"
-                    defaultChecked={Boolean(edit?.includes_breakfast)}
-                  />
-                  <span className="split-checkmark" aria-hidden="true" />
-                  <BreakfastPlateIcon size={19} />
-                  <span>
-                    <strong>มีอาหารเช้า</strong>
-                    <small>ที่พักรวมอาหารเช้าไว้ในการจอง</small>
-                  </span>
-                </label>
                 <div className="form-row">
                   <div className="field">
                     <label>เช็กอิน</label>

@@ -7,6 +7,7 @@ import { getTripRole,tripCardIdsAreMembers,tripExpenseGuestIdsBelongToTrip,tripM
 import { logTripActivity } from "@/src/lib/activity";
 import { clearFirstItineraryTransport } from "@/src/lib/itinerary-order";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
+import { linkedExpenseIds } from "@/src/lib/linked-expense";
 
 const costItem=z.object({
   id:z.string().optional(),key:z.string().trim().min(1).max(100),value:z.number().min(0),category:z.string().max(60).optional(),currency:z.string().length(3).optional(),foreignAmount:z.number().min(0).optional(),exchangeRate:z.number().positive().optional(),rateDate:z.string().optional(),paymentMethod:z.string().max(260).optional(),creditCardId:z.string().uuid().optional(),paymentOwnerName:z.string().max(120).optional(),splitMemberIds:z.array(z.string().uuid()).max(20).optional(),splitGuestIds:z.array(z.string().uuid()).max(30).optional(),splitCount:z.number().int().min(1).max(100).optional(),
@@ -46,7 +47,7 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
       LIMIT 1
     ) address_accommodation ON true
     WHERE i.trip_id=$1 AND i.place_name IS NOT NULL
-    ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order`,[id]);return NextResponse.json(result.rows);
+    ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order`,[id]);const linked_cost_item_ids=await linkedExpenseIds(id);return NextResponse.json(result.rows.map(row=>({...row,linked_cost_item_ids})));
 }
 
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){

@@ -1,6 +1,7 @@
 import type { SessionUser } from "@/src/lib/auth";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { query } from "@/src/lib/db";
+import { linkedExpenseIds } from "@/src/lib/linked-expense";
 import {
   getDemoCards,
   getDemoItineraries,
@@ -755,7 +756,8 @@ export async function loadItineraries(session: SessionUser, id: string) {
      ORDER BY i.day_number,i.start_time NULLS LAST,i.sort_order`,
     [id],
   );
-  return clientSafe(result.rows);
+  const linked_cost_item_ids = await linkedExpenseIds(id);
+  return clientSafe(result.rows.map((row) => ({ ...row, linked_cost_item_ids })));
 }
 
 export async function loadTripCards(session: SessionUser, id: string) {
