@@ -68,7 +68,7 @@ ALTER TABLE trip_collaborators ADD COLUMN IF NOT EXISTS access_level VARCHAR(8) 
 CREATE TABLE IF NOT EXISTS itineraries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
   day_number INTEGER NOT NULL CHECK (day_number > 0), time_slot time_slot NOT NULL DEFAULT 'morning',
-  start_time TIME, place_name VARCHAR(180), address TEXT, image_url TEXT,
+  start_time TIME, place_name VARCHAR(180), address TEXT, image_url TEXT, image_added_at TIMESTAMPTZ,
   transport_mode VARCHAR(40), transport_note TEXT, cost_items JSONB NOT NULL DEFAULT '[]'::jsonb,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

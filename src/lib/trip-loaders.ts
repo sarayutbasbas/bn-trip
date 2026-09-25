@@ -736,7 +736,7 @@ export async function loadItineraries(session: SessionUser, id: string) {
          AND BTRIM(COALESCE(candidate.address,''))<>''
          AND regexp_replace(lower(BTRIM(candidate.address)),'[[:space:]]+',' ','g')=
              regexp_replace(lower(BTRIM(COALESCE(i.address,''))),'[[:space:]]+',' ','g')
-       ORDER BY candidate.updated_at DESC,candidate.id
+       ORDER BY candidate.image_added_at ASC NULLS LAST,candidate.id
        LIMIT 1
      ) address_itinerary ON true
      LEFT JOIN LATERAL (

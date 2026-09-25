@@ -596,6 +596,22 @@ const migrations = [
        WHERE accommodation.night_bedtimes='{}'::jsonb`,
     ],
   },
+  {
+    version: 46,
+    statements: [
+      "ALTER TABLE itineraries ADD COLUMN IF NOT EXISTS image_added_at TIMESTAMPTZ",
+      `UPDATE itineraries itinerary
+       SET image_added_at=COALESCE((
+         SELECT MIN(activity.created_at)
+         FROM trip_activity_logs activity
+         WHERE activity.entity_type='itinerary'
+           AND activity.entity_id=itinerary.id
+           AND activity.after_data->>'image_url' IS NOT NULL
+       ),itinerary.updated_at)
+       WHERE itinerary.image_url IS NOT NULL AND itinerary.image_added_at IS NULL`,
+      "CREATE INDEX IF NOT EXISTS itineraries_location_image_first_idx ON itineraries(trip_id,image_added_at,id) WHERE image_url IS NOT NULL",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

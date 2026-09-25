@@ -372,6 +372,8 @@ type TimelineDocument = {
 
 export type Itinerary = {
   id: string;
+  created_at?: string | null;
+  image_added_at?: string | null;
   day_number: number;
   time_slot: "morning" | "afternoon" | "evening";
   start_time: string | null;
@@ -389,6 +391,33 @@ export type Itinerary = {
   location_image_url?: string | null;
   documents?: TimelineDocument[];
 };
+
+function timelineLocationImageSource(
+  items: Itinerary[],
+  address: string | null | undefined,
+  excludedId?: string,
+) {
+  const normalizedAddress = address?.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+  if (!normalizedAddress) return null;
+  const matching = items.filter(
+    (candidate) =>
+      candidate.id !== excludedId &&
+      candidate.address?.trim().toLocaleLowerCase().replace(/\s+/g, " ") ===
+        normalizedAddress,
+  );
+  const original = matching
+    .filter((candidate) => Boolean(candidate.image_url))
+    .sort(
+      (a, b) =>
+        (a.image_added_at || a.created_at || "").localeCompare(
+          b.image_added_at || b.created_at || "",
+        ) ||
+        a.id.localeCompare(b.id),
+    )[0];
+  return original || matching.find(
+    (candidate) => candidate.location_image_url || candidate.accommodation_image_url,
+  ) || null;
+}
 
 function timelineImageUsage(item: Itinerary, items: Itinerary[]) {
   const address = item.address?.trim().toLocaleLowerCase().replace(/\s+/g, " ");
@@ -5910,7 +5939,6 @@ function ExpenseSplitSummary({
   const totalSpent = tripTotal + shoppingTotal;
   const remaining = totalBudget - totalSpent;
   const totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
-  const boundedPercent = Math.min(Math.max(totalPercent, 0), 100);
   return (
     <section className={`expense-overview ${remaining < 0 ? "is-over-budget" : ""}`}>
       <div className="expense-overview-stats">
@@ -5931,24 +5959,6 @@ function ExpenseSplitSummary({
           <strong>฿{bahtFormat(Math.abs(remaining))}</strong>
           <small>{totalBudget > 0 ? Math.abs(100 - totalPercent).toFixed(0) : "0"}%</small>
         </article>
-      </div>
-      <div className="expense-overview-progress">
-        <div
-          className="expense-progress-ring"
-          style={{ "--expense-progress": `${boundedPercent * 3.6}deg` } as CSSProperties}
-          role="progressbar"
-          aria-label={`${t("ใช้ไปแล้ว")} ${totalPercent.toFixed(0)}%`}
-          aria-valuenow={Math.round(boundedPercent)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <span>{totalPercent.toFixed(0)}%</span>
-        </div>
-        <div>
-          <p>{t("ใช้ไปแล้ว")} ฿{bahtFormat(totalSpent)} {t("จาก")} ฿{bahtFormat(totalBudget)}</p>
-          <div className="expense-overview-bar"><i style={{ width: `${boundedPercent}%` }} /></div>
-          <small>{t(remaining < 0 ? "เกินงบ" : "ยังอยู่ในงบประมาณ")} <CheckCircle2 size={13} /></small>
-        </div>
       </div>
     </section>
   );
@@ -9933,22 +9943,10 @@ function ModalForm({
                 items={items}
                 currentItem={placeSource}
                 onSelectPlace={(item) => {
-                  const normalizedAddress = item.address
-                    ?.trim()
-                    .toLocaleLowerCase()
-                    .replace(/\s+/g, " ");
-                  const imageSource = [item, ...items].find(
-                    (candidate) =>
-                      candidate.id !== placeSource?.id &&
-                      candidate.address
-                        ?.trim()
-                        .toLocaleLowerCase()
-                        .replace(/\s+/g, " ") === normalizedAddress &&
-                      Boolean(
-                        candidate.image_url ||
-                          candidate.location_image_url ||
-                          candidate.accommodation_image_url,
-                      ),
+                  const imageSource = timelineLocationImageSource(
+                    items,
+                    item.address,
+                    placeSource?.id,
                   );
                   setPlaceName(item.place_name.trim());
                   setSelectedLocationImage(

@@ -8,14 +8,12 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
-  Coffee,
   Heart,
   ImagePlus,
   MapPin,
   Plus,
   ReceiptText,
   Trash2,
-  Utensils,
 } from "lucide-react";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { AttachmentPreviewOverlay } from "@/src/components/attachment-preview-overlay";
@@ -102,6 +100,29 @@ const currencyOptions = [
   ["AED", "เดอร์แฮมสหรัฐอาหรับเอมิเรตส์ (AED)"],
   ["INR", "รูปีอินเดีย (INR)"],
 ] as const;
+
+function BreakfastPlateIcon({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="5.5" />
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M2 3v4a2 2 0 0 0 4 0V3M4 3v18" />
+      <ellipse cx="20.5" cy="6" rx="1.8" ry="3.5" />
+      <path d="M20.5 9.5V21" />
+    </svg>
+  );
+}
+
 async function json<T>(url: string, options?: RequestInit) {
   const response = await fetch(url, options);
   const body = await response.json();
@@ -920,7 +941,7 @@ export function TripAccommodations({
                           {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={36} height={36} /></span>}
                           {item.includes_breakfast && (
                             <span className="accommodation-breakfast-icon" role="img" aria-label="รวมอาหารเช้า" title="รวมอาหารเช้า">
-                              <Utensils size={23} aria-hidden="true" />
+                              <BreakfastPlateIcon size={23} />
                             </span>
                           )}
                         </div>
@@ -1026,7 +1047,7 @@ export function TripAccommodations({
                     defaultChecked={Boolean(edit?.includes_breakfast)}
                   />
                   <span className="split-checkmark" aria-hidden="true" />
-                  <Coffee size={19} aria-hidden="true" />
+                  <BreakfastPlateIcon size={19} />
                   <span>
                     <strong>มีอาหารเช้า</strong>
                     <small>ที่พักรวมอาหารเช้าไว้ในการจอง</small>

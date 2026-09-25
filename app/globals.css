@@ -6966,75 +6966,6 @@ html.dark .trip-section-nav button.active {
   font-size: 9px;
   font-weight: 750;
 }
-.expense-overview-progress {
-  margin-top: 9px;
-  padding: 13px;
-  border: .5px solid var(--line);
-  border-radius: 18px;
-  display: grid;
-  grid-template-columns: 62px minmax(0, 1fr);
-  align-items: center;
-  gap: 13px;
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
-.expense-progress-ring {
-  --expense-progress: 0deg;
-  width: 62px;
-  height: 62px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: conic-gradient(var(--orange) var(--expense-progress), var(--surface-3) 0);
-}
-.expense-progress-ring::before {
-  content: "";
-  grid-area: 1 / 1;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--surface-solid);
-}
-.expense-progress-ring span {
-  z-index: 1;
-  grid-area: 1 / 1;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 800;
-}
-.expense-overview-progress > div:last-child {
-  min-width: 0;
-}
-.expense-overview-progress p {
-  margin: 0;
-  color: var(--ink);
-  font-size: 11px;
-  line-height: 1.4;
-}
-.expense-overview-bar {
-  height: 7px;
-  margin: 8px 0 6px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--surface-3);
-}
-.expense-overview-bar i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--brand-gradient);
-}
-.expense-overview-progress small {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #199461;
-  font-size: 9px;
-  font-weight: 650;
-}
-.expense-overview.is-over-budget .expense-overview-progress small {
-  color: #d63f35;
-}
 .expense-budget-breakdown,
 .expense-insight-details {
   margin-top: 9px;
@@ -11554,9 +11485,6 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
   background: color-mix(in srgb, var(--brand-soft) 58%, var(--surface-solid));
   box-shadow: 0 5px 14px rgba(255, 95, 16, .1);
 }
-.flight-layover-icon svg {
-  transform: rotate(-28deg);
-}
 .flight-layover > div {
   min-width: 0;
   display: grid;
@@ -13565,7 +13493,12 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 }
 .accommodation-breakfast-toggle > svg {
   flex: 0 0 auto;
-  color: var(--orange);
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border-radius: 8px;
+  color: #fff;
+  background: #ff6817;
 }
 .accommodation-breakfast-toggle > span:last-child {
   min-width: 0;
@@ -13807,7 +13740,8 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-stay-dates > span:last-child svg { grid-row:auto; }
 .accommodation-card-copy footer { min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 5px; }
 .accommodation-card-icons { grid-column:1;grid-row:1;min-width:0;display:flex;align-items:center;gap:6px; }
-.accommodation-breakfast-icon { width:36px;height:36px;flex:0 0 36px;border-radius:9px;display:grid;place-items:center;color:#ff6817;background:#fff;box-shadow:0 4px 11px rgba(20,30,50,.18); }
+.accommodation-breakfast-icon { width:36px;height:36px;flex:0 0 36px;border-radius:9px;display:grid;place-items:center;color:#fff;background:#ff6817;box-shadow:0 4px 11px rgba(20,30,50,.18); }
+.accommodation-card-copy .accommodation-breakfast-icon svg { color:#fff; }
 .accommodation-booking-badge,.accommodation-payment-badge { min-width:0;display:inline-flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .accommodation-booking-badge { width:36px;height:36px;border-radius:9px;align-self:center;justify-self:start;font-size:7px;box-shadow:0 4px 11px rgba(20,30,50,.18); }
 .accommodation-booking-badge img { width:36px;height:36px;border-radius:9px;object-fit:contain;object-position:left center; }
