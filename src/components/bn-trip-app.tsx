@@ -4455,13 +4455,20 @@ function SwipeableTimelineDay({
     id: number;
     x: number;
     y: number;
+    width: number;
     startedAt: number;
     axis: "horizontal" | "vertical" | null;
     deltaX: number;
   } | null>(null);
+  const dragFrame = useRef<number | null>(null);
+  const settleTimer = useRef<number | null>(null);
   const suppressClick = useRef(false);
   const targetDay = useRef<number | null>(null);
   const settling = useRef(false);
+  useEffect(() => () => {
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+  }, []);
   if (totalDays <= 1) return <>{children(day)}</>;
   const centerTrack = () => {
     const track = trackRef.current;
@@ -4474,13 +4481,34 @@ function SwipeableTimelineDay({
     if (!track) return;
     settling.current = true;
     targetDay.current = nextDay;
+    // Flush the drag position once so a very quick flick still animates.
+    void track.offsetWidth;
     track.style.transition =
       "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)";
     track.style.transform = transform;
+    // A drag that ends exactly at center may not fire transitionend.
+    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+    settleTimer.current = window.setTimeout(finishTransition, 380);
   };
+  function finishTransition() {
+    if (!settling.current) return;
+    if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+    settleTimer.current = null;
+    const nextDay = targetDay.current;
+    targetDay.current = null;
+    // Update the visible day and recenter the three panels in one frame.
+    if (nextDay !== null) flushSync(() => setDay(nextDay));
+    centerTrack();
+    settling.current = false;
+    window.setTimeout(() => {
+      suppressClick.current = false;
+    }, 80);
+  }
   const finishSwipe = (clientX: number, clientY: number) => {
     const start = pointerStart.current;
     pointerStart.current = null;
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = null;
     if (!start) return;
     const deltaX = clientX - start.x;
     const deltaY = clientY - start.y;
@@ -4491,10 +4519,10 @@ function SwipeableTimelineDay({
       centerTrack();
       return;
     }
-    const width = containerRef.current?.clientWidth || 320;
+    const width = start.width;
     const fastSwipe =
-      performance.now() - start.startedAt < 240 && Math.abs(deltaX) >= 30;
-    const horizontalSwipe = Math.abs(deltaX) >= Math.max(56, width * 0.18) || fastSwipe;
+      performance.now() - start.startedAt < 260 && Math.abs(deltaX) >= 24;
+    const horizontalSwipe = Math.abs(deltaX) >= Math.max(42, width * 0.14) || fastSwipe;
     if (!horizontalSwipe) {
       settleTrack("translate3d(-33.333333%, 0, 0)", null);
       return;
@@ -4523,6 +4551,7 @@ function SwipeableTimelineDay({
           id: event.pointerId,
           x: event.clientX,
           y: event.clientY,
+          width: event.currentTarget.clientWidth || 320,
           startedAt: performance.now(),
           axis: null,
           deltaX: 0,
@@ -4534,9 +4563,9 @@ function SwipeableTimelineDay({
         if (!start || start.id !== event.pointerId) return;
         const deltaX = event.clientX - start.x;
         const deltaY = event.clientY - start.y;
-        if (!start.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 7) {
+        if (!start.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 6) {
           start.axis =
-            Math.abs(deltaX) > Math.abs(deltaY) * 1.15
+            Math.abs(deltaX) > Math.abs(deltaY) * 1.08
               ? "horizontal"
               : "vertical";
           if (start.axis === "horizontal") {
@@ -4550,12 +4579,20 @@ function SwipeableTimelineDay({
           (day === 1 && deltaX > 0) ||
           (day === totalDays && deltaX < 0);
         start.deltaX = atBoundary ? deltaX * 0.2 : deltaX;
-        const track = trackRef.current;
-        if (track)
-          track.style.transform = `translate3d(calc(-33.333333% + ${start.deltaX}px), 0, 0)`;
+        if (dragFrame.current === null) {
+          dragFrame.current = requestAnimationFrame(() => {
+            dragFrame.current = null;
+            const active = pointerStart.current;
+            const track = trackRef.current;
+            if (active && track)
+              track.style.transform = `translate3d(${active.deltaX - active.width}px, 0, 0)`;
+          });
+        }
       }}
       onPointerUp={(event) => finishSwipe(event.clientX, event.clientY)}
       onPointerCancel={() => {
+        if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+        dragFrame.current = null;
         pointerStart.current = null;
         targetDay.current = null;
         settling.current = false;
@@ -4576,17 +4613,7 @@ function SwipeableTimelineDay({
         className="timeline-day-swipe-track"
         onTransitionEnd={(event) => {
           if (event.currentTarget !== event.target || event.propertyName !== "transform") return;
-          const nextDay = targetDay.current;
-          targetDay.current = null;
-          // Commit the newly visible day before recentering the three-panel
-          // track. Keeping both DOM updates in this transition-end frame
-          // prevents the previous day from flashing at the center for a frame.
-          if (nextDay !== null) flushSync(() => setDay(nextDay));
-          centerTrack();
-          settling.current = false;
-          window.setTimeout(() => {
-            suppressClick.current = false;
-          }, 80);
+          finishTransition();
         }}
       >
         {panels.map((panelDay, index) => (
