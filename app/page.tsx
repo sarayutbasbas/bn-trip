@@ -26,6 +26,7 @@ export default async function Home({searchParams}:{searchParams:Promise<{authErr
   const initialTripPreset=idea?.kind==="planned"&&idea.target_year&&idea.target_month?{
     sourceIdeaId:idea.id,
     destination:idea.name,
+    note:idea.note,
     countryCode:idea.country_code||undefined,
     locationIds:idea.trip_destinations.map(destination=>destination.id),
     tripDestinations:idea.trip_destinations.map(destination=>({...destination,searchTerms:[destination.nameTh,destination.nameEn].filter(Boolean)})),

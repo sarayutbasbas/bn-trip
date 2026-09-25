@@ -612,6 +612,12 @@ const migrations = [
       "CREATE INDEX IF NOT EXISTS itineraries_location_image_first_idx ON itineraries(trip_id,image_added_at,id) WHERE image_url IS NOT NULL",
     ],
   },
+  {
+    version: 47,
+    statements: [
+      "ALTER TABLE trips ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT ''",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { PageIntro } from "@/src/components/page-intro";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
+import { TripNoteField } from "@/src/components/trip-note-field";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import {
   AttachmentPreviewOverlay,
@@ -241,6 +242,7 @@ type ExpenseGuest = {
 export type Trip = {
   id: string;
   name: string;
+  note?: string;
   destination: string;
   country_code?: string | null;
   country_name?: string | null;
@@ -486,6 +488,7 @@ const DEFAULT_TRIP_COVER = "/travel-postcard-fallback.jpg";
 export type TripCreationPreset = {
   sourceIdeaId: string;
   destination: string;
+  note: string;
   countryCode?: string;
   locationIds?: string[];
   tripDestinations?: TripDestinationOption[];
@@ -4319,6 +4322,23 @@ function TimelineExpenseMenu({
 }) {
   const t = useT();
   const costs = item.cost_items || [];
+  useEffect(() => {
+    if (!open) return;
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const previousPosition = body.style.position;
+    const previousTop = body.style.top;
+    const previousWidth = body.style.width;
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    return () => {
+      body.style.position = previousPosition;
+      body.style.top = previousTop;
+      body.style.width = previousWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
   return (
     <div className="timeline-expense-menu">
       <button
@@ -9646,6 +9666,7 @@ function ModalForm({
         }
         await submit({
           name: f.get("name"),
+          note: String(f.get("note") || "").trim(),
           countryCode: f.get("countryCode"),
           locationIds: tripDestinations.map((destination) => destination.id),
           googlePhotosUrl: String(f.get("googlePhotosUrl") || "").trim(),
@@ -9778,6 +9799,7 @@ function ModalForm({
                   window.setTimeout(checkForChanges, 0);
                 }}
               />
+              <TripNoteField defaultValue={modal.trip?.note || modal.preset?.note || ""} />
               <div className="field">
                 <label>{t("ลิงก์โฟลเดอร์ Google Photos")}</label>
                 <input

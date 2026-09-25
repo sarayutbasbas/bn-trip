@@ -15,6 +15,7 @@ import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications,type InvitationNotification } from "@/src/components/invitation-notifications";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
+import { TripNoteField } from "@/src/components/trip-note-field";
 
 type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
@@ -107,7 +108,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     <TripDestinationPicker countryCode={countryCode} selected={locations} onChange={setLocations}/>
     <fieldset className="trip-idea-kind-picker"><legend>วางไว้ในลิสต์ไหน</legend><button type="button" className={kind==="planned"?"active":""} onClick={()=>{setKind("planned");setTargetMonth(targetMonth||1);setTargetYear(targetYear||new Date().getFullYear()+1)}}><CalendarRange size={17}/><span>ทริปที่เล็งไว้<small>มีเดือนและปีคร่าว ๆ</small></span></button><button type="button" className={kind==="someday"?"active":""} onClick={()=>{setKind("someday");setTargetMonth(null);setTargetYear(null)}}><Compass size={17}/><span>ลิสต์สักวันหนึ่ง<small>ยังไม่รู้ว่าจะไปเมื่อไร</small></span></button></fieldset>
     {kind==="planned"?<div className="trip-idea-date-row"><label className="trip-idea-field"><span>เดือน</span><select required value={targetMonth||""} onChange={event=>setTargetMonth(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกเดือน</option>{monthNames.map((month,index)=><option key={month} value={index+1}>{month}</option>)}</select></label><label className="trip-idea-field"><span>ปี ค.ศ.</span><input required type="number" min="2020" max="2200" value={targetYear||""} onChange={event=>setTargetYear(event.target.value?Number(event.target.value):null)}/></label></div>:null}
-    <label className="trip-idea-field"><span>โน้ต <small>(ไม่บังคับ)</small></span><textarea maxLength={500} value={note} onChange={event=>setNote(event.target.value)} placeholder="สิ่งที่อยากทำ เหตุผลที่อยากไป หรือไอเดียคร่าว ๆ"/></label>
+    <TripNoteField value={note} onChange={event=>setNote(event.target.value)}/>
     </div>
   </BottomSheet>{error?<FormErrorDialog title="บันทึกทริปที่เล็งไว้ไม่สำเร็จ" description={error} onClose={()=>setError("")}/>:null}</>;
 }

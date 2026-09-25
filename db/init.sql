@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS trips (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name VARCHAR(160) NOT NULL, destination VARCHAR(160) NOT NULL, start_date DATE NOT NULL,
+  name VARCHAR(160) NOT NULL, note TEXT NOT NULL DEFAULT '', destination VARCHAR(160) NOT NULL, start_date DATE NOT NULL,
   total_days INTEGER NOT NULL CHECK (total_days BETWEEN 1 AND 90),
   traveller_count INTEGER NOT NULL DEFAULT 2 CHECK (traveller_count > 0),
   budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0, shopping_budget_thb NUMERIC(14,2) NOT NULL DEFAULT 0,
