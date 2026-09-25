@@ -2084,7 +2084,17 @@ function costSourceLabel(cost: CostItem) {
 }
 
 function isLinkedExpense(item: Itinerary | undefined, cost: CostItem | undefined) {
-  return Boolean(cost?.id && item?.linked_cost_item_ids?.includes(cost.id));
+  if (!item || !cost) return false;
+  if (cost.id && item.linked_cost_item_ids?.includes(cost.id)) return true;
+  if (item.accommodation_id && cost.category === "ที่พัก") {
+    return cost.key === `ค่าที่พัก ${item.place_name}`;
+  }
+  const flightLabel = /^เที่ยวบิน\s+(.+?)\s+·/.exec(item.place_name)?.[1];
+  return Boolean(
+    flightLabel &&
+      cost.category === "ค่าตั๋วเครื่องบิน" &&
+      cost.key === `ตั๋วเครื่องบิน ${flightLabel}`,
+  );
 }
 
 function costSplitCount(cost: CostItem, fallback = 1) {
