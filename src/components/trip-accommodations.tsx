@@ -22,7 +22,6 @@ import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionEmpty } from "@/src/components/trip-section-empty";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { compressImageFile } from "@/src/lib/client-image-compression";
-import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 import {
   accommodationResourceKey,
   invalidateClientResource,
@@ -828,7 +827,6 @@ export function TripAccommodations({
         },
       );
       setEditing(null);
-      scrollPageToTopAfterOverlay();
       await Promise.all([load(), onChanged()]);
       window.dispatchEvent(
         new CustomEvent("trip-completion-changed", { detail: { tripId } }),

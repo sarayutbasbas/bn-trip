@@ -8656,7 +8656,6 @@ function CostSheet({
     try {
       await saveCost(modal.item, modal.costIndex, target, cost);
       close();
-      scrollPageToTopAfterOverlay();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "บันทึกค่าใช้จ่ายไม่สำเร็จ",
