@@ -1065,7 +1065,7 @@ export function TripAccommodations({
                       defaultChecked={Boolean(edit?.includes_breakfast)}
                     />
                     <span className="split-checkmark" aria-hidden="true" />
-                    <BreakfastPlateIcon size={19} />
+                    <span className="accommodation-breakfast-icon" aria-hidden="true"><BreakfastPlateIcon size={23} /></span>
                     <span>
                       <strong>มีอาหารเช้า</strong>
                       <small>ที่พักรวมอาหารเช้าไว้ในการจอง</small>

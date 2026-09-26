@@ -2094,7 +2094,7 @@ export function TripWorkspace({
           onClose={() => setError("")}
         />
       )}
-      {deleteTarget && (
+      {deleteTarget && typeof document !== "undefined" && createPortal(
         <div
           className="confirm-backdrop"
           role="presentation"
@@ -2150,7 +2150,8 @@ export function TripWorkspace({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   );

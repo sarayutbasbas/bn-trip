@@ -9,7 +9,7 @@ function Block({ className = "" }: { className?: string }) {
 
 function Intro({ page }: { page: LoadingPage }) {
   return <div className={`route-skeleton-intro is-${page}`}>
-    <Block className="route-skeleton-intro-title" />
+    <div className="route-skeleton-intro-title-row"><Block className="route-skeleton-intro-title" />{page === "ideas" && <Block className="route-skeleton-intro-icon" />}</div>
     <Block className="route-skeleton-intro-subtitle" />
   </div>;
 }
@@ -57,7 +57,8 @@ function TripsLoading() {
 function IdeasLoading() {
   return <div className="route-skeleton-screen route-skeleton-ideas">
     <Intro page="ideas" />
-    <SearchRow buttons={1} />
+    <SearchRow buttons={2} />
+    <div className="route-skeleton-filters">{[0, 1, 2].map(index => <Block key={index} />)}</div>
     <div className="route-skeleton-idea-cards">{[0, 1, 2, 3].map(index => <div className="route-skeleton-list-card" key={index}>
       <Block className="route-skeleton-card-cover" />
       <div className="route-skeleton-card-copy">

@@ -10,8 +10,9 @@ export const metadata: Metadata = {
   description: "เก็บทริปในอนาคตและสถานที่ในฝันที่อยากไปสักวัน",
 };
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ edit?: string }> }) {
   const session = await getSession();
   if (!session) redirect("/");
-  return <TripIdeasPage initialIdeas={await loadTripIdeas(session)} demo={Boolean(session.isDemo)} />;
+  const { edit } = await searchParams;
+  return <TripIdeasPage initialIdeas={await loadTripIdeas(session)} initialEditId={edit} demo={Boolean(session.isDemo)} />;
 }

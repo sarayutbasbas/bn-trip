@@ -21,7 +21,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   const value=parsed.data;const country=countryByCode(value.countryCode);if(!country)return NextResponse.json({error:"กรุณาเลือกประเทศ"},{status:400});
   const destinations=resolveTripDestinations(country.code,value.locationIds);if(destinations.length!==new Set(value.locationIds).size)return NextResponse.json({error:"กรุณาเลือกเมืองหรือจังหวัดจากรายการ"},{status:400});
   const destination=formatTripDestination(destinations.map(item=>item.nameTh).join(" · "),country.code,country.nameTh,destinations);
-  await query(`UPDATE trip_ideas SET name=$1,destination=$2,country_code=$3,trip_destinations=$4::jsonb,kind=$5,target_month=$6,target_year=$7,note=$8,cover_image_url=$9,updated_at=now() WHERE id=$10`,[value.name,destination,country.code,JSON.stringify(destinations),value.kind,value.kind==="planned"?value.targetMonth:null,value.kind==="planned"?value.targetYear:null,value.note,value.coverImageUrl,id]);
+  await query(`UPDATE trip_ideas SET name=$1,destination=$2,country_code=$3,trip_destinations=$4::jsonb,kind=$5,target_month=$6,target_year=$7,note=$8,cover_image_url=$9,updated_at=now() WHERE id=$10`,[value.name,destination,country.code,JSON.stringify(destinations),value.kind,value.targetMonth,value.targetYear,value.note,value.coverImageUrl,id]);
   return NextResponse.json(await loadTripIdea(session,id));
 }
 

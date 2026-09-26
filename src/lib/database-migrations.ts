@@ -618,6 +618,14 @@ const migrations = [
       "ALTER TABLE trips ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT ''",
     ],
   },
+  {
+    version: 48,
+    statements: [
+      "ALTER TABLE trip_ideas DROP CONSTRAINT IF EXISTS trip_ideas_check",
+      "ALTER TABLE trip_ideas ADD CONSTRAINT trip_ideas_target_date_kind_check CHECK (target_month IS NULL AND target_year IS NULL OR target_month IS NOT NULL AND target_year IS NOT NULL)",
+      "ALTER TABLE trip_ideas ADD CONSTRAINT trip_ideas_planned_target_check CHECK (kind <> 'planned' OR target_month IS NOT NULL AND target_year IS NOT NULL)",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

@@ -20,6 +20,7 @@ import {
   tripRoleSql,
 } from "@/src/lib/trip-access";
 import { inferTripCountry } from "@/src/lib/countries";
+import { loadTripIdeas, type TripIdea } from "@/src/lib/trip-ideas";
 import {
   buildTravelBadgeCollection,
   TRIP_DESTINATION_OPTIONS,
@@ -33,6 +34,7 @@ export type DashboardPayload = {
   upcoming: unknown[];
   past: unknown[];
   favoriteAccommodations: FavoriteAccommodation[];
+  tripIdeas: TripIdea[];
   counts: { total: number; ongoing: number; upcoming: number; past: number; countries?: number; destinations?: number; travel_days?: number; badges_unlocked?: number; badges_total?: number };
   countryHighlights: CountryHighlight[];
 };
@@ -466,6 +468,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
       new URLSearchParams("mode=dashboard"),
     ) as unknown as DashboardPayload;
     const badgeCollection = await loadTravelBadges(session);
+    const tripIdeas = await loadTripIdeas(session);
     const badgeProgress = Object.values(badgeCollection.totals).reduce(
       (total, category) => ({
         unlocked: total.unlocked + category.unlocked,
@@ -476,6 +479,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
     return {
       ...dashboard,
       favoriteAccommodations: [],
+      tripIdeas: tripIdeas.filter((idea) => idea.kind === "planned"),
       counts: {
         ...dashboard.counts,
         badges_unlocked: badgeProgress.unlocked,
@@ -492,7 +496,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
   const incomplete = tripIncompleteSetupSql("t");
   const flightSummaries = tripFlightSummariesSql("t");
   const destinationAccess = tripAccessSql("destination_trip");
-  const [ongoing, upcoming, past, favoriteAccommodations, counts, countries, destinations] = await Promise.all([
+  const [ongoing, upcoming, past, favoriteAccommodations, counts, countries, destinations, tripIdeas] = await Promise.all([
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC`, [session.userId]),
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 8`, [session.userId]),
@@ -510,8 +514,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
       JOIN trip_accommodations accommodation ON accommodation.id=favorite.accommodation_id
       JOIN trips t ON t.id=accommodation.trip_id
       WHERE favorite.user_id=$1 AND ${access}
-      ORDER BY favorite.favorited_at DESC,accommodation.id DESC
-      LIMIT 10`, [session.userId]),
+      ORDER BY favorite.favorited_at DESC,accommodation.id DESC`, [session.userId]),
     query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past,count(DISTINCT COALESCE(NULLIF(btrim(t.country_code),''),NULLIF(btrim(t.country_name),''))) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS countries,COALESCE(sum(t.total_days) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))),0)::int AS travel_days FROM trips t WHERE ${access}`, [session.userId]),
     query<{country_code:string;country:string;trips:number;average_rating:number;review_count:number}>(`WITH trip_country_rows AS (
         SELECT
@@ -560,6 +563,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
         AND COALESCE(destination_trip.return_departure_at,
           (destination_trip.start_date + destination_trip.total_days - 1)::timestamp)
           < (now() AT TIME ZONE COALESCE(destination_trip.timezone,'Asia/Bangkok'))`, [session.userId]),
+    loadTripIdeas(session),
   ]);
   const badgeCollection = await loadTravelBadges(session);
   const badgeProgress = Object.values(badgeCollection.totals).reduce(
@@ -574,6 +578,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
     upcoming: upcoming.rows,
     past: past.rows,
     favoriteAccommodations: favoriteAccommodations.rows,
+    tripIdeas: tripIdeas.filter((idea) => idea.kind === "planned"),
     counts: {
       ...(counts.rows[0] as DashboardPayload["counts"]),
       destinations: Number(destinations.rows[0]?.total || 0),
@@ -725,7 +730,7 @@ export async function loadItineraries(session: SessionUser, id: string) {
        ),'[]'::jsonb) AS documents,
        COALESCE(accommodation.booking_platform,'') AS accommodation_booking_platform,
        COALESCE(accommodation.image_url,address_accommodation.image_url) AS accommodation_image_url,
-       COALESCE(accommodation.image_url,address_itinerary.image_url,address_accommodation.image_url) AS location_image_url
+       COALESCE(accommodation.image_url,address_accommodation.image_url,address_itinerary.image_url) AS location_image_url
      FROM itineraries i
      LEFT JOIN trip_accommodations accommodation ON accommodation.id=i.accommodation_id
      LEFT JOIN LATERAL (

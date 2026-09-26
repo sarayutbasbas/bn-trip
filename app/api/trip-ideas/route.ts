@@ -23,6 +23,6 @@ export async function POST(request:Request){
   if(destinations.length!==new Set(value.locationIds).size)return NextResponse.json({error:"กรุณาเลือกเมืองหรือจังหวัดจากรายการ"},{status:400});
   const destination=formatTripDestination(destinations.map(item=>item.nameTh).join(" · "),country.code,country.nameTh,destinations);
   const inserted=await query<{id:string}>(`INSERT INTO trip_ideas (user_id,name,destination,country_code,trip_destinations,kind,target_month,target_year,note,cover_image_url)
-    VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10) RETURNING id`,[session.userId,value.name,destination,country.code,JSON.stringify(destinations),value.kind,value.kind==="planned"?value.targetMonth:null,value.kind==="planned"?value.targetYear:null,value.note,value.coverImageUrl]);
+    VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10) RETURNING id`,[session.userId,value.name,destination,country.code,JSON.stringify(destinations),value.kind,value.targetMonth,value.targetYear,value.note,value.coverImageUrl]);
   return NextResponse.json(await loadTripIdea(session,inserted.rows[0].id),{status:201});
 }

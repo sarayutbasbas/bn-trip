@@ -24,7 +24,10 @@ import { useRouter } from "next/navigation";
 import { PageIntro } from "@/src/components/page-intro";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
+import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
 import { TripNoteField } from "@/src/components/trip-note-field";
+import { ideaCountdown, ideaTargetDate } from "@/src/lib/trip-idea-display";
+import type { TripIdea } from "@/src/lib/trip-ideas";
 import { TripSegmentedFilter, type TripFilterOption } from "@/src/components/trip-segmented-filter";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import {
@@ -55,6 +58,8 @@ import { optimizedCanvasFile, prepareDocumentFile } from "@/src/lib/client-image
 import { uploadPrivateDocument } from "@/src/lib/client-blob-upload";
 import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 import {
+  accommodationResourceKey,
+  invalidateClientResource,
   invalidateClientResourcesContaining,
 } from "@/src/lib/client-resource-cache";
 import {
@@ -410,6 +415,10 @@ function timelineLocationImageSource(
       candidate.address?.trim().toLocaleLowerCase().replace(/\s+/g, " ") ===
         normalizedAddress,
   );
+  const accommodationSource = matching.find(
+    (candidate) => candidate.accommodation_id && candidate.accommodation_image_url,
+  ) || matching.find((candidate) => candidate.accommodation_image_url);
+  if (accommodationSource) return accommodationSource;
   const original = matching
     .filter((candidate) => Boolean(candidate.image_url))
     .sort(
@@ -429,6 +438,16 @@ function timelineImageUsage(item: Itinerary, items: Itinerary[]) {
   const sameLocation = (candidate: Itinerary) =>
     Boolean(address) &&
     candidate.address?.trim().toLocaleLowerCase().replace(/\s+/g, " ") === address;
+  if (item.accommodation_id && item.accommodation_image_url) {
+    const followers = items.filter((candidate) =>
+      candidate.id !== item.id &&
+      !candidate.image_url &&
+      sameLocation(candidate) &&
+      candidate.location_image_url === item.accommodation_image_url &&
+      !candidate.accommodation_id,
+    ).length;
+    return { kind: "accommodation" as const, followers, sourceName: item.place_name };
+  }
   if (item.image_url) {
     const followers = items.filter((candidate) =>
       candidate.id !== item.id &&
@@ -441,6 +460,10 @@ function timelineImageUsage(item: Itinerary, items: Itinerary[]) {
   const inheritedUrl = item.location_image_url || item.accommodation_image_url;
   if (!inheritedUrl) return { kind: "default" as const, followers: 0, sourceName: "" };
   const source = items.find((candidate) =>
+    candidate.id !== item.id &&
+    sameLocation(candidate) &&
+    candidate.accommodation_id && candidate.accommodation_image_url === inheritedUrl,
+  ) || items.find((candidate) =>
     candidate.id !== item.id &&
     sameLocation(candidate) &&
     candidate.image_url === inheritedUrl,
@@ -606,6 +629,7 @@ const EN_TEXT: Record<string, string> = {
   ยังไม่กำหนดวัน: "Dates not set",
   กำลังเดินทาง: "Ongoing",
   ที่ผ่านมาแล้ว: "Completed",
+  ผ่านมาแล้ว: "Completed",
   รีวิวทริป: "Trip reviews",
   รีวิว: "reviews",
   คะแนนเฉลี่ย: "Average rating",
@@ -1289,6 +1313,7 @@ let tripListCache: Trip[] | null = null;
 type DashboardSnapshot = {
   trips: Trip[];
   favoriteAccommodations: FavoriteAccommodation[];
+  tripIdeas: TripIdea[];
   counts: DashboardCounts;
   countryHighlights: CountryHighlight[];
 };
@@ -1340,6 +1365,7 @@ async function fetchFreshDashboardSnapshot(): Promise<DashboardSnapshot> {
   const snapshot: DashboardSnapshot = {
     trips,
     favoriteAccommodations: data.favoriteAccommodations || [],
+    tripIdeas: data.tripIdeas || [],
     counts: data.counts || {
       total: trips.length,
       ongoing: 0,
@@ -2571,14 +2597,9 @@ function TripCard({
             aria-label={t("ข้อมูลทริปยังไม่ครบ")}
           />
         )}
-        {!past && (
-          <b
-            className={`countdown-badge ${ongoing ? "ongoing-badge" : "upcoming-badge"}`}
-          >
-            <CalendarDays size={12} />
-            <span>{countdownLabel}</span>
-          </b>
-        )}
+        {!past && (ongoing ? (
+          <b className="countdown-badge ongoing-badge"><CalendarDays size={12} /><span>{countdownLabel}</span></b>
+        ) : <TripCountdownBadge label={countdownLabel} />)}
         {past && <TripRatingBadge trip={trip} variant="cover" />}
         <SharedTripAvatars
           members={trip.members}
@@ -2609,6 +2630,49 @@ function TripCard({
             )}
           </div>
         )}
+      </div>
+    </article>
+  );
+}
+
+function HomeTripIdeaCard({
+  idea,
+  now,
+  open,
+  priority = false,
+}: {
+  idea: TripIdea;
+  now: number;
+  open: () => void;
+  priority?: boolean;
+}) {
+  const country = countryByCode(idea.country_code);
+  const destinationLabel = formatTripDestination(idea.destination, idea.country_code, country?.nameTh, idea.trip_destinations);
+  const countdown = ideaCountdown(idea, new Date(now));
+  const targetDate = ideaTargetDate(idea);
+  return (
+    <article className="trip-card home-idea-card">
+      <button type="button" className="trip-card-link" onClick={open} aria-label={`เปิดทริปที่เล็งไว้ ${idea.name}`} />
+      <div className="trip-cover">
+        <Image
+          src={idea.cover_image_url || DEFAULT_TRIP_COVER}
+          alt={`รูปปก ${idea.name}`}
+          fill
+          sizes="(max-width: 600px) 50vw, 380px"
+          priority={priority}
+          unoptimized
+          className="trip-cover-image"
+        />
+        {countdown && <TripCountdownBadge label={countdown} />}
+        <SharedTripAvatars members={idea.members} limit={3} onClick={open} actionLabel="ผู้ร่วมวางแผน" />
+      </div>
+      <div className="trip-body">
+        <h3>{idea.name}</h3>
+        {destinationLabel && <p className="home-idea-destination">
+          {country ? <span className="trip-country-flag"><CountryFlagImage code={country.code} label="" /></span> : <Globe2 size={16} />}
+          <span>{destinationLabel}</span>
+        </p>}
+        {targetDate && <div className="trip-card-facts"><span><CalendarDays size={11} />คาดการณ์ช่วง {targetDate}</span></div>}
       </div>
     </article>
   );
@@ -3032,6 +3096,7 @@ function TravelBadgeProgressCard({
 function Dashboard({
   trips,
   favoriteAccommodations,
+  tripIdeas,
   counts,
   countryHighlights,
   revision,
@@ -3043,10 +3108,12 @@ function Dashboard({
   viewAnalytics,
   viewBadges,
   viewTripIdeas,
+  removeFavoriteAccommodation,
   notify,
 }: {
   trips: Trip[];
   favoriteAccommodations: FavoriteAccommodation[];
+  tripIdeas: TripIdea[];
   counts: DashboardCounts;
   countryHighlights: CountryHighlight[];
   revision: number;
@@ -3058,6 +3125,7 @@ function Dashboard({
   viewAnalytics: () => void;
   viewBadges: () => void;
   viewTripIdeas: () => void;
+  removeFavoriteAccommodation: (hotel: FavoriteAccommodation) => void;
   notify: (message: string) => void;
 }) {
   const t = useT();
@@ -3128,6 +3196,8 @@ function Dashboard({
   const visitedDestinations = counts.destinations ?? 0;
   const unlockedBadges = counts.badges_unlocked ?? 0;
   const totalBadges = counts.badges_total ?? 0;
+  const plannedIdeas = tripIdeas.filter((idea) => idea.kind === "planned");
+  const previewIdeas = plannedIdeas.slice(0, 8);
   const heading = (
     kicker: string,
     title: string,
@@ -3293,14 +3363,42 @@ function Dashboard({
           </article>
         )}
       </div>
+      <section className="dashboard-ideas-section" aria-label={t("ทริปที่เล็งไว้")}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">TRIPS ON THE RADAR</span>
+            <div className="section-title-row">
+              <h2><Telescope size={18} />{t("ทริปที่เล็งไว้")}</h2>
+              <span className="section-trip-count">{t(`${plannedIdeas.length} ทริป`)}</span>
+            </div>
+          </div>
+          <button type="button" className="section-view-all" onClick={viewTripIdeas}>
+            {t("ดูทั้งหมด")}<ArrowRight size={14} />
+          </button>
+        </div>
+        {previewIdeas.length ? (
+          <div className="trip-grid home-upcoming-grid home-ideas-grid">
+            <div className="home-upcoming-column">
+              {previewIdeas.filter((_, index) => index % 2 === 0).map((idea, index) => <HomeTripIdeaCard key={idea.id} idea={idea} now={now} open={() => router.push(`/trip-ideas?edit=${encodeURIComponent(idea.id)}`)} priority={index === 0} />)}
+            </div>
+            <div className="home-upcoming-column">
+              {previewIdeas.filter((_, index) => index % 2 === 1).map((idea) => <HomeTripIdeaCard key={idea.id} idea={idea} now={now} open={() => router.push(`/trip-ideas?edit=${encodeURIComponent(idea.id)}`)} />)}
+            </div>
+          </div>
+        ) : (
+          <article className="card past-empty">{t("ยังไม่มีทริปที่เล็งไว้")}</article>
+        )}
+      </section>
       {favoriteAccommodations.length > 0 && (
         <section
           className="dashboard-favorite-hotels"
           aria-label={t("โรงแรมที่ชื่นชอบ")}
         >
-          <div className="dashboard-favorite-hotels-head">
-            <span aria-hidden="true"><Heart size={16} fill="currentColor" /></span>
-            <h2>{t("โรงแรมที่ชื่นชอบ")}</h2>
+          <div className="section-head dashboard-favorite-hotels-head">
+            <div className="section-title-row">
+              <h2><Heart size={18} fill="currentColor" />{t("โรงแรมที่ชื่นชอบ")}</h2>
+              <span className="section-trip-count">{favoriteAccommodations.length} {t("โรงแรม")}</span>
+            </div>
           </div>
           <div className="dashboard-favorite-hotels-scroll">
             {favoriteAccommodations.map((hotel, index) => (
@@ -3310,6 +3408,7 @@ function Dashboard({
               >
                 <button
                   type="button"
+                  className="dashboard-favorite-hotel-open"
                   onClick={() =>
                     router.push(
                       `/trips/${hotel.trip_id}?view=stays&accommodation=${hotel.id}`,
@@ -3326,12 +3425,18 @@ function Dashboard({
                       priority={index < 3}
                       unoptimized
                     />
-                    <i aria-hidden="true"><Heart size={14} fill="currentColor" /></i>
                   </span>
                   <strong>{hotel.name}</strong>
                   <small>{hotel.location || hotel.destination}</small>
                   <em>{hotel.trip_name}</em>
                 </button>
+                <button
+                  type="button"
+                  className="dashboard-favorite-hotel-remove"
+                  onClick={() => removeFavoriteAccommodation(hotel)}
+                  aria-label={`นำ ${hotel.name} ออกจากโรงแรมที่ชื่นชอบ`}
+                  title="นำออกจากโรงแรมที่ชื่นชอบ"
+                ><Heart size={14} fill="currentColor" /></button>
               </article>
             ))}
           </div>
@@ -3632,9 +3737,8 @@ function CompactTripCard({
       : "is-actual-spent";
   const ongoing = temporal.ongoing;
   const past = temporal.past;
-  const StatusIcon = past ? CheckCircle2 : ongoing ? Navigation : CalendarDays;
   const status = past
-    ? t("ที่ผ่านมาแล้ว")
+    ? t("ผ่านมาแล้ว")
     : ongoing
       ? t("กำลังเดินทาง")
       : t(tripDaysUntilLabel(temporal.daysUntil));
@@ -3662,10 +3766,10 @@ function CompactTripCard({
           priority={priority}
           className="compact-trip-cover-image"
         />
-        <span className="compact-trip-status">
-          <StatusIcon size={12} />
+        {ongoing ? <span className="compact-trip-status">
+          <Navigation size={12} />
           <span>{status}</span>
-        </span>
+        </span> : <TripCountdownBadge label={status} tone={past ? "past" : "upcoming"} />}
         {past && <TripRatingBadge trip={trip} variant="compact" />}
       </div>
       <div className="compact-trip-body">
@@ -4098,12 +4202,9 @@ function TripHeader({
       <div
         className={`trip-cover-copy ${trip.members?.length ? "has-collaborators" : ""}`}
       >
-        {!ended && (
-          <span className={`trip-header-countdown ${temporal.ongoing ? "is-ongoing" : ""}`}>
-            <CalendarDays size={12} />
-            {countdownLabel}
-          </span>
-        )}
+        {!ended && (temporal.ongoing ? (
+          <span className="trip-header-countdown is-ongoing"><CalendarDays size={12} />{countdownLabel}</span>
+        ) : <TripCountdownBadge label={countdownLabel} />)}
         <h1 className="page-title">{trip.name}</h1>
         <span className="eyebrow">
           <TripCountryFlag trip={trip} />
@@ -5043,6 +5144,7 @@ function TripHub({
   >(null);
   const [openTimelineExpenseId, setOpenTimelineExpenseId] = useState<string | null>(null);
   const now = useMinuteClock();
+  const membersKey = (trip.members || []).map((member) => member.id).join(":");
   const tripDay = tripDayAt(trip, now);
   const ended = tripHasEnded(trip, now);
   const itinerariesByDay = useItinerariesByDay(items);
@@ -5289,7 +5391,7 @@ function TripHub({
                                   </>
                                 )}
                               </span>
-                              {imageUsage.kind === "own" && imageUsage.followers > 0 ? (
+                              {(imageUsage.kind === "own" || imageUsage.kind === "accommodation") && imageUsage.followers > 0 ? (
                                 <span
                                   className="event-image-source-badge is-source"
                                   title={`รูปต้นทาง · หากเปลี่ยนรูป รายการอีก ${imageUsage.followers} รายการจะเปลี่ยนตาม`}
@@ -5399,6 +5501,7 @@ function TripHub({
         ) : view === "flights" || view === "insurance" || view === "stays" ? (
           <div className="travel-stay-section">
             {view === "flights" ? <TripFlights
+              key={membersKey}
               tripId={trip.id}
               members={trip.members || []}
               tripOutboundAt={trip.outbound_departure_at}
@@ -5409,6 +5512,7 @@ function TripHub({
               onChanged={onFlightChanged}
               onOpenDocuments={() => selectView("workspace", "documents")}
             /> : view === "insurance" ? <TripInsurance
+              key={membersKey}
               tripId={trip.id}
               members={trip.members || []}
               tripOutboundAt={trip.outbound_departure_at}
@@ -5420,6 +5524,7 @@ function TripHub({
               onChanged={onFlightChanged}
               onOpenDocuments={() => selectView("workspace", "documents")}
             /> : <TripAccommodations
+              key={membersKey}
               tripId={trip.id}
               totalDays={trip.total_days}
               hasDayZero={trip.has_day_zero}
@@ -5458,6 +5563,7 @@ function TripHub({
           />
         ) : (
           <TripWorkspace
+            key={membersKey}
             tripId={trip.id}
             label={t}
             initialTab={activeWorkspaceTab}
@@ -5466,6 +5572,7 @@ function TripHub({
         )}
         {view === "plan" && trip.total_days > 1 && (
           <TripAccommodations
+            key={membersKey}
             tripId={trip.id}
             totalDays={trip.total_days}
             hasDayZero={trip.has_day_zero}
@@ -7034,7 +7141,7 @@ function ProfileSettingsCard({
                 onClick={() => setEditing(true)}
                 aria-label={t("แก้ไขชื่อที่แสดง")}
               >
-                <Pencil size={15} />
+                <Pencil size={26} />
               </button>
             )}
             {storageAdmin && (
@@ -7054,7 +7161,7 @@ function ProfileSettingsCard({
                 )}
                 aria-pressed={storageOpen}
               >
-                <Gem size={16} />
+                <Gem size={26} />
               </button>
             )}
           </div>
@@ -7357,8 +7464,8 @@ function SettingsContent({
         <article className="card">
           <div className="setting-row">
             <div className="setting-label">
-              <span className="stat-icon">
-                {dark ? <Moon size={17} /> : <Sun size={17} />}
+              <span className={`stat-icon settings-feature-icon settings-theme-icon ${dark ? "is-dark" : "is-light"}`}>
+                {dark ? <Moon size={26} /> : <Sun size={26} />}
               </span>
               <div>
                 <strong>{t("ธีมการแสดงผล")}</strong>
@@ -7378,7 +7485,7 @@ function SettingsContent({
                 title={lang === "EN" ? "Light mode" : "โหมดสว่าง"}
                 aria-pressed={!dark}
               >
-                <Sun size={15} />
+                <Sun size={26} />
               </button>
               <button
                 type="button"
@@ -7388,7 +7495,7 @@ function SettingsContent({
                 title={lang === "EN" ? "Dark mode" : "โหมดมืด"}
                 aria-pressed={dark}
               >
-                <Moon size={15} />
+                <Moon size={26} />
               </button>
             </div>
           </div>
@@ -7397,8 +7504,8 @@ function SettingsContent({
         <SettingsGlass>
         <a className="card master-settings-link" href="/settings/checklists?returnTo=%2Fsettings">
           <div className="setting-label">
-            <span className="stat-icon">
-              <ClipboardList size={17} />
+            <span className="stat-icon settings-feature-icon settings-checklist-icon">
+              <ClipboardList size={26} />
             </span>
             <div>
               <strong>{t("Master Checklist")}</strong>
@@ -7435,7 +7542,7 @@ function SettingsContent({
                   title={t(sortingCards ? "เสร็จแล้ว" : "จัดลำดับบัตร")}
                   aria-pressed={sortingCards}
                 >
-                  <ArrowUpDown size={16} />
+                  <ArrowUpDown size={26} />
                 </button>
               )}
               <button
@@ -7497,7 +7604,7 @@ function SettingsContent({
                         }
                       }}
                     >
-                      <GripVertical size={19} />
+                      <GripVertical size={26} />
                     </button>
                   ) : (
                     <button
@@ -7506,7 +7613,7 @@ function SettingsContent({
                       onClick={() => setCardSheet({ card })}
                       aria-label={`${t("แก้ไขบัตร")} ${card.nickname}`}
                     >
-                      <Pencil size={16} />
+                      <Pencil size={26} />
                     </button>
                   )}
                 </div>
@@ -7534,8 +7641,8 @@ function SettingsContent({
         <article className="card offline-documents-setting">
           <div className="setting-row">
             <div className="setting-label">
-              <span className="stat-icon">
-                <FolderOpen size={17} />
+              <span className="stat-icon settings-feature-icon settings-documents-icon">
+                <FolderOpen size={26} />
               </span>
               <div>
                 <strong>{t("เอกสารออฟไลน์")}</strong>
@@ -7558,8 +7665,8 @@ function SettingsContent({
         <article className="card logout-setting">
           <div className="setting-row">
             <div className="setting-label">
-              <span className="stat-icon">
-                <LogOut size={17} />
+              <span className="stat-icon settings-feature-icon settings-logout-icon">
+                <LogOut size={26} />
               </span>
               <div>
                 <strong>{t("ออกจากระบบ")}</strong>
@@ -9788,7 +9895,8 @@ function ModalForm({
       ? null
       : placeSource?.location_image_url || placeSource?.accommodation_image_url || null;
   const inheritedImageSource = inheritedImageUrl
-    ? items.find((item) => item.image_url === inheritedImageUrl)
+    ? items.find((item) => item.accommodation_id && item.accommodation_image_url === inheritedImageUrl)
+      || items.find((item) => item.image_url === inheritedImageUrl)
       || items.find((item) => item.accommodation_image_url === inheritedImageUrl)
     : null;
   const timelineImageFollowers = locationAddressEdited
@@ -10161,6 +10269,34 @@ function ModalForm({
           )}
           {modal.type === "place" && (
             <>
+              <CoverImagePicker
+                key={`timeline-image-${placeSource?.id || "new"}`}
+                existingUrl={placeSource?.image_url}
+                variant="square"
+                removable
+                onChange={(file)=>{
+                  setTimelineImageFile(file);
+                  setTimelineImageRemoved(file === null);
+                  checkForChanges();
+                }}
+              />
+              {(placeSource || selectedLocationImage !== undefined || timelineImageFile) && (
+                <p
+                  className={`timeline-location-image-status ${hasOwnTimelineImage ? "is-own-image" : inheritedImageUrl ? "has-image" : "uses-default"}`}
+                  role="status"
+                >
+                  {hasOwnTimelineImage || inheritedImageUrl ? <Images size={15} /> : <ImagePlus size={15} />}
+                  <span>
+                    {hasOwnTimelineImage
+                      ? timelineImageFollowers > 0
+                        ? `รูปต้นทางของโลเคชันนี้ · อีก ${timelineImageFollowers} รายการที่ยังไม่มีรูปของตัวเองจะเปลี่ยนตามเมื่อเปลี่ยนรูปนี้`
+                        : "รูปของรายการนี้เอง · จะไม่เปลี่ยนตามรูปจากรายการอื่น"
+                      : inheritedImageUrl
+                        ? `ใช้รูปจาก ${inheritedImageSource?.place_name || "โลเคชันนี้"} · หากรูปต้นทางเปลี่ยน รายการนี้จะเปลี่ยนตาม จนกว่าจะเพิ่มรูปของตัวเอง`
+                        : "โลเคชันนี้ยังไม่มีรูป ระบบจะใช้รูปเริ่มต้น"}
+                  </span>
+                </p>
+              )}
               <div className="form-row">
                 <div className="field">
                   <label>{t("วัน")}</label>
@@ -10224,9 +10360,9 @@ function ModalForm({
                   );
                   setPlaceName(item.place_name.trim());
                   setSelectedLocationImage(
-                    imageSource?.image_url ||
+                    imageSource?.accommodation_image_url ||
+                      imageSource?.image_url ||
                       imageSource?.location_image_url ||
-                      imageSource?.accommodation_image_url ||
                       null,
                   );
                   setLocationAddressEdited(Boolean(
@@ -10241,34 +10377,6 @@ function ModalForm({
                   setLocationAddressEdited(true);
                 }}
               />
-              <CoverImagePicker
-                key={`timeline-image-${placeSource?.id || "new"}`}
-                existingUrl={placeSource?.image_url}
-                variant="square"
-                removable
-                onChange={(file)=>{
-                  setTimelineImageFile(file);
-                  setTimelineImageRemoved(file === null);
-                  checkForChanges();
-                }}
-              />
-              {(placeSource || selectedLocationImage !== undefined || timelineImageFile) && (
-                <p
-                  className={`timeline-location-image-status ${hasOwnTimelineImage ? "is-own-image" : inheritedImageUrl ? "has-image" : "uses-default"}`}
-                  role="status"
-                >
-                  {hasOwnTimelineImage || inheritedImageUrl ? <Images size={15} /> : <ImagePlus size={15} />}
-                  <span>
-                    {hasOwnTimelineImage
-                      ? timelineImageFollowers > 0
-                        ? `รูปต้นทางของโลเคชันนี้ · อีก ${timelineImageFollowers} รายการที่ยังไม่มีรูปของตัวเองจะเปลี่ยนตามเมื่อเปลี่ยนรูปนี้`
-                        : "รูปของรายการนี้เอง · จะไม่เปลี่ยนตามรูปจากรายการอื่น"
-                      : inheritedImageUrl
-                        ? `ใช้รูปจาก ${inheritedImageSource?.place_name || "โลเคชันนี้"} · หากรูปต้นทางเปลี่ยน รายการนี้จะเปลี่ยนตาม จนกว่าจะเพิ่มรูปของตัวเอง`
-                        : "โลเคชันนี้ยังไม่มีรูป ระบบจะใช้รูปเริ่มต้น"}
-                  </span>
-                </p>
-              )}
               {!placeIsFirst && (
                 <div className="field">
                   <label>{t("วิธีเดินทางมาที่นี่")}</label>
@@ -10420,6 +10528,7 @@ export function BNTripApp({
     upcoming: Trip[];
     past: Trip[];
     favoriteAccommodations: FavoriteAccommodation[];
+    tripIdeas: TripIdea[];
     counts: DashboardCounts;
     countryHighlights: CountryHighlight[];
   };
@@ -10499,6 +10608,9 @@ export function BNTripApp({
       cachedDashboardSnapshot?.favoriteAccommodations ||
       [],
   );
+  const [dashboardTripIdeas, setDashboardTripIdeas] = useState<TripIdea[]>(
+    initialDashboard?.tripIdeas || cachedDashboardSnapshot?.tripIdeas || [],
+  );
   const [tripRevision, setTripRevision] = useState(0);
   const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0);
   const [refreshingDashboard, setRefreshingDashboard] = useState(false);
@@ -10532,11 +10644,13 @@ export function BNTripApp({
       setDashboardFavoriteAccommodations(
         initialDashboard.favoriteAccommodations || [],
       );
+      setDashboardTripIdeas(initialDashboard.tripIdeas || []);
       if (dashboardSnapshotCache) {
         dashboardSnapshotCache = {
           ...dashboardSnapshotCache,
           favoriteAccommodations:
             initialDashboard.favoriteAccommodations || [],
+          tripIdeas: initialDashboard.tripIdeas || [],
         };
       }
     }
@@ -10550,6 +10664,7 @@ export function BNTripApp({
       dashboardSnapshotCache = {
         trips: initialTrips,
         favoriteAccommodations: initialDashboard.favoriteAccommodations || [],
+        tripIdeas: initialDashboard.tripIdeas || [],
         counts: initialDashboard.counts,
         countryHighlights: initialDashboard.countryHighlights,
       };
@@ -10676,6 +10791,7 @@ export function BNTripApp({
           );
           setDashboardCountryHighlights(data.countryHighlights || []);
           setDashboardFavoriteAccommodations(data.favoriteAccommodations || []);
+          setDashboardTripIdeas(data.tripIdeas || []);
         } else if (tripId) {
           const cached = tripListCache?.find((trip) => trip.id === tripId);
           if (cached) {
@@ -10737,6 +10853,7 @@ export function BNTripApp({
         setDashboardCounts(snapshot.counts);
         setDashboardCountryHighlights(snapshot.countryHighlights);
         setDashboardFavoriteAccommodations(snapshot.favoriteAccommodations);
+        setDashboardTripIdeas(snapshot.tripIdeas);
         setDashboardRefreshToken((value) => value + 1);
       });
       if (announce) {
@@ -10786,6 +10903,42 @@ export function BNTripApp({
   const flash = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(""), 2400);
+  };
+  const removeFavoriteAccommodation = async (hotel: FavoriteAccommodation) => {
+    const previousIndex = dashboardFavoriteAccommodations.findIndex((item) => item.id === hotel.id);
+    setDashboardFavoriteAccommodations((current) => current.filter((item) => item.id !== hotel.id));
+    if (dashboardSnapshotCache) {
+      dashboardSnapshotCache = {
+        ...dashboardSnapshotCache,
+        favoriteAccommodations: dashboardSnapshotCache.favoriteAccommodations.filter((item) => item.id !== hotel.id),
+      };
+    }
+    try {
+      const response = await fetch(`/api/trips/${hotel.trip_id}/accommodations/${hotel.id}/favorite`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ favorite: false }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "นำโรงแรมออกจากรายการโปรดไม่สำเร็จ");
+      invalidateClientResource(accommodationResourceKey(hotel.trip_id));
+      flash("นำออกจากโรงแรมที่ชื่นชอบแล้ว");
+    } catch (error) {
+      const restore = (current: FavoriteAccommodation[]) => {
+        if (current.some((item) => item.id === hotel.id)) return current;
+        const next = [...current];
+        next.splice(Math.max(0, Math.min(previousIndex, next.length)), 0, hotel);
+        return next;
+      };
+      setDashboardFavoriteAccommodations(restore);
+      if (dashboardSnapshotCache) {
+        dashboardSnapshotCache = {
+          ...dashboardSnapshotCache,
+          favoriteAccommodations: restore(dashboardSnapshotCache.favoriteAccommodations),
+        };
+      }
+      flash(error instanceof Error ? error.message : "นำโรงแรมออกจากรายการโปรดไม่สำเร็จ");
+    }
   };
   const toggleTheme = () => {
     const next = !dark;
@@ -11124,17 +11277,6 @@ export function BNTripApp({
       throw error;
     }
   }
-  async function refreshTripMembers(id: string) {
-    const fresh: Trip = await request(`/api/trips/${id}`);
-    setSelected((current) => (current?.id === id ? fresh : current));
-    setTrips((old) => {
-      const next = old.map((trip) => (trip.id === id ? fresh : trip));
-      tripListCache = (tripListCache || next).map((trip) =>
-        trip.id === id ? fresh : trip,
-      );
-      return next;
-    });
-  }
   async function refreshActiveTrip(id: string) {
     const [freshValue, itineraryResponse] = await Promise.all([
       request(`/api/trips/${id}`, { cache: "no-store" }),
@@ -11210,6 +11352,7 @@ export function BNTripApp({
     <Dashboard
       trips={trips}
       favoriteAccommodations={dashboardFavoriteAccommodations}
+      tripIdeas={dashboardTripIdeas}
       counts={dashboardCounts}
       countryHighlights={dashboardCountryHighlights}
       revision={tripRevision + dashboardRefreshToken}
@@ -11225,6 +11368,7 @@ export function BNTripApp({
       viewAnalytics={() => router.push("/analytics")}
       viewBadges={() => router.push("/analytics#travel-badges")}
       viewTripIdeas={() => router.push("/trip-ideas")}
+      removeFavoriteAccommodation={(hotel) => void removeFavoriteAccommodation(hotel)}
       notify={flash}
     />
   ) : page === "analytics" && initialAnalytics && initialBadges ? (
@@ -11386,11 +11530,17 @@ export function BNTripApp({
     <CollaboratorsSheet
       trip={modal.trip}
       close={() => setModal(null)}
-      onChanged={() =>
-        void refreshTripMembers(modal.trip.id).then(() =>
-          setTripRevision((value) => value + 1),
-        )
-      }
+      onChanged={() => {
+        invalidateClientResourcesContaining(`trip:${modal.trip.id}:`);
+        tripReviewSummaryCache.delete(modal.trip.id);
+        void Promise.all([
+          refreshActiveTrip(modal.trip.id),
+          request(`/api/trips/${modal.trip.id}/cards`, { cache: "no-store" }) as Promise<PaymentCard[]>,
+        ]).then(([, freshCards]) => {
+          setTripCards(freshCards);
+          setTripRevision((value) => value + 1);
+        });
+      }}
       confirmRemove={setConfirmation}
       notify={flash}
       requestLeave={() => {

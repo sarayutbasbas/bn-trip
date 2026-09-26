@@ -4,6 +4,8 @@ import { getSession } from "@/src/lib/auth";
 import { query,transaction } from "@/src/lib/db";
 import { getTripRole } from "@/src/lib/trip-access";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
+import { clearRemovedTripMember } from "@/src/lib/trip-collaborator-cleanup";
+import { deleteUpload } from "@/src/lib/storage";
 
 const schema=z.object({email:z.string().trim().email().max(320),accessLevel:z.enum(["view","admin"]).default("view")});
 
@@ -18,5 +20,15 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
 }
 
 export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){
-  const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});const {id}=await params;const role=await getTripRole(id,session.userId);if(!role||role==="owner")return NextResponse.json({error:"เฉพาะผู้ร่วมทริปเท่านั้นที่ออกจากทริปได้"},{status:403});const result=await query("DELETE FROM trip_collaborators WHERE trip_id=$1 AND user_id=$2 RETURNING id",[id,session.userId]);return result.rowCount?NextResponse.json({ok:true}):NextResponse.json({error:"Not found"},{status:404});
+  const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});if(session.isDemo)return NextResponse.json({error:"Demo mode is read-only",loginRequired:true},{status:403});const {id}=await params;await ensureLatestDatabaseSchema();const role=await getTripRole(id,session.userId);if(!role||role==="owner")return NextResponse.json({error:"เฉพาะผู้ร่วมทริปเท่านั้นที่ออกจากทริปได้"},{status:403});
+  const removed=await transaction(async client=>{
+    const collaborator=await client.query("SELECT id FROM trip_collaborators WHERE trip_id=$1 AND user_id=$2 FOR UPDATE",[id,session.userId]);
+    if(!collaborator.rowCount)return null;
+    const cleanup=await clearRemovedTripMember(client,id,session.userId);
+    await client.query("DELETE FROM trip_collaborators WHERE trip_id=$1 AND user_id=$2",[id,session.userId]);
+    return cleanup;
+  });
+  if(!removed)return NextResponse.json({error:"Not found"},{status:404});
+  await Promise.all(removed.insuranceDocuments.map(document=>deleteUpload(document.stored_filename,document.blob_url).catch(error=>console.error("Delete departed collaborator insurance upload failed",{filename:document.stored_filename,error}))));
+  return NextResponse.json({ok:true});
 }
