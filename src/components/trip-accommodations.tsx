@@ -39,6 +39,7 @@ type Member = {
   display_name: string | null;
   email: string | null;
   avatar_url: string | null;
+  role?: "owner" | "collaborator";
 };
 type Card = {
   id: string;
@@ -119,6 +120,25 @@ function BreakfastPlateIcon({ size }: { size: number }) {
       <ellipse cx="20.5" cy="6" rx="1.8" ry="3.5" />
       <path d="M20.5 9.5V21" />
     </svg>
+  );
+}
+
+function AccommodationGuestAvatars({ memberIds, members }: { memberIds: string[]; members: Member[] }) {
+  const selected = memberIds.flatMap((id) => {
+    const member = members.find((candidate) => candidate.id === id);
+    return member ? [member] : [];
+  });
+  if (!selected.length) return null;
+  const visible = selected.slice(0, 3);
+  const remaining = selected.length - visible.length;
+  return (
+    <span className="accommodation-guest-avatars" role="img" aria-label={`ผู้หารค่าที่พัก ${selected.length} คน: ${selected.map((member) => member.display_name || member.email || "สมาชิก").join(", ")}`}>
+      {visible.map((member) => {
+        const name = member.display_name || member.email || "สมาชิก";
+        return <span key={member.id} className={`accommodation-guest-avatar${member.role === "owner" ? " is-owner" : ""}`} title={name} style={member.avatar_url ? { backgroundImage: `url("${member.avatar_url}")` } : undefined}>{!member.avatar_url && name.charAt(0).toUpperCase()}</span>;
+      })}
+      {remaining > 0 && <span className="accommodation-guest-avatar is-more" title={`และอีก ${remaining} คน`}>+{remaining}</span>}
+    </span>
   );
 }
 
@@ -934,7 +954,7 @@ export function TripAccommodations({
                       <span><b>{item.nights} คืน</b></span>
                     </div>
                     <footer>
-                      {(bookingPlatform || item.includes_breakfast) && (
+                      {(bookingPlatform || item.includes_breakfast || item.split_member_ids?.length) && (
                         <div className="accommodation-card-icons">
                           {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={36} height={36} /></span>}
                           {item.includes_breakfast && (
@@ -942,6 +962,7 @@ export function TripAccommodations({
                               <BreakfastPlateIcon size={23} />
                             </span>
                           )}
+                          <AccommodationGuestAvatars memberIds={item.split_member_ids || []} members={members} />
                         </div>
                       )}
                       <strong className="accommodation-total-price">

@@ -25,6 +25,7 @@ import { PageIntro } from "@/src/components/page-intro";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripNoteField } from "@/src/components/trip-note-field";
+import { TripSegmentedFilter, type TripFilterOption } from "@/src/components/trip-segmented-filter";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import {
   AttachmentPreviewOverlay,
@@ -1097,6 +1098,10 @@ Object.assign(EN_TEXT, {
   "อัปเดตสถิติล่าสุดแล้ว": "Statistics updated",
   Undo: "Undo",
   ดาวน์โหลดเอกสารไม่สำเร็จ: "Could not download document",
+  "ดาวน์โหลดเอกสารออฟไลน์สำเร็จแล้ว": "Document saved for offline access",
+  "ดาวน์โหลดแผนทริป?": "Download trip plan?",
+  "ยืนยันเพื่อเริ่มดาวน์โหลดแผนทริปลงอุปกรณ์นี้": "Confirm to download the trip plan to this device",
+  "ยืนยันดาวน์โหลด": "Confirm download",
   เฉพาะเจ้าของทริปที่ย้อนคืนประวัติได้: "Only the trip owner can undo changes",
   รายการนี้ไม่สามารถย้อนคืนได้: "This change cannot be undone",
 });
@@ -3499,25 +3504,12 @@ function TravelAnalyticsDashboard({
   const topPeriod = [...flightInsights.periods].sort((a, b) => b.flights - a.flights)[0];
   const topRoute = flightInsights.routes[0];
   const locationCount = scope === "domestic" ? data.totals.destinations : data.totals.countries;
-  const scopeFilter = (
-    <nav className="trip-type-options status-filter analytics-type-options" aria-label={t("กรองสถิติการเดินทาง")}>
-      {([
-        ["all", "ทั้งหมด", Luggage],
-        ["domestic", "ภายในประเทศ", MapPin],
-        ["international", "ต่างประเทศ", Globe2],
-      ] as const).map(([value, label, Icon]) => (
-        <button
-          className={`${scope === value ? "active" : ""} status-${value}`}
-          key={value}
-          type="button"
-          aria-pressed={scope === value}
-          onClick={() => setScope(value)}
-        >
-          <Icon size={24} /><span><strong>{t(label)}</strong></span>
-        </button>
-      ))}
-    </nav>
-  );
+  const scopeOptions: TripFilterOption<TravelAnalyticsScope>[] = [
+    { value: "all", label: t("ทั้งหมด"), Icon: Luggage, count: analytics.all.totals.trips, tone: "all" },
+    { value: "domestic", label: t("ภายในประเทศ"), Icon: MapPin, count: analytics.domestic.totals.trips, tone: "domestic" },
+    { value: "international", label: t("ต่างประเทศ"), Icon: Globe2, count: analytics.international.totals.trips, tone: "international" },
+  ];
+  const scopeFilter = <TripSegmentedFilter value={scope} options={scopeOptions} onChange={setScope} ariaLabel={t("กรองสถิติการเดินทาง")} tripLabel={t("ทริป")} className="analytics-type-options" />;
   const badgeTotals = Object.values(badges.totals).reduce(
     (total, category) => ({ unlocked: total.unlocked + category.unlocked, count: total.count + category.total }),
     { unlocked: 0, count: 0 },
@@ -3934,10 +3926,10 @@ function TripsDirectory({
       setLoadingMore(false);
     }
   }
-  const statuses: Array<{value:TripStatus;label:string;Icon:typeof Luggage}> = [
-    {value:"all",label:"ทั้งหมด",Icon:Luggage},
-    {value:"upcoming",label:"กำลังจะไป",Icon:Plane},
-    {value:"past",label:"ที่ผ่านมา",Icon:CheckCircle2},
+  const statuses: TripFilterOption<TripStatus>[] = [
+    {value:"all",label:t("ทั้งหมด"),Icon:Luggage,count:statusCounts.all,tone:"all"},
+    {value:"upcoming",label:t("กำลังจะไป"),Icon:Plane,count:statusCounts.upcoming,tone:"upcoming"},
+    {value:"past",label:t("ที่ผ่านมา"),Icon:CheckCircle2,count:statusCounts.past,tone:"past"},
   ];
   const tripTypes:Array<{value:TripType;label:string;Icon:typeof Luggage}>=[
     {value:"all",label:"ทั้งหมด",Icon:Luggage},
@@ -4004,17 +3996,7 @@ function TripsDirectory({
           </section>
         </BottomSheet>
       )}
-      <div className="status-filter">
-        {statuses.map(({value,label,Icon}) => (
-          <button
-            key={value}
-            className={`${status === value ? "active" : ""} status-${value}`}
-            onClick={() => setStatus(value)}
-          >
-            <Icon size={24}/><span><strong>{t(label)}</strong><small>{statusCounts[value]} {t("ทริป")}</small></span>
-          </button>
-        ))}
-      </div>
+      <TripSegmentedFilter value={status} options={statuses} onChange={setStatus} ariaLabel={t("กรองทริปตามสถานะ")} tripLabel={t("ทริป")}/>
       {loading ? (
         <div className="compact-trip-grid compact-trip-list-skeleton" role="status" aria-label={t("กำลังโหลดทริป…")}>
           {Array.from({length:4},(_,index)=><span className="compact-trip-skeleton-card" key={index}><i/><b><em/><em/><em/></b></span>)}
@@ -4225,6 +4207,7 @@ function TripSectionNav({
 }) {
   const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [confirmDownload, setConfirmDownload] = useState(false);
   useEffect(() => {
     if (!moreOpen) return;
     const root = document.documentElement;
@@ -4278,7 +4261,7 @@ function TripSectionNav({
     },
     { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", availableInTrip: trip.country_code !== "TH", hasNotification: completion.insuranceIncomplete, active: active === "insurance", action: () => select("insurance") },
     { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
-    { id: "export", label: "Download", Icon: Download, action: () => { window.open(`/api/trips/${trip.id}/export-plan`, "_self"); } },
+    { id: "export", label: "Download", Icon: Download, action: () => setConfirmDownload(true) },
   ];
   const primary = sections
     .filter(({ availableInTrip }) => availableInTrip !== false)
@@ -4318,6 +4301,19 @@ function TripSectionNav({
             </div>
           </section>
         </div>, document.body)}
+      {confirmDownload && (
+        <ConfirmDialog
+          confirmation={{
+            title: "ดาวน์โหลดแผนทริป?",
+            description: "ยืนยันเพื่อเริ่มดาวน์โหลดแผนทริปลงอุปกรณ์นี้",
+            confirmLabel: "ยืนยันดาวน์โหลด",
+            onConfirm: () => {
+              window.location.assign(`/api/trips/${trip.id}/export-plan`);
+            },
+          }}
+          close={() => setConfirmDownload(false)}
+        />
+      )}
     </>
   );
 }
@@ -7674,7 +7670,8 @@ export function ConfirmDialog({
       setBusy(false);
     }
   };
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       className="confirm-backdrop"
       role="presentation"
@@ -7716,7 +7713,8 @@ export function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -4,7 +4,7 @@ import { useEffect,useMemo,useState,type FormEvent,type KeyboardEvent } from "re
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays,CalendarRange,CheckCircle2,Compass,Heart,LogOut,MapPinned,PlaneTakeoff,Plus,RefreshCw,Search,Trash2,UserPlus,X } from "lucide-react";
+import { CalendarDays,CalendarRange,CheckCircle2,Compass,Globe2,Heart,LogOut,Luggage,MapPin,MapPinned,PlaneTakeoff,Plus,RefreshCw,RotateCcw,Search,Settings2,Trash2,UserPlus,X } from "lucide-react";
 import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas";
 import { getCurrentAccount } from "@/src/lib/client-account";
 import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
@@ -16,11 +16,13 @@ import { InvitationNotifications,type InvitationNotification } from "@/src/compo
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 import { TripNoteField } from "@/src/components/trip-note-field";
+import { TripSegmentedFilter, type TripFilterOption } from "@/src/components/trip-segmented-filter";
 
 type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
 type IdeaCollaborator={id:string;email:string;user_id:string|null;joined:boolean;display_name:string|null;avatar_url:string|null};
 type HeaderProfile={id:string;email:string;display_name:string;avatar_url:string|null};
+type IdeaTripType="all"|"domestic"|"international";
 const monthNames=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 
 function timestamp(value:string){const parsed=Date.parse(value);return Number.isNaN(parsed)?0:parsed}
@@ -72,6 +74,10 @@ function IdeaCard({idea,edit,convert,share}:{idea:TripIdea;edit:()=>void;convert
 
 function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;close:()=>void;save:(draft:IdeaDraft)=>Promise<void>;requestDelete:()=>void;busy:boolean}){
   const current=editor.idea;const promote=editor.promote;
+  const currentYear=new Date().getFullYear();
+  const yearOptions=Array.from({length:21},(_,index)=>currentYear+index);
+  const savedYear=current?.target_year;
+  const defaultYear=savedYear&&savedYear>=currentYear&&savedYear<=currentYear+20?savedYear:currentYear+1;
   const initialCountry=countryByCode(current?.country_code)||TRIP_COUNTRIES[0];
   const [name,setName]=useState(current?.name||"");
   const [countryCode,setCountryCode]=useState(initialCountry.code);
@@ -80,8 +86,8 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     return option||{...saved,searchTerms:[saved.nameTh,saved.nameEn].filter(Boolean)} as TripDestinationOption;
   })||[]);
   const [kind,setKind]=useState<TripIdeaKind>(promote?"planned":current?.kind||"planned");
-  const [targetMonth,setTargetMonth]=useState<number|null>(promote?null:current?.target_month||new Date().getMonth()+1);
-  const [targetYear,setTargetYear]=useState<number|null>(promote?null:current?.target_year||new Date().getFullYear()+1);
+  const [targetMonth,setTargetMonth]=useState<number|null>(promote||current?.kind==="someday"?null:current?.target_month||new Date().getMonth()+1);
+  const [targetYear,setTargetYear]=useState<number|null>(promote||current?.kind==="someday"?null:defaultYear);
   const [note,setNote]=useState(current?.note||"");const [coverFile,setCoverFile]=useState<File|null>(null);const [error,setError]=useState("");
   const validationIncomplete=!name.trim()||!locations.length||(kind==="planned"&&(!targetMonth||!targetYear));
   const locationIds=locations.map(location=>location.id).sort();
@@ -106,8 +112,8 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     <label className="trip-idea-field"><span>ชื่อทริป</span><input required maxLength={160} value={name} onChange={event=>setName(event.target.value)} placeholder="เช่น Fukuoka Food Trip"/></label>
     <CountryPicker value={countryCode} onChange={nextCountryCode=>{setCountryCode(nextCountryCode);setLocations([])}} note="เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง"/>
     <TripDestinationPicker countryCode={countryCode} selected={locations} onChange={setLocations}/>
-    <fieldset className="trip-idea-kind-picker"><legend>วางไว้ในลิสต์ไหน</legend><button type="button" className={kind==="planned"?"active":""} onClick={()=>{setKind("planned");setTargetMonth(targetMonth||1);setTargetYear(targetYear||new Date().getFullYear()+1)}}><CalendarRange size={17}/><span>ทริปที่เล็งไว้<small>มีเดือนและปีคร่าว ๆ</small></span></button><button type="button" className={kind==="someday"?"active":""} onClick={()=>{setKind("someday");setTargetMonth(null);setTargetYear(null)}}><Compass size={17}/><span>ลิสต์สักวันหนึ่ง<small>ยังไม่รู้ว่าจะไปเมื่อไร</small></span></button></fieldset>
-    {kind==="planned"?<div className="trip-idea-date-row"><label className="trip-idea-field"><span>เดือน</span><select required value={targetMonth||""} onChange={event=>setTargetMonth(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกเดือน</option>{monthNames.map((month,index)=><option key={month} value={index+1}>{month}</option>)}</select></label><label className="trip-idea-field"><span>ปี ค.ศ.</span><input required type="number" min="2020" max="2200" value={targetYear||""} onChange={event=>setTargetYear(event.target.value?Number(event.target.value):null)}/></label></div>:null}
+    <fieldset className="trip-idea-kind-picker"><legend>วางไว้ในลิสต์ไหน</legend><button type="button" className={kind==="planned"?"active":""} onClick={()=>{setKind("planned");setTargetMonth(targetMonth||1);setTargetYear(targetYear||defaultYear)}}><CalendarRange size={17}/><span>ทริปที่เล็งไว้<small>มีเดือนและปีคร่าว ๆ</small></span></button><button type="button" className={kind==="someday"?"active":""} onClick={()=>{setKind("someday");setTargetMonth(null);setTargetYear(null)}}><Compass size={17}/><span>ลิสต์สักวันหนึ่ง<small>ยังไม่รู้ว่าจะไปเมื่อไร</small></span></button></fieldset>
+    {kind==="planned"?<div className="trip-idea-date-row"><label className="trip-idea-field"><span>เดือน</span><select required value={targetMonth||""} onChange={event=>setTargetMonth(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกเดือน</option>{monthNames.map((month,index)=><option key={month} value={index+1}>{month}</option>)}</select></label><label className="trip-idea-field"><span>ปี ค.ศ.</span><select required value={targetYear||""} onChange={event=>setTargetYear(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกปี</option>{yearOptions.map(year=><option key={year} value={year}>{year}</option>)}</select></label></div>:null}
     <TripNoteField value={note} onChange={event=>setNote(event.target.value)}/>
     </div>
   </BottomSheet>{error?<FormErrorDialog title="บันทึกทริปที่เล็งไว้ไม่สำเร็จ" description={error} onClose={()=>setError("")}/>:null}</>;
@@ -126,10 +132,25 @@ function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:Trip
 }
 
 export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:boolean}){
-  const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor>();const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [profile,setProfile]=useState<HeaderProfile|null>(null);const [refreshing,setRefreshing]=useState(false);
-  const filteredIdeas=useMemo(()=>{const keyword=query.trim().toLocaleLowerCase();if(!keyword)return ideas;return ideas.filter(idea=>`${idea.name} ${idea.destination} ${idea.note} ${countryByCode(idea.country_code)?.nameTh||""} ${countryByCode(idea.country_code)?.nameEn||""}`.toLocaleLowerCase().includes(keyword))},[ideas,query]);
+  const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor>();const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [kindFilter,setKindFilter]=useState<"all"|TripIdeaKind>("all");const [tripType,setTripType]=useState<IdeaTripType>("all");const [selectedYears,setSelectedYears]=useState<string[]>([]);const [filtersOpen,setFiltersOpen]=useState(false);const [draftTripType,setDraftTripType]=useState<IdeaTripType>("all");const [draftYears,setDraftYears]=useState<string[]>([]);const [profile,setProfile]=useState<HeaderProfile|null>(null);const [refreshing,setRefreshing]=useState(false);
+  const availableYears=useMemo(()=>[...new Set(ideas.map(idea=>idea.target_year).filter((year):year is number=>typeof year==="number"))].sort((a,b)=>b-a),[ideas]);
+  const hasDomestic=ideas.some(idea=>idea.country_code==="TH");
+  const hasInternational=ideas.some(idea=>idea.country_code!=="TH");
+  const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0;
+  const tripTypes=[
+    {value:"all" as const,label:"ทั้งหมด",Icon:Luggage},
+    ...(hasDomestic?[{value:"domestic" as const,label:"ในประเทศ",Icon:MapPin}]:[]),
+    ...(hasInternational?[{value:"international" as const,label:"ต่างประเทศ",Icon:Globe2}]:[]),
+  ];
+  const searchedIdeas=useMemo(()=>{const keyword=query.trim().toLocaleLowerCase();return ideas.filter(idea=>(!keyword||`${idea.name} ${idea.destination} ${idea.note} ${countryByCode(idea.country_code)?.nameTh||""} ${countryByCode(idea.country_code)?.nameEn||""}`.toLocaleLowerCase().includes(keyword))&&(tripType==="all"||(tripType==="domestic")===(idea.country_code==="TH"))&&(!selectedYears.length||(idea.target_year!==null&&selectedYears.includes(String(idea.target_year)))))},[ideas,query,tripType,selectedYears]);
+  const filteredIdeas=kindFilter==="all"?searchedIdeas:searchedIdeas.filter(idea=>idea.kind===kindFilter);
   const plannedIdeas=filteredIdeas.filter(idea=>idea.kind==="planned");
   const somedayIdeas=filteredIdeas.filter(idea=>idea.kind==="someday");
+  const kindFilters:TripFilterOption<"all"|TripIdeaKind>[]=[
+    {value:"all",label:"ทั้งหมด",Icon:Luggage,count:searchedIdeas.length,tone:"all"},
+    {value:"planned",label:"ทริปที่เล็งไว้",Icon:CalendarRange,count:searchedIdeas.filter(idea=>idea.kind==="planned").length,tone:"upcoming"},
+    {value:"someday",label:"ลิสต์สักวันหนึ่ง",Icon:Compass,count:searchedIdeas.filter(idea=>idea.kind==="someday").length,tone:"past"},
+  ];
   useEffect(()=>{let active=true;getCurrentAccount().then(account=>{if(active)setProfile(account)}).catch(()=>{});return()=>{active=false}},[]);
   useEffect(()=>{
     if(sessionStorage.getItem("invitation:accepted:trip_idea")!=="1")return;
@@ -144,6 +165,7 @@ export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:
   },[]);
   useEffect(()=>{const root=document.documentElement;const sheetOpen=Boolean(editing||sharing);root.classList.toggle("sheet-open",sheetOpen);root.classList.toggle("confirm-open",Boolean(confirmation));return()=>root.classList.remove("sheet-open","confirm-open")},[editing,sharing,confirmation]);
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(""),2400)}
+  function openFilters(){setDraftTripType(tripType);setDraftYears([...selectedYears]);setFiltersOpen(true)}
   function openForm(idea:TripIdea|null,promote=false){if(demo){notify("เข้าสู่ระบบเพื่อเพิ่มหรือแก้ไขรายการ");return}setEditing({idea,promote})}
   async function save(draft:IdeaDraft){setBusy(true);try{const current=editing?.idea||null;const saved=await readResponse(await fetch(current?`/api/trip-ideas/${current.id}`:"/api/trip-ideas",{method:current?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)})) as TripIdea;setIdeas(items=>sortIdeas(current?items.map(item=>item.id===saved.id?saved:item):[...items,saved]));setEditing(undefined);notify(current?"บันทึกทริปที่เล็งไว้แล้ว":"เพิ่มทริปที่เล็งไว้แล้ว")}finally{setBusy(false)}}
   async function remove(idea:TripIdea){await readResponse(await fetch(`/api/trip-ideas/${idea.id}`,{method:"DELETE"}));setIdeas(items=>items.filter(item=>item.id!==idea.id));setEditing(undefined);notify("ลบออกจากลิสต์แล้ว")}
@@ -173,12 +195,40 @@ export function TripIdeasPage({initialIdeas,demo}:{initialIdeas:TripIdea[];demo:
       <header className="mobile-head flow-header"><Link className="brand" href="/" aria-label="RouteRao · หน้าแรก"><Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized/><div>RouteRao<small>travel smarter together</small></div></Link><nav className="mobile-actions" aria-label="เมนูหลัก"><button className="icon-btn home-refresh-btn" type="button" onClick={()=>void refreshAll()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing?"analytics-refresh-spinning":""} size={24}/></button><InvitationNotifications onChanged={invitationChanged}/><button className="home-profile-btn" type="button" onClick={()=>router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์"><span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url?{backgroundImage:`url("${profile.avatar_url}")`}:undefined}>{!profile?.avatar_url&&avatarLabel.charAt(0).toUpperCase()}</span></span></button></nav></header>
       <div className="trip-ideas-screen">
         <PageIntro title="ทริปที่เล็งไว้" titleIcon={<Heart size={25} fill="currentColor"/>} subtitle={<>เก็บแพลนที่อยากไปไว้ที่นี่ แล้วออกเดินทางด้วยกัน</>}/>
-        <div className="trip-ideas-search-row"><label className="trip-search trip-ideas-search"><Search size={20}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="ค้นหาทริป เมือง หรือประเทศ" aria-label="ค้นหาทริป เมือง หรือประเทศ"/>{query?<button type="button" onClick={()=>setQuery("")} aria-label="ล้างคำค้นหา"><X size={15}/></button>:null}</label><button className="trip-ideas-add-button" type="button" onClick={()=>openForm(null)} aria-label="เพิ่มทริปที่เล็งไว้" title="เพิ่มทริปที่เล็งไว้"><Plus size={21}/></button></div>
+        <div className="trip-ideas-search-row"><label className="trip-search trip-ideas-search"><Search size={20}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="ค้นหาทริป เมือง หรือประเทศ" aria-label="ค้นหาทริป เมือง หรือประเทศ"/>{query?<button type="button" onClick={()=>setQuery("")} aria-label="ล้างคำค้นหา"><X size={15}/></button>:null}</label><button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={openFilters} aria-expanded={filtersOpen} aria-label="ตั้งค่าตัวกรอง" title="ตั้งค่าตัวกรอง"><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label="กำลังใช้ตัวกรอง"/>:null}</button><button className="trip-ideas-add-button" type="button" onClick={()=>openForm(null)} aria-label="เพิ่มทริปที่เล็งไว้" title="เพิ่มทริปที่เล็งไว้"><Plus size={21}/></button></div>
+        {filtersOpen?<BottomSheet
+          title="เลือกตัวกรองทริป"
+          subtitle="เลือกประเภทและปีที่ต้องการได้มากกว่า 1 ปี แล้วกดยืนยันเพื่อแสดงผล"
+          closeLabel="ยกเลิก"
+          onClose={()=>setFiltersOpen(false)}
+          onSubmit={event=>{event.preventDefault();setTripType(draftTripType);setSelectedYears([...draftYears].sort((a,b)=>Number(b)-Number(a)));setFiltersOpen(false)}}
+          className="trip-directory-filter-sheet"
+          bodyClassName="bottom-sheet-body trip-directory-filter-body"
+          submitLabel="แสดงผล"
+          deleteLabel="รีเซ็ตตัวกรอง"
+          deleteIcon={<RotateCcw size={18}/>}
+          onDelete={()=>{setDraftTripType("all");setDraftYears([]);setTripType("all");setSelectedYears([]);setFiltersOpen(false)}}
+        >
+          <section className="trip-directory-filter-section">
+            <h3>ประเภททริป</h3>
+            <div className="trip-type-options status-filter trip-directory-type-options trip-idea-trip-type-options" role="group" aria-label="ประเภททริป">
+              {tripTypes.map(({value,label,Icon})=><button type="button" key={value} className={`${draftTripType===value?"active":""} status-${value}`} onClick={()=>setDraftTripType(value)} aria-pressed={draftTripType===value}><Icon size={24}/><span><strong>{label}</strong></span></button>)}
+            </div>
+          </section>
+          {availableYears.length?<section className="trip-directory-filter-section">
+            <h3>ปีที่เดินทาง</h3>
+            <div className="year-filter" role="group" aria-label="ปีที่เดินทาง">
+              <button type="button" className={!draftYears.length?"active":""} onClick={()=>setDraftYears([])} aria-pressed={!draftYears.length}>ทุกปี</button>
+              {availableYears.map(year=>{const value=String(year);const active=draftYears.includes(value);return <button type="button" key={year} className={active?"active":""} onClick={()=>setDraftYears(current=>active?current.filter(item=>item!==value):[...current,value])} aria-pressed={active}>{year}</button>})}
+            </div>
+          </section>:null}
+        </BottomSheet>:null}
+        <TripSegmentedFilter value={kindFilter} options={kindFilters} onChange={setKindFilter} ariaLabel="กรองทริปที่เล็งไว้" tripLabel="ทริป" className="trip-ideas-type-filter"/>
         <section className="trip-ideas-list" aria-label="รายการทริปที่เล็งไว้">
           {filteredIdeas.length?<div className="trip-idea-groups">
             {plannedIdeas.length?<section className="trip-ideas-group" aria-label="ทริปที่เล็งไว้"><div className="trip-ideas-grid">{plannedIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} convert={()=>convertToTrip(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
-            {somedayIdeas.length?<section className="trip-ideas-group" aria-labelledby="someday-ideas-title"><div className="trip-ideas-divider"><span/><h2 id="someday-ideas-title">ลิสต์สักวันหนึ่ง</h2><span/></div><div className="trip-ideas-grid">{somedayIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
-          </div>:<div className="trip-ideas-empty"><Search size={25}/><strong>{query?"ไม่พบทริปที่ค้นหา":"ยังไม่มีทริปที่เล็งไว้"}</strong><span>{query?"ลองค้นหาด้วยชื่อเมืองหรือประเทศอื่น":"เพิ่มสถานที่ที่อยากไปเก็บไว้ก่อนได้"}</span></div>}
+            {somedayIdeas.length?<section className="trip-ideas-group" aria-label="ลิสต์สักวันหนึ่ง">{kindFilter==="all"?<div className="trip-ideas-divider"><span/><h2>ลิสต์สักวันหนึ่ง</h2><span/></div>:null}<div className="trip-ideas-grid">{somedayIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
+          </div>:<div className="trip-ideas-empty"><Search size={25}/><strong>{hasActiveTripFilters?"ไม่พบทริปที่ตรงกับตัวกรอง":query?"ไม่พบทริปที่ค้นหา":kindFilter!=="all"?"ยังไม่มีทริปในหมวดนี้":"ยังไม่มีทริปที่เล็งไว้"}</strong><span>{hasActiveTripFilters?"ลองเปลี่ยนประเภททริปหรือปีที่เลือก":query?"ลองค้นหาด้วยชื่อเมืองหรือประเทศอื่น":kindFilter!=="all"?"ลองเลือกหมวดอื่น หรือเพิ่มทริปใหม่":"เพิ่มสถานที่ที่อยากไปเก็บไว้ก่อนได้"}</span></div>}
         </section>
       </div>
     </main>

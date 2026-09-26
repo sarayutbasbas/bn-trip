@@ -2694,9 +2694,6 @@ button:disabled {
   padding-bottom: calc(22px + env(safe-area-inset-bottom));
 }
 .analytics-redesign .analytics-type-options { margin: 0 0 12px; }
-.analytics-type-options .status-domestic > svg { color: #19a66f; }
-.analytics-type-options .status-international > svg { color: #5c76d8; }
-.analytics-type-options button.active > svg { color: #fff; }
 .analytics-redesign > .dashboard-badge-section { margin-top: 14px; }
 .analytics-memory-kpis {
   display: grid;
@@ -3479,9 +3476,11 @@ button:disabled {
   background: var(--surface-2);
 }
 .trip-directory-type-options { margin:0; }
-.trip-directory-type-options .status-domestic > svg { color:#19a66f; }
-.trip-directory-type-options .status-international > svg { color:#5c76d8; }
+.trip-directory-type-options .status-domestic > svg { color:#5c76d8; }
+.trip-directory-type-options .status-international > svg { color:#19a66f; }
 .trip-directory-type-options button.active > svg { color:#fff; }
+.trip-idea-trip-type-options:has(> button:nth-child(2):last-child) { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.trip-idea-trip-type-options:has(> button:first-child:last-child) { grid-template-columns:1fr; }
 .directory-title {
   margin: 4px 2px 4px;
   display: flex;
@@ -3632,6 +3631,8 @@ button:disabled {
 .status-filter .status-all > svg { color: var(--orange); }
 .status-filter .status-upcoming > svg { color: #5c76d8; }
 .status-filter .status-past > svg { color: #19a66f; }
+.status-filter .status-domestic > svg { color: #5c76d8; }
+.status-filter .status-international > svg { color: #19a66f; }
 .status-filter button.active > svg { color: #fff; }
 .status-filter button > span { min-width: 0; overflow: visible; }
 .status-filter button strong,
@@ -11778,7 +11779,8 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
 .trip-idea-modal-head h2 { margin: 3px 0 0; font-size: 21px; font-weight: 700; letter-spacing: -.03em; }
 .trip-idea-field { display: grid; gap: 6px; }
 .trip-idea-field > span, .trip-idea-kind-picker legend { color: var(--muted); font-size: 10px; font-weight: 650; }
-.trip-idea-field input, .trip-idea-field select, .trip-idea-field textarea { width: 100%; min-height: 46px; padding: 0 13px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface-2); font-size: 16px; }
+.trip-idea-field input, .trip-idea-field select, .trip-idea-field textarea { width: 100%; min-height: 48px; padding: 0 13px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface-2); font-size: 16px; }
+.trip-idea-date-row .trip-idea-field select { height: 48px; }
 .trip-idea-field textarea { min-height: 76px; padding-top: 11px; resize: vertical; }
 .trip-idea-kind-picker { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
 .trip-idea-kind-picker legend { margin-bottom: 6px; }
@@ -11786,7 +11788,7 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
 .trip-idea-kind-picker button.active { color: var(--orange); border-color: rgba(255,107,0,.45); background: var(--brand-soft); }
 .trip-idea-kind-picker button span { display: grid; font-size: 11px; font-weight: 700; }
 .trip-idea-kind-picker button small { margin-top: 1px; font-size: 8px; font-weight: 400; }
-.trip-idea-date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.trip-idea-date-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .trip-idea-error { margin: 0; color: #b23f24; font-size: 11px; }
 .trip-idea-save { width: 100%; color: #fff; background: var(--brand-gradient); }
 .trip-idea-submit-actions { position: sticky; z-index: 8; bottom: 0; margin: 6px calc(var(--sheet-inline-padding) * -1) 0; padding: 10px var(--sheet-inline-padding) max(14px,calc(10px + env(safe-area-inset-bottom))); border-top: .5px solid var(--line); display: flex; gap: 10px; background: var(--surface-solid); box-shadow: 0 -12px 28px color-mix(in srgb,var(--ink) 7%,transparent); }
@@ -11941,6 +11943,7 @@ html.has-badge-preview, html.has-badge-preview body, body.has-badge-preview { ov
   align-items: stretch;
   gap: 8px;
 }
+.trip-ideas-type-filter button strong { white-space: normal; line-height: 1.2; }
 .trip-ideas-search {
   flex: 1 1 auto;
   min-height: 44px;
@@ -13637,7 +13640,7 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
   width: 36px;
   height: 36px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   background: #fff;
@@ -13693,7 +13696,7 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
   width: 28px;
   height: 28px;
   padding: 4px;
-  border-radius: 8px;
+  border-radius: 50%;
   color: #fff;
   background: #ff6817;
 }
@@ -13924,7 +13927,7 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-card-image { position:relative;min-height:0;overflow:hidden;border-radius:0;background:#e9ecef; }
 .accommodation-card-image img { object-fit:cover; }
 .accommodation-favorite-button { position:absolute;z-index:3;top:7px;right:7px;width:29px;height:29px;border:0;border-radius:50%;display:grid;place-items:center;color:#26344b;background:rgba(255,255,255,.92);box-shadow:0 3px 10px rgba(0,0,0,.14); }
-.accommodation-favorite-button.active { color:#ff6718; }
+.accommodation-favorite-button.active { color:#c2185b; }
 .accommodation-favorite-button:disabled { opacity:.65; }
 .accommodation-card-copy { position:relative;z-index:2;min-width:0;padding:8px 9px 8px 10px;display:flex;flex-direction:column;gap:3px;pointer-events:none; }
 .accommodation-card-copy header { min-width:0;display:flex;align-items:flex-start;gap:5px; }
@@ -13942,11 +13945,16 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-stay-dates > span:last-child svg { grid-row:auto; }
 .accommodation-card-copy footer { min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 5px; }
 .accommodation-card-icons { grid-column:1;grid-row:1;min-width:0;display:flex;align-items:center;gap:6px; }
-.accommodation-breakfast-icon { width:36px;height:36px;flex:0 0 36px;border-radius:9px;display:grid;place-items:center;color:#fff;background:#ff6817;box-shadow:0 4px 11px rgba(20,30,50,.18); }
+.accommodation-guest-avatars { min-width:0;display:inline-flex;align-items:center;flex:0 0 auto;padding-left:2px; }
+.accommodation-guest-avatar { width:24px;height:24px;flex:0 0 24px;margin-left:-8px;border:2px solid var(--surface-solid);border-radius:50%;display:grid;place-items:center;color:#fff;background-color:#8e8e93;background-position:center;background-size:cover;box-shadow:0 2px 6px rgba(0,0,0,.16);font-size:9px;font-weight:750; }
+.accommodation-guest-avatar:first-child { margin-left:0; }
+.accommodation-guest-avatar.is-owner { border-color:var(--orange); }
+.accommodation-guest-avatar.is-more { color:var(--orange);background:var(--brand-soft);font-size:8px; }
+.accommodation-breakfast-icon { width:36px;height:36px;flex:0 0 36px;border-radius:50%;display:grid;place-items:center;color:#fff;background:#ff6817;box-shadow:0 4px 11px rgba(20,30,50,.18); }
 .accommodation-card-copy .accommodation-breakfast-icon svg { color:#fff; }
 .accommodation-booking-badge,.accommodation-payment-badge { min-width:0;display:inline-flex;align-items:center;gap:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.accommodation-booking-badge { width:36px;height:36px;border-radius:9px;align-self:center;justify-self:start;font-size:7px;box-shadow:0 4px 11px rgba(20,30,50,.18); }
-.accommodation-booking-badge img { width:36px;height:36px;border-radius:9px;object-fit:contain;object-position:left center; }
+.accommodation-booking-badge { width:36px;height:36px;border-radius:50%;align-self:center;justify-self:start;overflow:hidden;font-size:7px;box-shadow:0 4px 11px rgba(20,30,50,.18); }
+.accommodation-booking-badge img { width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:center;transform:scale(1.2); }
 .accommodation-booking-badge svg { color:#ff6718; }
 .accommodation-payment-badge { width:fit-content;max-width:100%;padding:3px 6px;border-radius:999px;color:#188568;background:#e7f8f1;font-size:6px; }
 .accommodation-total-price { grid-column:2;grid-row:1;align-self:center;margin:0;text-align:right;color:var(--ink);font-size:20px;line-height:1;white-space:nowrap; }
@@ -13967,6 +13975,10 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-cover-picker { position:relative;overflow:visible; }
 .accommodation-cover-picker.has-image .cover-upload { padding-right:42px; }
 .dark .accommodation-payment-badge { color:#7ee3c5;background:rgba(27,142,107,.2); }
+@media(max-width:480px){
+  .accommodation-card-copy footer:has(.accommodation-guest-avatars) { grid-template-columns:minmax(0,1fr); }
+  .accommodation-card-copy footer:has(.accommodation-guest-avatars) .accommodation-total-price { grid-column:1;grid-row:2;justify-self:end; }
+}
 @media(max-width:380px){
   .accommodation-card { grid-template-columns:126px minmax(0,1fr); }
   .accommodation-card-image { min-height:0; }
@@ -14822,7 +14834,7 @@ html.dark .dashboard-trip-plan-card {
 
 .dashboard-favorite-hotels { min-width:0; }
 .dashboard-favorite-hotels-head { margin:0 2px 8px;display:flex;align-items:center;gap:8px; }
-.dashboard-favorite-hotels-head > span { width:28px;height:28px;flex:0 0 28px;border:.5px solid color-mix(in srgb,var(--orange) 24%,var(--line));border-radius:9px;display:grid;place-items:center;color:var(--orange);background:color-mix(in srgb,var(--orange) 8%,var(--surface-solid)); }
+.dashboard-favorite-hotels-head > span { width:28px;height:28px;flex:0 0 28px;border:.5px solid color-mix(in srgb,#c2185b 24%,var(--line));border-radius:9px;display:grid;place-items:center;color:#c2185b;background:color-mix(in srgb,#c2185b 8%,var(--surface-solid)); }
 .dashboard-favorite-hotels-head h2 { margin:0;color:var(--ink);font-size:16px;font-weight:700;line-height:1.2;letter-spacing:-.025em; }
 .dashboard-favorite-hotels-scroll { width:100%;max-width:100%;padding:2px 2px 8px;display:grid;grid-auto-flow:column;grid-auto-columns:min(43%,174px);gap:9px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x; }
 .dashboard-favorite-hotels-scroll::-webkit-scrollbar { display:none; }
@@ -14831,7 +14843,7 @@ html.dark .dashboard-trip-plan-card {
 .dashboard-favorite-hotel-card > button:active { transform:scale(.985); }
 .dashboard-favorite-hotel-image { position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;display:block;background:var(--surface-3); }
 .dashboard-favorite-hotel-image img { object-fit:cover; }
-.dashboard-favorite-hotel-image i { position:absolute;top:7px;right:7px;width:27px;height:27px;border-radius:50%;display:grid;place-items:center;color:var(--orange);background:rgba(255,255,255,.94);box-shadow:0 3px 10px rgba(0,0,0,.14);font-style:normal; }
+.dashboard-favorite-hotel-image i { position:absolute;top:7px;right:7px;width:27px;height:27px;border-radius:50%;display:grid;place-items:center;color:#c2185b;background:rgba(255,255,255,.94);box-shadow:0 3px 10px rgba(0,0,0,.14);font-style:normal; }
 .dashboard-favorite-hotel-card strong,.dashboard-favorite-hotel-card small,.dashboard-favorite-hotel-card em { min-width:0;margin-right:8px;margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 .dashboard-favorite-hotel-card strong { margin-top:7px;font-size:11px;font-weight:750;line-height:1.25; }
 .dashboard-favorite-hotel-card small { margin-top:3px;color:var(--muted);font-size:8px;line-height:1.3; }

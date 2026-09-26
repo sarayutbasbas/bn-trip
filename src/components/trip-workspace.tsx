@@ -807,6 +807,7 @@ export function TripWorkspace({
       const next = [...new Set([...offlineIds, item.id])];
       setOfflineIds(next);
       localStorage.setItem(offlineKey(tripId), JSON.stringify(next));
+      notify("ดาวน์โหลดเอกสารออฟไลน์สำเร็จแล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "ดาวน์โหลดไม่สำเร็จ");
     } finally {
@@ -1774,7 +1775,6 @@ export function TripWorkspace({
                   placeholder={label(
                     "พิมพ์ Checklist เอง (จะบันทึกเข้า Master ด้วย)",
                   )}
-                  autoFocus
                   required
                   maxLength={240}
                 />
