@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import ExcelJS from "exceljs";
 import { Pool } from "pg";
-import { createTripTemplate, parseTripImport } from "../src/lib/trip-import";
+import { createTripTemplate, parseTripImport, IMPORT_EXAMPLE_CODE } from "../src/lib/trip-import";
 import { saveTripImport } from "../src/lib/trip-import-save";
 
 async function fixture() {
@@ -23,6 +23,111 @@ async function fixture() {
   return workbook;
 }
 async function parse(workbook: ExcelJS.Workbook) { return parseTripImport(await workbook.xlsx.writeBuffer()); }
+
+test("each data sheet has a highlighted example that is never imported, even after moving", async () => {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await createTripTemplate());
+  for (const name of ["ทริป", "ไทม์ไลน์", "ค่าใช้จ่าย", "ที่พัก", "เที่ยวบิน"]) {
+    const sheet = workbook.getWorksheet(name)!;
+    assert.equal(sheet.getCell("A2").value, IMPORT_EXAMPLE_CODE);
+    assert.equal(sheet.getCell("A2").fill.type, "pattern");
+    assert.match(sheet.getRow(2).getCell(sheet.columnCount).text, /ไม่นำเข้า/);
+    sheet.getRow(800).values = sheet.getRow(2).values;
+    sheet.getRow(2).values = [];
+    // Formatting far below data must not count toward the 500-booking limit.
+    sheet.getCell("A3000").numFmt = "@";
+  }
+  await assert.rejects(() => parse(workbook), /ยังไม่มีข้อมูลทริป/);
+  workbook.getWorksheet("ทริป")!.getRow(3).values = ["REAL01", "Real trip", "VN", "ฮานอย", "2025-11-01", "2025-11-05"];
+  const batch = await parse(workbook);
+  assert.equal(batch.trips.length, 1);
+  assert.equal(batch.plans.length + batch.stays.length + batch.flights.length + batch.expenseCount, 0);
+});
+
+test("copying each example and changing the trip code imports all five sheets together", async () => {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await createTripTemplate());
+  for (const name of ["ทริป", "ไทม์ไลน์", "ค่าใช้จ่าย", "ที่พัก", "เที่ยวบิน"]) {
+    const sheet = workbook.getWorksheet(name)!;
+    sheet.getRow(3).values = sheet.getRow(2).values;
+    sheet.getCell("A3").value = "MYTRIP01";
+  }
+  const batch = await parse(workbook);
+  assert.deepEqual([batch.trips.length, batch.plans.length, batch.expenseCount, batch.stays.length, batch.flights.length], [1, 1, 1, 1, 1]);
+});
+
+async function largeBookingFixture() {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await createTripTemplate());
+  for (let index = 0; index < 100; index++) {
+    const code = `TRIP${index}`;
+    workbook.getWorksheet("ทริป")!.getRow(index + 3).values = [code, `History ${index}`, "VN", "ฮานอย", "2025-11-01", "2025-11-05"];
+    for (let item = 0; item < 5; item++) {
+      const row = index * 5 + item + 3;
+      workbook.getWorksheet("ที่พัก")!.getRow(row).values = [code, `Hotel ${item}`, "Hanoi", "2025-11-01", "14:00", "2025-11-02", "12:00", 100, "THB", 1, "direct", "ใช่"];
+      workbook.getWorksheet("เที่ยวบิน")!.getRow(row).values = [code, "ภายในทริป", item + 1, "VN616", "Vietnam Airlines", "BKK", "HAN", "2025-11-01", "10:00", "+07:00", "2025-11-01", "12:00", "+07:00", 200, "THB", 1];
+    }
+  }
+  return workbook;
+}
+
+test("accepts 500 hotels and 500 flights plus examples and rejects the 501st real row", async () => {
+  const workbook = await largeBookingFixture();
+  const batch = await parse(workbook);
+  assert.equal(batch.trips.length, 100);
+  assert.equal(batch.stays.length, 500);
+  assert.equal(batch.flights.length, 500);
+  workbook.getWorksheet("ที่พัก")!.getRow(503).values = workbook.getWorksheet("ที่พัก")!.getRow(3).values;
+  await assert.rejects(() => parse(workbook), /ที่พัก: ไม่เกิน 500 แถวข้อมูลจริง/);
+});
+
+test("bulk import saves 500 hotels and 500 flights atomically and retries without duplicates", { skip: !process.env.TRIP_IMPORT_TEST_DATABASE_URL }, async () => {
+  const pool = new Pool({ connectionString: process.env.TRIP_IMPORT_TEST_DATABASE_URL });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const table of ["trips", "itineraries", "trip_accommodations", "trip_flight_segments", "trip_flight_passengers"]) {
+      await client.query(`CREATE TEMP TABLE ${table} (LIKE public.${table} INCLUDING ALL) ON COMMIT DROP`);
+    }
+    const batch = await parse(await largeBookingFixture());
+    const result = await saveTripImport(client, "00000000-0000-4000-a000-000000000001", batch, "large-bookings");
+    assert.deepEqual(result, { count: 100, planCount: 1000, expenseCount: 1000, stayCount: 500, flightCount: 500 });
+    assert.equal((await client.query("SELECT count(*)::int n FROM trip_accommodations")).rows[0].n, 500);
+    assert.equal((await client.query("SELECT count(*)::int n FROM trip_flight_segments WHERE itinerary_id IS NOT NULL AND ticket_cost_item_id IS NOT NULL")).rows[0].n, 500);
+    assert.equal((await client.query("SELECT count(*)::int n FROM trip_flight_passengers")).rows[0].n, 500);
+    assert.equal(Number((await client.query("SELECT sum((cost->>'value')::numeric) n FROM itineraries CROSS JOIN LATERAL jsonb_array_elements(cost_items) cost")).rows[0].n), 150000);
+    assert.equal((await saveTripImport(client, "00000000-0000-4000-a000-000000000001", batch, "large-bookings")).count, 0);
+  } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
+});
+
+test("more than ten hotels and flights in ONE trip retain every link, including zero-price tickets", { skip: !process.env.TRIP_IMPORT_TEST_DATABASE_URL }, async () => {
+  const workbook = await bookingFixture();
+  const hotels = workbook.getWorksheet("ที่พัก")!, flights = workbook.getWorksheet("เที่ยวบิน")!;
+  for (let index = 0; index < 20; index++) {
+    hotels.getRow(index + 2).values = ["VN01", `Hotel ${index}`, "Hanoi", "2025-11-01", "14:00", "2025-11-02", "12:00", 100, "THB", 1, "direct", "ใช่"];
+    flights.getRow(index + 2).values = ["VN01", "ภายในทริป", index + 1, "VN616", "Vietnam Airlines", "BKK", "HAN", "2025-11-01", "10:00", "+07:00", "2025-11-01", "12:00", "+07:00", index === 0 ? 0 : 200, "THB", 1];
+  }
+  const batch = await parse(workbook);
+  const pool = new Pool({ connectionString: process.env.TRIP_IMPORT_TEST_DATABASE_URL });
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const table of ["trips", "itineraries", "trip_accommodations", "trip_flight_segments", "trip_flight_passengers"]) {
+      await client.query(`CREATE TEMP TABLE ${table} (LIKE public.${table} INCLUDING ALL) ON COMMIT DROP`);
+    }
+    await saveTripImport(client, "00000000-0000-4000-a000-000000000001", batch, "twenty-bookings");
+    assert.equal((await client.query("SELECT count(*)::int n FROM trip_accommodations")).rows[0].n, 20);
+    assert.equal((await client.query("SELECT count(*)::int n FROM trip_flight_segments WHERE itinerary_id IS NOT NULL")).rows[0].n, 20);
+    assert.equal((await client.query("SELECT count(*)::int n FROM trip_flight_segments WHERE ticket_cost_item_id IS NULL AND ticket_price IS NULL")).rows[0].n, 1);
+    assert.equal((await client.query("SELECT count(*)::int n FROM itineraries i JOIN trip_accommodations a ON a.id=i.accommodation_id WHERE i.cost_items->0->>'id'=a.cost_item_id::text")).rows[0].n, 20);
+    await client.query("SAVEPOINT failed_booking_import");
+    batch.flights[0].airlineName = "x".repeat(1000);
+    await assert.rejects(() => saveTripImport(client, "00000000-0000-4000-a000-000000000001", batch, "failed-bookings"));
+    await client.query("ROLLBACK TO SAVEPOINT failed_booking_import");
+    assert.equal((await client.query("SELECT count(*)::int n FROM trip_accommodations")).rows[0].n, 20);
+    assert.equal((await client.query("SELECT count(*)::int n FROM trip_flight_segments")).rows[0].n, 20);
+  } finally { await client.query("ROLLBACK"); client.release(); await pool.end(); }
+});
 
 test("links multiple trips, converts historical currency, and creates daily expense plans", async () => {
   const batch = await parse(await fixture());

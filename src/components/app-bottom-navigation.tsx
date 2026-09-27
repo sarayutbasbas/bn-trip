@@ -17,7 +17,7 @@ import {
 } from "@/src/lib/codepen-switcher-glass";
 
 const NAV_VISIBLE_PATHS = new Set([
-  "/", "/trips", "/settings", "/analytics", "/badges", "/trip-ideas",
+  "/", "/trips", "/settings", "/analytics", "/trip-ideas",
 ]);
 
 type NavIconName = "home" | "trip" | "wishlist" | "stats" | "profile";

@@ -166,6 +166,7 @@ const TripAccommodations = dynamic(
   () => import("@/src/components/trip-accommodations").then((module) => module.TripAccommodations),
   { loading: () => <TripSectionSkeleton variant="accommodations" /> },
 );
+const AnalyticsJourneyMap = dynamic(() => import("@/src/components/analytics-journey-map").then(module => module.AnalyticsJourneyMap));
 const TravelBadgesPage = dynamic(
   () =>
     import("@/src/components/travel-badges-page").then(
@@ -3503,48 +3504,28 @@ function AnalyticsYearTrend({
   money: (value: number) => string;
   tripLabel: string;
 }) {
-  const chronological = [...years].reverse();
-  const width = 320;
-  const chartTop = 22;
-  const chartBottom = 112;
+  const t = useT();
+  const chartId = useId();
+  const chronological = [...years].sort((a, b) => a.year - b.year);
   const maxTrips = Math.max(1, ...chronological.map((item) => item.trips));
-  const step = chronological.length > 1 ? 272 / (chronological.length - 1) : 0;
-  const points = chronological.map((item, index) => ({
-    ...item,
-    x: chronological.length > 1 ? 24 + index * step : width / 2,
-    y: chartBottom - (item.trips / maxTrips) * (chartBottom - chartTop),
-  }));
-  const line = points.map((point) => `${point.x},${point.y}`).join(" ");
-  const area = points.length
-    ? `M ${points[0].x} ${chartBottom} L ${points.map((point) => `${point.x} ${point.y}`).join(" L ")} L ${points.at(-1)!.x} ${chartBottom} Z`
-    : "";
   return (
-    <div className="analytics-trend" role="img" aria-label="Trips by year">
-      <svg viewBox={`0 0 ${width} 132`} preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="analytics-area-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#ff6b16" stopOpacity="0.28" />
-            <stop offset="1" stopColor="#ffb05a" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        {[42, 77, 112].map((y) => (
-          <line key={y} x1="16" x2="304" y1={y} y2={y} className="analytics-trend-grid" />
-        ))}
-        <path d={area} fill="url(#analytics-area-gradient)" />
-        <polyline points={line} className="analytics-trend-line" />
-        {points.map((point) => (
-          <g key={point.year}>
-            <circle cx={point.x} cy={point.y} r="6" className="analytics-trend-point-ring" />
-            <circle cx={point.x} cy={point.y} r="3.5" className="analytics-trend-point" />
-          </g>
-        ))}
-      </svg>
-      <div className="analytics-trend-labels">
-        {points.map((point) => (
-          <div key={point.year}>
-            <b>{point.year}</b>
-            <span>{point.trips} {tripLabel}</span>
-            <small>{money(point.totalExpense)}</small>
+    <div className="analytics-year-chart">
+      <p className="analytics-chart-hint">{t("แตะกราฟเพื่อดูรายละเอียดแต่ละปี")}</p>
+      <div className="analytics-year-bars" aria-label={t("การเดินทางในแต่ละปี")}>
+        {chronological.map((point) => (
+          <div className="analytics-year-column" key={point.year}>
+            <button type="button" className="analytics-year-bar" popoverTarget={`${chartId}-${point.year}`} aria-label={`${point.year}: ${point.trips} ${tripLabel}, ${point.destinations} ${t("จุดหมาย")}`}>
+              <span className="analytics-year-bar-fill" style={{ height: `${Math.max(4, point.trips / maxTrips * 100)}%` }}><b>{point.trips}</b></span>
+              <strong>{point.year}</strong>
+            </button>
+            <div id={`${chartId}-${point.year}`} popover="auto" className="analytics-year-popover">
+              <button type="button" popoverTarget={`${chartId}-${point.year}`} popoverTargetAction="hide" aria-label={t("ปิด")}><X size={18} /></button>
+              <h3><CalendarDays size={18} />{point.year}</h3>
+              <p><MapPin size={17} />{t("จุดหมายที่ไป")} <b>{point.destinations} {t("ที่")}</b></p>
+              <p><Luggage size={17} />{t("การเดินทาง")} <b>{point.trips} {tripLabel}</b></p>
+              <p><WalletCards size={17} />{t("ค่าใช้จ่ายรวม")} <b>{money(point.totalExpense)}</b></p>
+              <small>{t("นับจุดหมายไม่ซ้ำภายในปี จากเมืองหรือจังหวัดของทริป")}</small>
+            </div>
           </div>
         ))}
       </div>
@@ -3617,18 +3598,7 @@ function TravelAnalyticsDashboard({
     { value: "international", label: t("ต่างประเทศ"), Icon: Globe2, count: analytics.international.totals.trips, tone: "international" },
   ];
   const scopeFilter = <TripSegmentedFilter value={scope} options={scopeOptions} onChange={setScope} ariaLabel={t("กรองสถิติการเดินทาง")} tripLabel={t("ทริป")} className="analytics-type-options" />;
-  const badgeTotals = Object.values(badges.totals).reduce(
-    (total, category) => ({ unlocked: total.unlocked + category.unlocked, count: total.count + category.total }),
-    { unlocked: 0, count: 0 },
-  );
-  const badgeSection = <>
-    <TravelBadgeProgressCard
-      unlocked={badgeTotals.unlocked}
-      total={badgeTotals.count}
-      onClick={() => document.querySelector(".badge-cabinet-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-    />
-    <TravelBadgesPage collection={badges} embedded />
-  </>;
+  const badgeSection = <TravelBadgesPage collection={badges} embedded />;
   const analyticsHero = <PageIntro
     title={t("ความทรงจำของเรา")}
     titleIcon={<Heart size={22} fill="currentColor" />}
@@ -3664,20 +3634,7 @@ function TravelAnalyticsDashboard({
         <article className="is-blue"><i><WalletCards size={24} /></i><div><strong>{money(data.totals.averageExpense)}</strong><b>{t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}</b><small>{t("จากค่าใช้จ่ายที่บันทึกไว้")}</small></div></article>
       </section>
 
-      <section className="analytics-journey-map">
-        <div className="analytics-memory-section-head"><h2><MapPin size={18} />{t("แผนที่การเดินทางของเรา")}</h2><small>{data.totals.countries} {t("ประเทศ")} · {data.totals.destinations} {t("เมือง")}</small></div>
-        <div className="analytics-map-canvas" role="img" aria-label={t("แผนที่จุดหมายที่เคยเดินทาง")}>
-          <span className="analytics-map-land is-one" /><span className="analytics-map-land is-two" /><span className="analytics-map-land is-three" />
-          <span className="analytics-map-path is-one" /><span className="analytics-map-path is-two" />
-          <Plane className="analytics-map-plane" size={23} />
-          {(scope === "domestic" ? data.destinations : data.countries).slice(0, 5).map((item, index) => {
-            const label = "country" in item ? item.country : (lang === "EN" ? item.nameEn : item.nameTh);
-            const positions = [[18, 42], [55, 69], [76, 30], [43, 29], [82, 66]];
-            return <span className="analytics-map-pin" key={"country" in item ? item.country : item.id} style={{ "--map-x": `${positions[index][0]}%`, "--map-y": `${positions[index][1]}%` } as CSSProperties}><i />{label}</span>;
-          })}
-          <em>Good Trips<br />Happier Us ♡</em>
-        </div>
-      </section>
+      <AnalyticsJourneyMap key={scope} scope={scope} data={data} english={lang === "EN"} />
 
       <div className="analytics-memory-grid">
         <section className="analytics-ranking-card">
@@ -3695,7 +3652,7 @@ function TravelAnalyticsDashboard({
 
         <section className="analytics-year-card">
           <div className="analytics-memory-section-head"><h2><ArrowUp size={18} />{t("การเดินทางในแต่ละปี")}</h2></div>
-          <AnalyticsYearTrend years={data.years} money={money} tripLabel={t("ทริป")} />
+          <AnalyticsYearTrend key={scope} years={data.years} money={money} tripLabel={t("ทริป")} />
           <div className="analytics-year-summary"><span><Plane size={17} /><b>{flightInsights.totals.segments}</b><small>{t("ช่วงบินทั้งหมด")}</small></span><span><CalendarDays size={17} /><b>{data.years.length}</b><small>{t("ปีที่มีทริป")}</small></span></div>
         </section>
       </div>

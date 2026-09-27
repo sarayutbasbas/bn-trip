@@ -83,6 +83,7 @@ export type TravelAnalyticsPayload = {
   years: Array<{
     year: number;
     trips: number;
+    destinations: number;
     totalExpense: number;
     averageExpense: number;
   }>;
@@ -210,7 +211,7 @@ function clientSafe<T>(value: T): T {
 }
 
 function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayload {
-  const years = new Map<number, { trips: number; totalExpense: number }>();
+  const years = new Map<number, { trips: number; totalExpense: number; destinations: Set<string> }>();
   const countries = new Map<
     string,
     { country: string; countryCode: string; trips: number; totalExpense: number }
@@ -229,7 +230,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
     travelExpense += travel;
     shoppingExpense += shopping;
     const year = Number(row.year);
-    const yearEntry = years.get(year) || { trips: 0, totalExpense: 0 };
+    const yearEntry = years.get(year) || { trips: 0, totalExpense: 0, destinations: new Set<string>() };
     yearEntry.trips += 1;
     yearEntry.totalExpense += total;
     years.set(year, yearEntry);
@@ -278,6 +279,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
         .toLocaleLowerCase();
       if (!id || seenDestinations.has(id)) continue;
       seenDestinations.add(id);
+      yearEntry.destinations.add(`${countryKey}:${id}`);
       const entry = destinations.get(id) || {
         id,
         nameTh: destination.nameTh?.trim() || destination.nameEn?.trim() || fallbackDestination,
@@ -307,6 +309,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
       .map(([year, value]) => ({
         year,
         trips: value.trips,
+        destinations: value.destinations.size,
         totalExpense: value.totalExpense,
         averageExpense: value.trips ? value.totalExpense / value.trips : 0,
       }))

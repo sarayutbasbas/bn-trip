@@ -7,6 +7,8 @@ import { createTripTemplate, IMPORT_MAX_BYTES, parseTripImport } from "@/src/lib
 import { saveTripImport } from "@/src/lib/trip-import-save";
 
 export const runtime = "nodejs";
+// Large historical workbooks still commit atomically, including linked bookings.
+export const maxDuration = 300;
 
 export async function GET() {
   if (!await getSession()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

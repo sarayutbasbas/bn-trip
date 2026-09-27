@@ -6,6 +6,8 @@ import { createCustomTripDestination, resolveTripDestinations, TRIP_DESTINATION_
 
 export const IMPORT_HEADERS = ["ชื่อทริป", "ประเทศ", "เมือง", "วันเดินทางไป", "วันเดินทางกลับ", "เวลาไป", "เวลากลับ", "งบหลัก (บาท)", "งบช้อปปิ้ง (บาท)", "มีเที่ยวบิน", "โน้ต"];
 export const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+// Reserved across every data sheet; never infer example rows from colour or position.
+export const IMPORT_EXAMPLE_CODE = "__EXAMPLE__";
 export const TIMELINE_HEADERS = ["รหัสทริป", "รหัสรายการ", "วันที่", "เวลา", "ชื่อรายการ", "โลเคชั่นหรือที่อยู่", "วิธีเดินทาง", "รายละเอียด"];
 export const EXPENSE_HEADERS = ["รหัสทริป", "รหัสรายการ", "วันที่", "ชื่อค่าใช้จ่าย", "ประเภท", "จำนวนเงิน", "สกุลเงิน", "เรทเป็นบาท", "วิธีชำระเงิน"];
 export const IMPORT_CATEGORIES = ["อาหาร", "เดินทาง", "ค่าตั๋วเครื่องบิน", "ที่พัก", "Shopping", "กิจกรรม", "ของฝาก", "อื่น ๆ"];
@@ -31,12 +33,12 @@ export async function createTripTemplate() {
   sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF7518" } };
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  for (let row = 2; row <= 101; row++) {
+  for (let row = 3; row <= 102; row++) {
     for (const column of [5, 6, 7, 8]) sheet.getCell(row, column).numFmt = "@";
     sheet.getCell(row, 11).dataValidation = { type: "list", allowBlank: true, formulae: ['"ใช่,ไม่"'] };
   }
   sheet.getCell("A1").note = "ตั้งรหัสเอง เช่น TRIP01 แล้วใช้รหัสเดียวกันในชีตไทม์ไลน์และค่าใช้จ่าย";
-  workbook.definedNames.add("'ทริป'!$A$2:$A$101", "TripCodes");
+  workbook.definedNames.add("'ทริป'!$A$3:$A$102", "TripCodes");
   for (const [name, headers] of [["ไทม์ไลน์", TIMELINE_HEADERS], ["ค่าใช้จ่าย", EXPENSE_HEADERS], ["ที่พัก", STAY_HEADERS], ["เที่ยวบิน", FLIGHT_HEADERS]] as const) {
     const child = workbook.addWorksheet(name);
     child.columns = headers.map(header => ({ header, width: 25 }));
@@ -59,6 +61,8 @@ export async function createTripTemplate() {
   const help = workbook.addWorksheet("วิธีใช้และตัวอย่าง");
   help.getColumn(1).width = 110;
   ["เริ่มที่ชีต ทริป: 1 แถวต่อ 1 ทริป สูงสุด 100 ทริปต่อไฟล์",
+    "ทุกชีตข้อมูลมีแถวตัวอย่างสีเหลือง รหัส __EXAMPLE__ ระบบข้ามแถวนี้เสมอ ไม่สร้างข้อมูล",
+    "กรอกข้อมูลจริงตั้งแต่แถว 3 หรือคัดลอกตัวอย่างแล้วเปลี่ยนรหัสทริปเป็นรหัสของคุณ เช่น TRIP01 ในทุกชีตที่เกี่ยวข้อง อย่าใช้ __EXAMPLE__ กับข้อมูลจริง",
     "จำเป็น: ชื่อทริป, ประเทศ (รหัสหรือชื่อไทย/อังกฤษ), เมือง, วันเดินทางไป, วันเดินทางกลับ",
     "หลายเมืองให้คั่นด้วย | เช่น ฮานอย | ดานัง",
     "วันที่ใช้ ค.ศ. YYYY-MM-DD เช่น 2026-11-01; ทริปยาวไม่เกิน 90 วัน; เวลา HH:mm (ว่าง = ไป 09:00 / กลับ 18:00)",
@@ -99,6 +103,30 @@ export async function createTripTemplate() {
   countries.addRow(["รหัส", "ชื่อไทย", "ชื่ออังกฤษ"]);
   TRIP_COUNTRIES.forEach(country => countries.addRow([country.code, country.nameTh, country.nameEn]));
   countries.columns.forEach(column => { column.width = 30; });
+  const examples: Array<[string, (string | number)[]]> = [
+    ["ทริป", [IMPORT_EXAMPLE_CODE, "เที่ยวเวียดนาม", "VN", "ฮานอย | ดานัง", "2025-11-01", "2025-11-05", "08:00", "18:00", 20000, 5000, "ใช่", "ทริปกับครอบครัว"]],
+    ["ไทม์ไลน์", [IMPORT_EXAMPLE_CODE, "PLAN01", "2025-11-01", "12:00", "กินเฝอ", "ฮานอย", "เดิน", "ร้านที่ชอบ"]],
+    ["ค่าใช้จ่าย", [IMPORT_EXAMPLE_CODE, "PLAN01", "", "เฝอ 2 ชาม", "อาหาร", 100000, "VND", 0.0013, "เงินสด"]],
+    ["ที่พัก", [IMPORT_EXAMPLE_CODE, "Hanoi Hotel", "ฮานอย", "2025-11-01", "14:00", "2025-11-05", "12:00", 8000, "THB", 1, "agoda", "ใช่", "เงินสด", "ราคารวมทั้งการจอง"]],
+    ["เที่ยวบิน", [IMPORT_EXAMPLE_CODE, "ขาไป", 1, "VN616", "Vietnam Airlines", "BKK", "HAN", "2025-11-01", "10:00", "+07:00", "2025-11-01", "12:00", "+07:00", 6000, "THB", 1, "ABC123", "Economy", "12A", "", "7 kg", "23 kg"]],
+  ];
+  for (const [name, values] of examples) {
+    const target = workbook.getWorksheet(name)!;
+    const row = target.getRow(2);
+    row.values = [...values, "ตัวอย่างเท่านั้น — ไม่นำเข้า กรอกข้อมูลจริงตั้งแต่แถว 3"];
+    row.height = 44;
+    row.eachCell({ includeEmpty: true }, cell => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFEDB3" } };
+      cell.font = { color: { argb: "FF785000" }, italic: true };
+      cell.alignment = { vertical: "middle", wrapText: true };
+      cell.note = "ตัวอย่างเท่านั้น ไม่นำเข้า: คัดลอกแล้วเปลี่ยนรหัส __EXAMPLE__ เป็นรหัสทริปจริง";
+      cell.dataValidation = { type: "custom", allowBlank: true, formulae: ["TRUE()"] };
+    });
+    target.getColumn(1).width = 26;
+    target.getColumn(values.length + 1).width = 48;
+    target.getCell(1, values.length + 1).value = "คำแนะนำ (ไม่ต้องกรอก)";
+    target.views = [{ state: "frozen", ySplit: 2 }];
+  }
   return workbook.xlsx.writeBuffer();
 }
 
@@ -121,11 +149,11 @@ export async function parseTripImport(buffer: ArrayBuffer): Promise<TripImportBa
   const codeFirst = sheet?.getCell(1, 1).text.trim() === "รหัสทริป";
   const offset = codeFirst ? 1 : 0;
   if (!sheet || IMPORT_HEADERS.some((header, index) => sheet.getCell(1, index + 1 + offset).text.trim() !== header)) throw new Error("หัวตารางไม่ตรงกับเทมเพลต กรุณาดาวน์โหลดเทมเพลตใหม่");
-  if (sheet.rowCount > 1001) throw new Error("ไฟล์มีจำนวนแถวมากเกินไป กรุณาใช้เทมเพลตไม่เกิน 100 ทริป");
   const trips: ImportedTrip[] = [];
   const errors: string[] = [];
   for (let index = 2; index <= sheet.rowCount; index++) {
     const row = sheet.getRow(index);
+    if (codeFirst && row.getCell(1).text.trim().toUpperCase() === IMPORT_EXAMPLE_CODE) continue;
     if (Array.from({ length: 12 }, (_, column) => row.getCell(column + 1).text.trim()).every(value => !value)) continue;
     try {
       const cells = IMPORT_HEADERS.map((_, column) => {
@@ -175,10 +203,12 @@ export async function parseTripImport(buffer: ArrayBuffer): Promise<TripImportBa
     const child = workbook.getWorksheet(name);
     if (!child) return;
     if (headers.some((header, index) => child.getCell(1, index + 1).text.trim() !== header)) { errors.push(`ชีต ${name}: หัวตารางไม่ตรงกับเทมเพลต`); return; }
-    if (child.rowCount > limit + 1) { errors.push(`ชีต ${name}: ไม่เกิน ${limit} แถว`); return; }
+    let dataRows = 0;
     for (let index = 2; index <= child.rowCount; index++) {
       const row = child.getRow(index);
+      if (row.getCell(1).text.trim().toUpperCase() === IMPORT_EXAMPLE_CODE) continue;
       if (headers.every((_, column) => !row.getCell(column + 1).text.trim())) continue;
+      if (++dataRows > limit) { errors.push(`ชีต ${name}: ไม่เกิน ${limit} แถวข้อมูลจริง (ไม่นับตัวอย่างและแถวว่าง)`); break; }
       try { parse(headers.map((header, column) => {
         try { return cellText(row.getCell(column + 1), header.startsWith("เวลา")); }
         catch (error) { throw new ImportCellError(column + 1, error instanceof Error ? error.message : "ข้อมูลไม่ถูกต้อง"); }

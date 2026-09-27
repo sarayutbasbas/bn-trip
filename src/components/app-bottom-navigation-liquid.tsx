@@ -11,7 +11,6 @@ const NAV_VISIBLE_PATHS = new Set([
   "/album",
   "/settings",
   "/analytics",
-  "/badges",
   "/trip-ideas",
 ]);
 

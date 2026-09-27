@@ -25,7 +25,9 @@ export function TripImportSettings({ onImported }: { onImported: () => void }) {
     form.set("file", selected);
     form.set("confirm", String(confirm));
     const response = await fetch("/api/trips/import", { method: "POST", body: form });
-    const data = await response.json();
+    const data = await response.json().catch(() => {
+      throw new Error("เซิร์ฟเวอร์ตอบกลับไม่สมบูรณ์หรือใช้เวลานาน กรุณาลองอัปโหลดไฟล์เดิมอีกครั้ง ระบบจะข้ามทริปที่บันทึกสำเร็จแล้ว");
+    });
     if (!response.ok) throw new Error(data.error || "นำเข้าไม่สำเร็จ");
     return data;
   }
@@ -65,6 +67,7 @@ export function TripImportSettings({ onImported }: { onImported: () => void }) {
       </div>
       <p>1 แถวต่อ 1 ทริป · สูงสุด 100 ทริปต่อไฟล์ · ขนาดไม่เกิน 2 MB</p>
       <p>กรอก 5 ชีต เชื่อมด้วยรหัสทริปที่ตั้งเอง ที่พักและเที่ยวบินจะสร้างรายการและค่าใช้จ่ายในไทม์ไลน์ให้อัตโนมัติ ไม่ต้องกรอกราคาซ้ำ</p>
+      <p>ทุกชีตมีแถวตัวอย่างสีเหลืองที่ไม่นำเข้า เริ่มกรอกแถว 3 หรือคัดลอกแล้วเปลี่ยนรหัส __EXAMPLE__ เป็นรหัสทริปของคุณ · ที่พักและเที่ยวบินสูงสุดชีตละ 500 รายการ</p>
       <div className="trip-import-actions">
         <button type="button" className="secondary-btn" disabled={busy} onClick={downloadTemplate}><Download size={17} />ดาวน์โหลดเทมเพลต</button>
         <button type="button" className="primary-btn" disabled={busy} onClick={() => input.current?.click()}><Upload size={17} />อัปโหลดข้อมูล</button>
