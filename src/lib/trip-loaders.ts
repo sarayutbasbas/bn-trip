@@ -1,4 +1,5 @@
 import type { SessionUser } from "@/src/lib/auth";
+import { appendTripSearch } from "@/src/lib/trip-search";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { query } from "@/src/lib/db";
 import { linkedExpenseIds } from "@/src/lib/linked-expense";
@@ -622,7 +623,7 @@ export async function loadTripDirectory(
   const selectedYears = [...new Set(params.getAll("year").flatMap((value) => value.split(",")).map(Number).filter((year) => Number.isInteger(year) && year >= 2000 && year <= 2200))].slice(0, 50);
   const search = (params.get("q") || "").trim().slice(0, 80);
   const sort = params.get("sort") || "latest";
-  const values: Array<string | number | number[]> = [session.userId];
+  const values: Array<string | number | number[] | string[]> = [session.userId];
   const where = [access];
   if (status === "ongoing")
     where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
@@ -637,11 +638,8 @@ export async function loadTripDirectory(
     values.push(selectedYears);
     where.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${values.length}::int[])`);
   }
-  if (search) {
-    values.push(`%${search}%`);
-    where.push(`(name ILIKE $${values.length} OR destination ILIKE $${values.length} OR country_name ILIKE $${values.length})`);
-  }
-  const statusCountValues: Array<string | number | number[]> = [session.userId];
+  appendTripSearch(where, values, search);
+  const statusCountValues: Array<string | number | number[] | string[]> = [session.userId];
   const statusCountWhere = [access];
   if (tripType === "domestic") statusCountWhere.push("t.country_code='TH'");
   if (tripType === "international")
@@ -650,10 +648,7 @@ export async function loadTripDirectory(
     statusCountValues.push(selectedYears);
     statusCountWhere.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${statusCountValues.length}::int[])`);
   }
-  if (search) {
-    statusCountValues.push(`%${search}%`);
-    statusCountWhere.push(`(name ILIKE $${statusCountValues.length} OR destination ILIKE $${statusCountValues.length} OR country_name ILIKE $${statusCountValues.length})`);
-  }
+  appendTripSearch(statusCountWhere, statusCountValues, search);
   const order =
     sort === "oldest"
       ? "t.start_date ASC,t.id ASC"

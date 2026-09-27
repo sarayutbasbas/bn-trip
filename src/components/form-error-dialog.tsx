@@ -43,7 +43,7 @@ export function FormErrorDialog({
       <div className="confirm-dialog error-dialog" role="alertdialog" aria-modal="true" aria-labelledby="form-error-title" aria-describedby="form-error-description">
         <span className="confirm-icon error-dialog-icon"><AlertTriangle size={22}/></span>
         <h2 id="form-error-title">{title}</h2>
-        <p id="form-error-description">{description}</p>
+        <p id="form-error-description" style={{ whiteSpace: "pre-line", maxHeight: "45dvh", overflowY: "auto", textAlign: "start" }}>{description}</p>
         <div className="confirm-actions error-dialog-actions">
           <button ref={buttonRef} type="button" className="confirm-delete" onClick={onClose}>ตกลง</button>
         </div>

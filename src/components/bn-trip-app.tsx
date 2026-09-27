@@ -26,6 +26,8 @@ import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
 import { TripNoteField } from "@/src/components/trip-note-field";
+import { TripImportSettings } from "@/src/components/trip-import-settings";
+import { fetchTripDirectoryWindow } from "@/src/lib/client-trip-pagination";
 import { ideaCountdown, ideaTargetDate } from "@/src/lib/trip-idea-display";
 import type { TripIdea } from "@/src/lib/trip-ideas";
 import { TripSegmentedFilter, type TripFilterOption } from "@/src/components/trip-segmented-filter";
@@ -3857,6 +3859,12 @@ function TripsDirectory({
   const [now] = useState(() => Date.now());
   const skipInitialFetch = useRef(Boolean(initialData));
   const hasContentRef = useRef(Boolean(initialData));
+  const visibleTripCountRef = useRef(Math.max(20, initialData?.items.length || 0));
+  const activeFiltersRef = useRef(JSON.stringify([status, tripType, selectedYears, queryText.trim(), sort]));
+  const directoryRequestRef = useRef(0);
+  const refreshingDirectoryRef = useRef(false);
+  const loadMoreControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => loadMoreControllerRef.current?.abort(), []);
   const lastRestoreRefreshRef = useRef(0);
   const restoredFocusRef = useRef(false);
   useEffect(()=>{if(!filtersOpen)return;const root=document.documentElement;root.classList.add("confirm-open");return()=>root.classList.remove("confirm-open")},[filtersOpen]);
@@ -3927,6 +3935,15 @@ function TripsDirectory({
       return;
     }
     const controller = new AbortController();
+    const requestId = ++directoryRequestRef.current;
+    loadMoreControllerRef.current?.abort();
+    loadMoreControllerRef.current = null;
+    const filterKey = JSON.stringify([status, tripType, selectedYears, queryText.trim(), sort]);
+    if (activeFiltersRef.current !== filterKey) {
+      visibleTripCountRef.current = 20;
+      activeFiltersRef.current = filterKey;
+    }
+    refreshingDirectoryRef.current = true;
     const timer = window.setTimeout(
       async () => {
         const showInitialLoading = !hasContentRef.current;
@@ -3953,12 +3970,8 @@ function TripsDirectory({
           { scroll: false },
         );
         try {
-          const response = await fetch(`/api/trips?${params}`, {
-            signal: controller.signal,
-            cache: "no-store",
-          });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error);
+          const data = await fetchTripDirectoryWindow<Trip>(params, visibleTripCountRef.current, controller.signal);
+          if (controller.signal.aborted || requestId !== directoryRequestRef.current) return;
           const nextItems = applyCachedTripReviewSummaries(
             Array.isArray(data.items) ? data.items : [],
           );
@@ -3968,6 +3981,7 @@ function TripsDirectory({
             ...(tripListCache || []).filter((trip) => !nextIds.has(trip.id)),
           ];
           setItems(nextItems);
+          visibleTripCountRef.current = Math.max(20, nextItems.length);
           setYears(Array.isArray(data.years) ? data.years : []);
           if(data.statusCounts)setStatusCounts({all:Number(data.statusCounts.all||0),ongoing:Number(data.statusCounts.ongoing||0),upcoming:Number(data.statusCounts.upcoming||0),past:Number(data.statusCounts.past||0)});
           setHasMore(Boolean(data.hasMore));
@@ -3982,6 +3996,7 @@ function TripsDirectory({
           }
         } finally {
           if (!controller.signal.aborted) {
+            refreshingDirectoryRef.current = false;
             setLoading(false);
             onRefreshComplete?.();
           }
@@ -4006,6 +4021,10 @@ function TripsDirectory({
     onRefreshComplete,
   ]);
   async function loadMore() {
+    if (loadMoreControllerRef.current || refreshingDirectoryRef.current) return;
+    const controller = new AbortController();
+    loadMoreControllerRef.current = controller;
+    const requestId = directoryRequestRef.current;
     setLoadingMore(true);
     const params = new URLSearchParams({
       mode: "list",
@@ -4018,15 +4037,20 @@ function TripsDirectory({
     if (selectedYears.length) params.set("year", selectedYears.join(","));
     if (queryText.trim()) params.set("q", queryText.trim());
     try {
-      const response = await fetch(`/api/trips?${params}`);
+      const response = await fetch(`/api/trips?${params}`, { signal: controller.signal, cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      if (controller.signal.aborted || requestId !== directoryRequestRef.current) return;
+      visibleTripCountRef.current = items.length + (Array.isArray(data.items) ? data.items.length : 0);
       setItems((current) => [
         ...current,
         ...(Array.isArray(data.items) ? data.items : []),
       ]);
       setHasMore(Boolean(data.hasMore));
+    } catch (error) {
+      if (!controller.signal.aborted) console.error("Load more trips failed", error);
     } finally {
+      if (loadMoreControllerRef.current === controller) loadMoreControllerRef.current = null;
       setLoadingMore(false);
     }
   }
@@ -7516,6 +7540,9 @@ function SettingsContent({
         </a>
         </SettingsGlass>
         <SettingsGlass>
+        <TripImportSettings onImported={() => { tripListCache = null; dashboardSnapshotCache = null; }} />
+        </SettingsGlass>
+        <SettingsGlass>
         <article className="card payment-settings-card">
           <div className="section-head">
             <div>
@@ -10202,7 +10229,7 @@ function ModalForm({
                     name="outboundTime"
                     type="time"
                     required
-                    defaultValue={localTime(modal.trip?.outbound_departure_at, modal.preset?.outboundTime || "")}
+                    defaultValue={modal.trip ? localTime(modal.trip.outbound_departure_at, "08:00") : "08:00"}
                     label={t("เวลาเดินทางไป")}
                   />
                 </div>

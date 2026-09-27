@@ -8783,6 +8783,18 @@ html.dark .settings-liquid-glass .card {
   color: var(--muted);
   font-size: 9px;
 }
+.trip-import-settings { display: grid; gap: 12px; }
+.trip-import-icon { color: #0ba578; }
+.trip-import-settings > p { margin: 0; font-size: 12px; color: var(--muted); }
+.trip-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.trip-import-actions button { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 140px; font-size: 12px; padding: 10px; }
+.trip-import-preview { padding-left: 24px; margin: 12px 0; }
+.trip-import-preview li { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.trip-import-preview li > * { display: block; overflow-wrap: anywhere; }
+.trip-import-preview span, .trip-import-preview small { color: var(--muted); font-size: 12px; }
+.trip-import-success { display: flex; gap: 8px; font-size: 13px; color: #0ba578; }
+.trip-import-success svg { flex-shrink: 0; }
+.trip-import-success a { text-decoration: underline; }
 .timeline-location-image-status {
   min-height: 34px;
   margin: 0 2px 1px;
