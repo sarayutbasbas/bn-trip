@@ -1,4 +1,6 @@
 "use client";
+import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
+import { TripCoverArt, TripCoverCarousel } from "./trip-cover-gallery";
 import { prepareTripPlanDownload, saveTripPlanDownload } from "@/src/lib/trip-plan-download";
 import { useExpenseGuests, EXPENSE_GUESTS_CHANGED_EVENT } from "./use-expense-guests";
 import { ExpensePeopleFields } from "./expense-people-fields";
@@ -263,6 +265,7 @@ type ExpenseGuest = {
   name: string;
 };
 export type Trip = {
+  cover_image_urls?: string[];
   id: string;
   name: string;
   note?: string;
@@ -529,6 +532,7 @@ type StorageMetric = {
 type StorageUsage = { metrics: StorageMetric[]; updatedAt: string };
 const DEFAULT_TRIP_COVER = "/travel-postcard-fallback.jpg";
 export type TripCreationPreset = {
+  coverImageUrls?: string[];
   sourceIdeaId: string;
   destination: string;
   note: string;
@@ -2464,7 +2468,6 @@ function TripCard({
   priority?: boolean;
 }) {
   const t = useT();
-  const coverUrl = trip.cover_image_url || DEFAULT_TRIP_COVER;
   const temporal = tripTemporalStatus(trip, now);
   const budget = Number(trip.budget_thb || 0);
   const actualSpent = Number(trip.actual_spent_thb || 0);
@@ -2491,13 +2494,7 @@ function TripCard({
         aria-label={`${past ? "View" : "Open"} trip ${trip.name}`}
       />
       <div className="trip-cover">
-        <TripCoverImage
-          src={coverUrl}
-          alt={`รูปปก ${trip.name}`}
-          sizes="(max-width: 600px) calc(100vw - 32px), 520px"
-          priority={priority}
-          className="trip-cover-image"
-        />
+        <TripCoverArt record={trip} sizes="(max-width: 600px) calc(100vw - 32px), 520px" priority={priority} />
         <span />
         {!past && trip.has_incomplete_setup && (
           <i
@@ -2562,15 +2559,7 @@ function HomeTripIdeaCard({
     <article className="trip-card home-idea-card">
       <button type="button" className="trip-card-link" onClick={open} aria-label={`เปิดทริปที่เล็งไว้ ${idea.name}`} />
       <div className="trip-cover">
-        <Image
-          src={idea.cover_image_url || DEFAULT_TRIP_COVER}
-          alt={`รูปปก ${idea.name}`}
-          fill
-          sizes="(max-width: 600px) 50vw, 380px"
-          priority={priority}
-          unoptimized
-          className="trip-cover-image"
-        />
+        <TripCoverArt record={idea} sizes="(max-width: 600px) 50vw, 380px" priority={priority} />
         {countdown && <TripCountdownBadge label={countdown} />}
         <SharedTripAvatars members={idea.members} limit={3} onClick={open} actionLabel="ผู้ร่วมวางแผน" />
       </div>
@@ -3694,13 +3683,7 @@ function CompactTripCard({
         />
       )}
       <div className="compact-trip-cover">
-        <TripCoverImage
-          src={trip.cover_image_url || DEFAULT_TRIP_COVER}
-          alt={`รูปปก ${trip.name}`}
-          sizes="(max-width: 600px) 42vw, 180px"
-          priority={priority}
-          className="compact-trip-cover-image"
-        />
+        <TripCoverArt record={trip} sizes="(max-width: 600px) 42vw, 180px" priority={priority} />
         {ongoing ? <span className="compact-trip-status">
           <Navigation size={12} />
           <span>{status}</span>
@@ -4146,7 +4129,6 @@ function TripHeader({
 }) {
   const t = useT();
   const now = useMinuteClock();
-  const coverUrl = trip.cover_image_url || DEFAULT_TRIP_COVER;
   const ended = tripHasEnded(trip, now);
   const temporal = tripTemporalStatus(trip, now);
   const countdownLabel = !trip.outbound_departure_at
@@ -4156,15 +4138,7 @@ function TripHeader({
       : t(tripDaysUntilLabel(temporal.daysUntil));
   return (
     <div className="trip-detail-head has-cover">
-      <div className="trip-detail-image-frame">
-        <TripCoverImage
-          src={coverUrl}
-          alt={`รูปปก ${trip.name}`}
-          sizes="100vw"
-          priority
-          className="trip-detail-cover-image"
-        />
-      </div>
+      <TripCoverCarousel key={JSON.stringify(tripCovers(trip))} record={trip} />
       {goBack && (
         <button className="trip-cover-back" type="button" onClick={goBack} aria-label={t("ย้อนกลับ")}>
           <ChevronLeft size={21} />
@@ -7827,6 +7801,40 @@ export function ConfirmDialog({
   );
 }
 
+export function TripCoverPicker({ value, onChange }: { value: CoverDraft[]; onChange: (value: CoverDraft[]) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const editing = useRef<number | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = value.map((entry) => typeof entry === "string" ? entry : URL.createObjectURL(entry));
+    setPreviews(urls);
+    return () => urls.forEach((url, index) => { if (typeof value[index] !== "string") URL.revokeObjectURL(url); });
+  }, [value]);
+  function choose(index: number | null) {
+    editing.current = index;
+    if (input.current) { input.current.value = ""; input.current.click(); }
+  }
+  return <div className="trip-cover-picker">
+    <div className="trip-cover-picker-label"><strong>รูปปกทริป</strong><small>{value.length}/4 รูป · รูปแรกเป็นรูปหลัก</small></div>
+    <div className="trip-cover-picker-thumbnails">
+      {value.map((_, index) => <div className="trip-cover-picker-item" key={index}>
+        <button type="button" className="trip-cover-picker-image" onClick={() => choose(index)} aria-label={`เปลี่ยนรูปปกที่ ${index + 1}`}>
+          {previews[index] && <Image src={previews[index]} alt={`รูปปกที่ ${index + 1}`} fill sizes="100px" unoptimized />}
+          <span>{index + 1}</span>
+        </button>
+        <button className="trip-cover-picker-delete" type="button" aria-label={`ลบรูปปกที่ ${index + 1}`} onClick={() => onChange(value.filter((_, position) => position !== index))}><X size={15} /></button>
+        {index > 0 && <button className="trip-cover-picker-first" type="button" onClick={() => onChange([value[index], ...value.filter((_, position) => position !== index)])}>ใช้เป็นรูปแรก</button>}
+      </div>)}
+      {value.length < 4 && <button type="button" className="trip-cover-picker-add" onClick={() => choose(null)}><Plus size={24} /><span>เพิ่มรูป</span></button>}
+    </div>
+    <div hidden><CoverImagePicker fileInputRef={input} onChange={(file) => {
+      if (!file) return;
+      if (editing.current === null) { if (value.length < 4) onChange([...value, file]); }
+      else onChange(value.map((entry, index) => index === editing.current ? file : entry));
+    }} /></div>
+  </div>;
+}
+
 type CropSource = { file: File; image: HTMLImageElement; url: string };
 
 export function CoverImagePicker({
@@ -7834,17 +7842,20 @@ export function CoverImagePicker({
   onChange,
   variant = "cover",
   removable = false,
+  fileInputRef,
 }: {
   existingUrl?: string | null;
   onChange: (file: File | null) => void;
   variant?: "cover" | "square";
   removable?: boolean;
+  fileInputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const t = useT();
   const square = variant === "square";
   const outputWidth = square ? 640 : 1600;
   const outputHeight = square ? 640 : 900;
-  const inputRef = useRef<HTMLInputElement>(null);
+  const ownInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = fileInputRef || ownInputRef;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const objectUrls = useRef<string[]>([]);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -7859,6 +7870,7 @@ export function CoverImagePicker({
   const [preview, setPreview] = useState(existingUrl || "");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [cropping, setCropping] = useState(false);
+  const [showCoverGuide, setShowCoverGuide] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [error, setError] = useState("");
@@ -7986,7 +7998,7 @@ export function CoverImagePicker({
     const canvas = canvasRef.current;
     if (!start || !canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const ratio = outputWidth / rect.width;
+    const ratio = 1 / Math.max(rect.width / outputWidth, rect.height / outputHeight);
     setOffset(
       clampOffset({
         x: start.offsetX + (event.clientX - start.clientX) * ratio,
@@ -8068,8 +8080,12 @@ export function CoverImagePicker({
         </div>
         <span />
       </header>
-      <main>
-        <div className={`fixed-crop-frame ${square ? "is-square" : ""}`}>
+      <main className={!square ? "trip-crop-main" : undefined}>
+        {!square && <div className="trip-crop-guide-controls">
+          <button type="button" aria-pressed={showCoverGuide} onClick={() => setShowCoverGuide((value) => !value)}>{showCoverGuide ? "ซ่อนตัวอย่างปกมือถือ" : "แสดงตัวอย่างปกมือถือ"}</button>
+          <small>ข้อมูลตัวอย่างไม่ติดในรูปที่บันทึก · ลากและจีบเพื่อจัดรูป</small>
+        </div>}
+        <div className={`fixed-crop-frame ${square ? "is-square" : ""}${!square && showCoverGuide ? " has-mobile-cover-guide" : ""}`}>
           <canvas
             ref={canvasRef}
             onPointerDown={startMove}
@@ -8077,10 +8093,23 @@ export function CoverImagePicker({
             onPointerUp={endMove}
             onPointerCancel={endMove}
           />
-          <span className="crop-gesture-hint">
+          {!square && showCoverGuide ? <div className="trip-crop-guide" aria-hidden="true">
+            <div className="trip-crop-guide-nav"><i><ChevronLeft size={21} /></i><i><Pencil size={20} /></i></div>
+            <div className="trip-crop-guide-copy">
+              <TripCountdownBadge label="อีก 105 วัน" />
+              <strong>ทดสอบชื่อทริปยาวสองบรรทัด เพื่อทดสอบการแสดงรูป</strong>
+              <div><span className="trip-crop-guide-flag">🇹🇭</span> ฉะเชิงเทรา, ไทย</div>
+              <small>19 ก.ย. 69 - 19 ก.ย. 69 (1 วัน)</small>
+            </div>
+            <div className="trip-crop-guide-members">
+              <span className="trip-crop-guide-rating"><Star size={14} fill="#ffd166" color="#ffd166" /> 3.9 <small>(2)</small></span>
+              <div className="trip-crop-guide-avatars"><span><UserRound size={24} /></span><span><UserRound size={24} /></span></div>
+            </div>
+            <div className="trip-crop-guide-dots"><span /><span className="active" /><span /><span /></div>
+          </div> : <><span className="crop-gesture-hint">
             {t("ลากเพื่อขยับ · จีบเพื่อซูม")}
           </span>
-          <span className="crop-ratio">{square ? "1 : 1" : "16 : 9"}</span>
+          <span className="crop-ratio">{square ? "1 : 1" : "16 : 9"}</span></>}
         </div>
       </main>
       <footer>
@@ -9560,7 +9589,8 @@ function ModalForm({
   const t = useT();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverDrafts, setCoverDrafts] = useState<CoverDraft[]>(() => modal.type === "trip" && (modal.trip || modal.preset) ? tripCovers({cover_image_url:modal.trip?.cover_image_url || modal.preset?.coverImageUrl,cover_image_urls:modal.trip?.cover_image_urls || modal.preset?.coverImageUrls}).filter(url=>url!==DEFAULT_TRIP_COVER) : []);
+  const [coversChanged,setCoversChanged] = useState(false);
   const [summaryImageFile, setSummaryImageFile] = useState<File | null>(null);
   const [summaryImagePreview, setSummaryImagePreview] = useState(modal.type==="trip"?modal.trip?.summary_image_url||"":"");
   const [summaryImageRemoved, setSummaryImageRemoved] = useState(false);
@@ -9884,22 +9914,8 @@ function ModalForm({
     try {
       if (modal.type === "trip") {
         if (!tripDestinations.length) throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");
-        let coverImageUrl = modal.trip?.cover_image_url || modal.preset?.coverImageUrl || DEFAULT_TRIP_COVER;
-        if (coverFile) {
-          const upload = new FormData();
-          upload.set("file", coverFile);
-          const response = await fetch("/api/uploads", {
-            method: "POST",
-            body: upload,
-          });
-          const result = await response.json();
-          if (!response.ok)
-            throw new Error(result.error || "อัปโหลดรูปไม่สำเร็จ");
-          if (typeof result.url !== "string" || !result.url) {
-            throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");
-          }
-          coverImageUrl = result.url;
-        }
+        const coverImageUrls = await uploadTripCovers(coverDrafts);
+        const coverImageUrl = coverImageUrls[0];
         let summaryImageUrl=summaryImageRemoved?null:modal.trip?.summary_image_url||null;
         if(summaryImageFile){
           const upload=new FormData();upload.set("file",summaryImageFile);
@@ -9922,6 +9938,7 @@ function ModalForm({
           shoppingBudgetThb: amount(f, "shoppingBudgetThb"),
           hasFlights: f.get("hasFlights") === "true",
           coverImageUrl,
+          coverImageUrls,
           summaryImageUrl,
         });
       }
@@ -10007,7 +10024,7 @@ function ModalForm({
         backdropClassName="trip-modal-backdrop"
         backdropRef={modalBackdropRef}
         submitLabel={t(saving ? "กำลังบันทึก…" : "บันทึก")}
-        submitDisabled={saving || (!hasChanges && !coverFile && !summaryImageFile && !summaryImageRemoved && !timelineImageFile && !timelineImageRemoved && !documentFile && pendingTimelineDocuments.length===0)}
+        submitDisabled={saving || (!hasChanges && !coversChanged && !summaryImageFile && !summaryImageRemoved && !timelineImageFile && !timelineImageRemoved && !documentFile && pendingTimelineDocuments.length===0)}
         onDelete={canDeleteCurrent && ((modal.type === "place" && modal.item) || (modal.type === "trip" && modal.trip)) ? () => setPendingDelete(true) : undefined}
         deleteDisabled={saving}
         deleteLabel={t(modal.type === "trip" ? "ลบทริป" : "ลบรายการ")}
@@ -10015,13 +10032,7 @@ function ModalForm({
         <div className="form-grid">
           {modal.type === "trip" && (
             <>
-              <CoverImagePicker
-                existingUrl={modal.trip?.cover_image_url || modal.preset?.coverImageUrl}
-                onChange={(file) => {
-                  setCoverFile(file);
-                  checkForChanges();
-                }}
-              />
+              <TripCoverPicker value={coverDrafts} onChange={(value) => { setCoverDrafts(value); setCoversChanged(true); }} />
               <div className="field">
                 <label>{t("ชื่อทริป")}</label>
                 <input name="name" required defaultValue={modal.trip?.name || modal.preset?.destination} />

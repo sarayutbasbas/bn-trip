@@ -1,9 +1,11 @@
 "use client";
+import Image from "next/image";
+import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
+import { TripCoverArt } from "./trip-cover-gallery";
 import { FetchSkeleton } from "@/src/components/fetch-skeleton";
 
 import { useEffect,useMemo,useState,type FormEvent,type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarDays,CalendarRange,CheckCircle2,Compass,Globe2,Heart,LogOut,Luggage,MapPin,MapPinned,PlaneTakeoff,Plus,RefreshCw,RotateCcw,Search,Settings2,Trash2,UserPlus,X } from "lucide-react";
@@ -11,7 +13,7 @@ import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas"
 import { getCurrentAccount } from "@/src/lib/client-account";
 import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
 import { TRIP_DESTINATION_OPTIONS,type TripDestinationOption } from "@/src/lib/travel-badges";
-import { ConfirmDialog,CountryFlagImage,CountryPicker,CoverImagePicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
+import { ConfirmDialog,CountryFlagImage,CountryPicker,TripCoverPicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
 import { PageIntro } from "@/src/components/page-intro";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications,type InvitationNotification } from "@/src/components/invitation-notifications";
@@ -24,7 +26,7 @@ import { tripMatchesSearch } from "@/src/lib/destination-search";
 import { TripMemberFilter } from "@/src/components/trip-member-filter";
 import { collectFilterMembers, matchesMemberFilter } from "@/src/lib/trip-member-filter";
 
-type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string};
+type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string;coverImageUrls:string[]};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
 type IdeaCollaborator={id:string;email:string;user_id:string|null;joined:boolean;display_name:string|null;avatar_url:string|null};
 type HeaderProfile={id:string;email:string;display_name:string;avatar_url:string|null};
@@ -54,7 +56,7 @@ function IdeaCard({idea,edit,convert,share}:{idea:TripIdea;edit:()=>void;convert
   const targetDate=ideaTargetDate(idea);
   const activate=(event:KeyboardEvent<HTMLElement>)=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();edit()}};
   return <article className={`compact-trip-card trip-idea-card is-${idea.kind} ${idea.members?.length>1?"has-shared-members":""}`} role="button" tabIndex={0} onClick={edit} onKeyDown={activate} aria-label={`แก้ไข ${idea.name}`}>
-    <div className="compact-trip-cover"><Image className="compact-trip-cover-image" src={idea.cover_image_url||"/travel-postcard-fallback.jpg"} alt={`รูปปก ${idea.name}`} fill sizes="(max-width: 639px) 42vw, 260px" unoptimized/>{countdown?<TripCountdownBadge label={countdown}/>:null}</div>
+    <div className="compact-trip-cover"><TripCoverArt record={idea} sizes="(max-width: 639px) 42vw, 260px"/>{countdown?<TripCountdownBadge label={countdown}/>:null}</div>
     <div className="compact-trip-body trip-idea-copy"><h3>{idea.name}</h3>
       <p>{country?<span className="trip-country-flag"><CountryFlagImage code={country.code} label=""/></span>:<MapPinned size={13}/>}<span>{formatTripDestination(idea.destination,idea.country_code,country?.nameTh,idea.trip_destinations)}</span></p>
       {targetDate?<small className="trip-idea-target-date"><CalendarDays size={11}/><span>{targetDate}</span></small>:null}
@@ -80,12 +82,12 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   const [kind,setKind]=useState<TripIdeaKind>(promote?"planned":current?.kind||"planned");
   const [targetMonth,setTargetMonth]=useState<number|null>(current?current.target_month:promote?null:new Date().getMonth()+1);
   const [targetYear,setTargetYear]=useState<number|null>(current?current.target_year:promote?null:defaultYear);
-  const [note,setNote]=useState(current?.note||"");const [coverFile,setCoverFile]=useState<File|null>(null);const [error,setError]=useState("");
+  const [note,setNote]=useState(current?.note||"");const [covers,setCovers]=useState<CoverDraft[]>(()=>current?tripCovers(current).filter(url=>url!=="/travel-postcard-fallback.jpg"):[]);const [coversChanged,setCoversChanged]=useState(false);const [error,setError]=useState("");
   const validationIncomplete=!name.trim()||!locations.length||(kind==="planned"&&(!targetMonth||!targetYear));
   const locationIds=locations.map(location=>location.id).sort();
   const originalLocationIds=(current?.trip_destinations||[]).map(location=>location.id).sort();
-  const unchanged=Boolean(current)&&!coverFile&&name.trim()===(current?.name||"").trim()&&countryCode===(current?.country_code||initialCountry.code)&&locationIds.join("|")===originalLocationIds.join("|")&&kind===current?.kind&&targetMonth===(current?.target_month||null)&&targetYear===(current?.target_year||null)&&note.trim()===(current?.note||"").trim();
-  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");let coverImageUrl=current?.cover_image_url||"/travel-postcard-fallback.jpg";if(coverFile){const upload=new FormData();upload.set("file",coverFile);const uploaded=await readResponse(await fetch("/api/uploads",{method:"POST",body:upload}));if(typeof uploaded.url!=="string"||!uploaded.url)throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");coverImageUrl=uploaded.url}await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl})}catch(caught){setError((caught as Error).message)}}
+  const unchanged=Boolean(current)&&!coversChanged&&name.trim()===(current?.name||"").trim()&&countryCode===(current?.country_code||initialCountry.code)&&locationIds.join("|")===originalLocationIds.join("|")&&kind===current?.kind&&targetMonth===(current?.target_month||null)&&targetYear===(current?.target_year||null)&&note.trim()===(current?.note||"").trim();
+  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");const coverImageUrls=await uploadTripCovers(covers);const coverImageUrl=coverImageUrls[0];await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl,coverImageUrls})}catch(caught){setError((caught as Error).message)}}
   return <><BottomSheet
     title={promote?"กำหนดช่วงเวลาที่อยากไป":current?"แก้ไขรายการ":"เพิ่มสถานที่ที่อยากไป"}
     subtitle={promote?"เลือกเดือนและปีเพื่อย้ายมาเป็นทริปที่เล็งไว้":current?"แก้ไขข้อมูลของทริปที่เล็งไว้หรือลิสต์สักวันหนึ่ง":"บันทึกสถานที่ที่อยากเดินทางไปในอนาคต"}
@@ -100,7 +102,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     deleteIcon={current?.access_role==="collaborator"?<LogOut size={18}/>:undefined}
   >
     <div className="form-grid trip-idea-form-grid">
-    <CoverImagePicker existingUrl={current?.cover_image_url||null} onChange={setCoverFile}/>
+    <TripCoverPicker value={covers} onChange={value=>{setCovers(value);setCoversChanged(true)}}/>
     <label className="trip-idea-field"><span>ชื่อทริป</span><input required maxLength={160} value={name} onChange={event=>setName(event.target.value)} placeholder="เช่น Fukuoka Food Trip"/></label>
     <CountryPicker value={countryCode} onChange={nextCountryCode=>{setCountryCode(nextCountryCode);setLocations([])}} note="เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง"/>
     <TripDestinationPicker countryCode={countryCode} selected={locations} onChange={setLocations}/>

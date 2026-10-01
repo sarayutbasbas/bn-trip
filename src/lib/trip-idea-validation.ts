@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { tripCoverUrlsSchema } from "./trip-cover-validation";
 import { tripNoteSchema } from "@/src/lib/trip-note";
 
 export const tripIdeaSchema=z.object({
   name:z.string().trim().min(1).max(160),countryCode:z.string().length(2),locationIds:z.array(z.string().min(3).max(800)).min(1).max(20),
   kind:z.enum(["planned","someday"]),targetMonth:z.number().int().min(1).max(12).nullable(),targetYear:z.number().int().min(2020).max(2200).nullable(),
-  note:tripNoteSchema.default(""),coverImageUrl:z.string().max(500).default("/travel-postcard-fallback.jpg"),
+  note:tripNoteSchema.default(""),coverImageUrl:z.string().max(500).default("/travel-postcard-fallback.jpg"),coverImageUrls:tripCoverUrlsSchema.optional(),
 }).strict().superRefine((value,context)=>{
   if(Boolean(value.targetMonth)!==Boolean(value.targetYear)){context.addIssue({code:"custom",path:["targetMonth"],message:"กรุณาเลือกเดือนและปีให้ครบ"});return;}
   if(value.kind==="planned"&&(!value.targetMonth||!value.targetYear)){context.addIssue({code:"custom",path:["targetMonth"],message:"กรุณาเลือกเดือนและปี"});return;}

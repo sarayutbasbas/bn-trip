@@ -638,6 +638,15 @@ const migrations = [
        WHERE itinerary.trip_id=accommodation.trip_id AND cost.item->>'id'=accommodation.cost_item_id::text`,
     ],
   },
+  {
+    version: 50,
+    statements: [
+      "ALTER TABLE trips ADD COLUMN IF NOT EXISTS cover_image_urls TEXT[] NOT NULL DEFAULT '{}'",
+      "ALTER TABLE trip_ideas ADD COLUMN IF NOT EXISTS cover_image_urls TEXT[] NOT NULL DEFAULT '{}'",
+      "ALTER TABLE trips ADD CONSTRAINT trips_cover_images_limit CHECK (cardinality(cover_image_urls) <= 4)",
+      "ALTER TABLE trip_ideas ADD CONSTRAINT trip_ideas_cover_images_limit CHECK (cardinality(cover_image_urls) <= 4)",
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

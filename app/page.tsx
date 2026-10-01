@@ -31,6 +31,7 @@ export default async function Home({searchParams}:{searchParams:Promise<{authErr
     locationIds:idea.trip_destinations.map(destination=>destination.id),
     tripDestinations:idea.trip_destinations.map(destination=>({...destination,searchTerms:[destination.nameTh,destination.nameEn].filter(Boolean)})),
     coverImageUrl:idea.cover_image_url,
+    coverImageUrls:idea.cover_image_urls,
     outboundDate:`${idea.target_year}-${String(idea.target_month).padStart(2,"0")}-01`,
     outboundTime:"09:00",
   }:null;
