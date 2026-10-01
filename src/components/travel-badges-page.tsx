@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { badgeMatchesCategory, badgesHrefForScope, canRemoveManualBadgeVisit, latestTripBadges } from "@/src/lib/travel-badges";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowRight,
@@ -27,6 +28,7 @@ import type {
   TravelBadgeCollection,
 } from "@/src/lib/travel-badges";
 import { exportTravelMap } from "@/src/lib/export-travel-map";
+import { matchMapBadge } from "@/src/lib/badge-map-match";
 type BadgeFilter = "all" | TravelBadgeCategory;
 
 const CATEGORY_META: Record<TravelBadgeCategory, { label: string; eyebrow: string }> = {
@@ -47,10 +49,6 @@ function geometryRings(geometry: MapGeometry): number[][][][] {
   return geometry.type === "Polygon"
     ? [geometry.coordinates as number[][][]]
     : geometry.coordinates as number[][][][];
-}
-
-function normalizedMapName(value: string) {
-  return value.toLowerCase().replace(/province|prefecture|metropolis|fu|to|do|ken/gi, "").replace(/[^a-z0-9]/g, "");
 }
 
 function normalizedViewport(viewport: MapViewport, width: number, height: number): MapViewport {
@@ -87,8 +85,11 @@ function AdministrativeMap({
   const mapWidth = category === "thailand" ? 520 : 900;
   const mapHeight = isWorld ? 450 : category === "thailand" ? 720 : 620;
   const [viewport, setViewport] = useState<MapViewport>({ zoom: MIN_MAP_ZOOM, centerX: mapWidth / 2, centerY: mapHeight / 2 });
-  const drag = useRef<{ pointerX: number; pointerY: number; centerX: number; centerY: number } | null>(null);
+  const drag = useRef<{ pointerId: number; pointerX: number; pointerY: number; centerX: number; centerY: number; unitsPerPixel: number; zoom: number } | null>(null);
+  const panFrame = useRef<number | null>(null);
+  const pendingPan = useRef<MapViewport | null>(null);
   const dragged = useRef(false);
+  useEffect(() => () => { if (panFrame.current !== null) cancelAnimationFrame(panFrame.current); }, []);
   useEffect(() => {
     let active = true;
     fetch(isWorld ? "/maps/world-countries.geojson" : `/maps/${category === "thailand" ? "thailand" : "japan"}-adm1.geojson`)
@@ -133,23 +134,26 @@ function AdministrativeMap({
   const viewBox = `${safeViewport.centerX - viewWidth / 2} ${safeViewport.centerY - viewHeight / 2} ${viewWidth} ${viewHeight}`;
 
   function changeZoom(nextZoom: number) {
+    drag.current = null;
+    pendingPan.current = null;
+    if (panFrame.current !== null) cancelAnimationFrame(panFrame.current);
+    panFrame.current = null;
     setViewport((current) => normalizedViewport({ ...current, zoom: nextZoom }, projected.width, projected.height));
   }
 
-  const badgeForFeature = (feature: MapFeature) => {
-    const shapeName = normalizedMapName(feature.properties.shapeName || "");
-    return badges.find((badge) => {
-      const candidates = [badge.nameEn, badge.slug.replaceAll("_", " "), ...badge.aliases].map(normalizedMapName);
-      return candidates.some((candidate) => candidate && (shapeName === candidate || shapeName.includes(candidate) || candidate.includes(shapeName)));
+  const mappedPaths = useMemo(() => {
+    return projected.paths.map(item => {
+      const badge = matchMapBadge(item.feature.properties.shapeName || "", badges);
+      return {...item, badge};
     });
-  };
+  }, [projected.paths, badges]);
 
   return (
     <div className={`administrative-map administrative-map-${category}`}>
       <div className="administrative-map-controls" aria-label="เครื่องมือซูมแผนที่">
         <button type="button" onClick={() => changeZoom(safeViewport.zoom + .5)} disabled={safeViewport.zoom >= MAX_MAP_ZOOM} aria-label="ซูมเข้า"><ZoomIn size={16} /></button>
         <button type="button" onClick={() => changeZoom(safeViewport.zoom - .5)} disabled={safeViewport.zoom <= MIN_MAP_ZOOM} aria-label="ซูมออก"><ZoomOut size={16} /></button>
-        <button type="button" onClick={() => setViewport({ zoom: MIN_MAP_ZOOM, centerX: mapWidth / 2, centerY: mapHeight / 2 })} disabled={safeViewport.zoom === MIN_MAP_ZOOM} aria-label="แสดงแผนที่ทั้งหมด"><Maximize2 size={15} /></button>
+        <button type="button" onClick={() => changeZoom(MIN_MAP_ZOOM)} disabled={safeViewport.zoom === MIN_MAP_ZOOM} aria-label="แสดงแผนที่ทั้งหมด"><Maximize2 size={15} /></button>
       </div>
       {features.length ? (
         <svg
@@ -159,37 +163,42 @@ function AdministrativeMap({
           role="img"
           aria-label={isWorld ? "แผนที่จุดหมายทั่วโลก" : category === "thailand" ? "แผนที่จังหวัดประเทศไทย" : "แผนที่จังหวัดประเทศญี่ปุ่น"}
           onPointerDown={(event) => {
+            if (!event.isPrimary || event.button !== 0 || drag.current) return;
+            dragged.current = false;
             if (safeViewport.zoom <= MIN_MAP_ZOOM) return;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            drag.current = { pointerX: event.clientX, pointerY: event.clientY, centerX: safeViewport.centerX, centerY: safeViewport.centerY };
+            const rect = event.currentTarget.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            // Keep the click targeted at the tapped province while capturing pans.
+            (event.target as Element).setPointerCapture(event.pointerId);
+            drag.current = { pointerId: event.pointerId, pointerX: event.clientX, pointerY: event.clientY, centerX: safeViewport.centerX, centerY: safeViewport.centerY, zoom: safeViewport.zoom, unitsPerPixel: Math.max(viewWidth / rect.width, viewHeight / rect.height) };
             dragged.current = false;
           }}
           onPointerMove={(event) => {
-            if (!drag.current) return;
-            const rect = event.currentTarget.getBoundingClientRect();
-            if (rect.width <= 0 || rect.height <= 0) return;
-            const deltaX = (event.clientX - drag.current.pointerX) * viewWidth / rect.width;
-            const deltaY = (event.clientY - drag.current.pointerY) * viewHeight / rect.height;
-            if (Math.abs(deltaX) + Math.abs(deltaY) > 2) dragged.current = true;
-            setViewport((current) => normalizedViewport({
-              ...current,
-              centerX: drag.current!.centerX - deltaX,
-              centerY: drag.current!.centerY - deltaY,
-            }, projected.width, projected.height));
+            const start = drag.current;
+            if (!start || start.pointerId !== event.pointerId) return;
+            const deltaX = (event.clientX - start.pointerX) * start.unitsPerPixel;
+            const deltaY = (event.clientY - start.pointerY) * start.unitsPerPixel;
+            if (Math.hypot(event.clientX - start.pointerX, event.clientY - start.pointerY) > 5) dragged.current = true;
+            if (!dragged.current) return;
+            pendingPan.current = normalizedViewport({zoom: start.zoom, centerX: start.centerX - deltaX, centerY: start.centerY - deltaY}, projected.width, projected.height);
+            if (panFrame.current === null) panFrame.current = requestAnimationFrame(() => {
+              panFrame.current = null;
+              const next = pendingPan.current;
+              pendingPan.current = null;
+              if (next) setViewport(next);
+            });
           }}
-          onPointerUp={() => { drag.current = null; window.setTimeout(() => { dragged.current = false; }, 0); }}
-          onPointerCancel={() => { drag.current = null; dragged.current = false; }}
-          onLostPointerCapture={() => {
-            drag.current = null;
-            window.setTimeout(() => { dragged.current = false; }, 0);
-          }}
+          onPointerUp={event => { if (drag.current?.pointerId === event.pointerId) drag.current = null; }}
+          onPointerCancel={event => { if (drag.current?.pointerId === event.pointerId) { drag.current = null; dragged.current = true; } }}
+          onLostPointerCapture={event => { if (drag.current?.pointerId === event.pointerId) drag.current = null; }}
         >
-          {projected.paths.map(({ feature, path }) => {
-            const badge = badgeForFeature(feature);
+          {mappedPaths.map(({ feature, path, badge }) => {
             return (
               <path
                 key={`${feature.properties.shapeISO || ""}:${feature.properties.shapeName}`}
                 d={path}
+                data-map-region={feature.properties.shapeName}
+                data-map-badge={badge?.id}
                 className={`${badge?.unlocked ? "is-visited" : ""} ${badge?.id === selectedId ? "is-selected" : ""}`}
                 onClick={(event) => {
                   if (badge && !dragged.current) selectBadge(badge.id);
@@ -198,7 +207,7 @@ function AdministrativeMap({
                 tabIndex={badge ? 0 : undefined}
                 role={badge ? "button" : undefined}
                 aria-label={badge ? `${badge.nameTh} · ${badge.unlocked ? "ไปมาแล้ว" : "ยังไม่ได้ไป"}` : feature.properties.shapeName}
-                onKeyDown={(event) => { if (badge && (event.key === "Enter" || event.key === " ")) selectBadge(badge.id); }}
+                onKeyDown={(event) => { if (badge && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); selectBadge(badge.id); } }}
               />
             );
           })}
@@ -211,7 +220,6 @@ function AdministrativeMap({
           ><title>{badge.nameTh}</title></circle>) : null}
         </svg>
       ) : <div className="administrative-map-loading">กำลังโหลดแผนที่…</div>}
-      <div className="administrative-map-legend"><span className="is-visited" /> ไปมาแล้ว <span /> ยังไม่ได้ไป</div>
       <small>Boundary data: Natural Earth (public domain) · OpenStreetMap contributors · geoBoundaries</small>
     </div>
   );
@@ -239,14 +247,36 @@ function BadgeArtwork({
   );
 }
 
-function BadgePreviewDialog({ badge, close }: { badge: TravelBadge; close: () => void }) {
+function BadgePreviewDialog({ badge, close, removeManualVisit }: { badge: TravelBadge; close: () => void; removeManualVisit: () => Promise<void> }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [failed, setFailed] = useState(false);
+  const [confirmRemoval, setConfirmRemoval] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [error, setError] = useState("");
+  const removalLock = useRef(false);
+  function requestClose() {
+    if (!removalLock.current) close();
+  }
+  async function removeVisit() {
+    if (removalLock.current || !canRemoveManualBadgeVisit(badge)) return;
+    removalLock.current = true;
+    setRemoving(true);
+    setError("");
+    try {
+      await removeManualVisit();
+      close();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "ยกเลิกไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      removalLock.current = false;
+      setRemoving(false);
+    }
+  }
   useEffect(() => {
     dialogRef.current?.showModal();
   }, []);
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    const handleKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape" && !removalLock.current) close(); };
     document.addEventListener("keydown", handleKeyDown);
     document.body.classList.add("has-badge-preview");
     document.documentElement.classList.add("has-badge-preview");
@@ -258,15 +288,25 @@ function BadgePreviewDialog({ badge, close }: { badge: TravelBadge; close: () =>
   }, [close]);
 
   return createPortal(
-    <dialog ref={dialogRef} className="badge-preview-backdrop" onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => { if (event.target === event.currentTarget) close(); }} aria-labelledby="badge-preview-title">
+    <dialog ref={dialogRef} className="badge-preview-backdrop" onCancel={(event) => { event.preventDefault(); requestClose(); }} onClick={(event) => { if (event.target === event.currentTarget) requestClose(); }} aria-labelledby="badge-preview-title" aria-busy={removing}>
       <section className="badge-preview-dialog">
-        <button type="button" className="badge-preview-close" onClick={close} aria-label="ปิดรูปเข็มกลัด" autoFocus><X size={22} /></button>
+        <button type="button" className="badge-preview-close" disabled={removing} onClick={requestClose} aria-label="ปิดรูปเข็มกลัด" autoFocus><X size={22} /></button>
         <div className="badge-preview-image">
           {failed ? <p role="alert">โหลดรูปไม่สำเร็จ กรุณาปิดแล้วลองอีกครั้ง</p> : <Image src={badge.image} alt={`เข็มกลัด ${badge.nameTh}`} fill sizes="(max-width: 600px) 84vw, 560px" unoptimized loading="eager" onError={() => setFailed(true)} />}
         </div>
         <div className="badge-preview-copy">
           <h2 id="badge-preview-title">{badge.nameTh}</h2>
           <p>{badge.nameEn}</p>
+          {canRemoveManualBadgeVisit(badge) ? <div className="badge-manual-removal">
+            {confirmRemoval ? <>
+              <p>ยกเลิกสถานะเคยไปแล้วที่กดรับเองใช่ไหม?</p>
+              <div>
+                <button type="button" disabled={removing} onClick={() => { setConfirmRemoval(false); setError(""); }}>เก็บไว้</button>
+                <button type="button" disabled={removing} onClick={removeVisit}>{removing ? "กำลังยกเลิก…" : "ยืนยันยกเลิก"}</button>
+              </div>
+            </> : <button type="button" onClick={() => setConfirmRemoval(true)}>ยกเลิกเคยไปแล้ว</button>}
+            {error ? <p role="alert">{error}</p> : null}
+          </div> : null}
         </div>
       </section>
     </dialog>, document.body
@@ -317,7 +357,7 @@ function BadgeGridCard({
   }
 
   return (
-    <article data-travel-badge-card={badge.id} className={`travel-badge-card ${badge.unlocked ? "is-unlocked" : "is-locked"} ${selected ? "is-selected" : ""} ${previewReady ? "is-preview-ready" : ""}`}>
+    <article tabIndex={-1} data-travel-badge-card={badge.id} className={`travel-badge-card ${badge.unlocked ? "is-unlocked" : "is-locked"} ${selected ? "is-selected" : ""} ${previewReady ? "is-preview-ready" : ""}`}>
       {badge.unlocked ? (
         <button
           type="button"
@@ -352,6 +392,7 @@ function BadgeGridCard({
         <small>{badge.nameEn}</small>
         <span className="travel-badge-status">{badge.unlocked ? <><CheckCircle2 size={12} /> {badge.visits.length} ทริป</> : <><LockKeyhole size={12} /> ยังไม่ปลดล็อก</>}</span>
       </button>
+      {canRemoveManualBadgeVisit(badge) ? <button type="button" className="badge-manual-manage" disabled={saving} onClick={() => previewBadge(badge)} aria-label={`ยกเลิกเคยไปแล้ว ${badge.nameTh}`}>ยกเลิกเคยไปแล้ว</button> : null}
       {previewReady && !badge.unlocked ? <div className="travel-badge-preview-trigger is-unlock-prompt">
         <button type="button" disabled={saving} onClick={unlockToday}><MapPinCheck size={16} /> {saving ? "กำลังบันทึก…" : "เคยไปแล้ว"}</button>
         {error ? <small>{error}</small> : null}
@@ -360,41 +401,78 @@ function BadgeGridCard({
   );
 }
 
+function focusBadgeCard(id: string, smooth = true) {
+  const card = document.querySelector<HTMLElement>(`[data-travel-badge-card="${CSS.escape(id)}"]`);
+  if (!card) return;
+  const sticky = document.querySelector<HTMLElement>(".badges-sticky-map, .badges-sticky-filter");
+  const stickyTop = sticky ? parseFloat(getComputedStyle(sticky).top) || 0 : 0;
+  card.style.scrollMarginTop = `${(sticky?.getBoundingClientRect().height || 0) + stickyTop + 12}px`;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  card.focus({preventScroll: true});
+  card.scrollIntoView({block: "start", behavior: smooth && !reducedMotion ? "smooth" : "instant"});
+  if (!reducedMotion) {
+    card.getAnimations().forEach(animation => animation.cancel());
+    card.animate([{boxShadow:"0 0 0 2px rgba(255,107,0,.7)"},{boxShadow:"0 0 0 6px rgba(255,107,0,.15)"},{boxShadow:"0 0 0 2px rgba(255,107,0,.7)"}], {duration:900,iterations:2});
+  }
+}
+
 export function TravelBadgesPage({
   collection,
   embedded = false,
+  highlightScope = "all",
+  initialCategory = "all",
+  initialFocus,
+  progressCard,
 }: {
   collection: TravelBadgeCollection;
   embedded?: boolean;
+  progressCard?: ReactNode;
+  highlightScope?: "all" | "domestic" | "international";
+  initialCategory?: BadgeFilter;
+  initialFocus?: string;
 }) {
-  const [category, setCategory] = useState<BadgeFilter>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [category, setCategory] = useState<BadgeFilter>(initialCategory);
+  const badgesHref = badgesHrefForScope(highlightScope);
+  const [selectedId, setSelectedId] = useState<string | null>(initialFocus || null);
   const [badges, setBadges] = useState(collection.badges);
+  const [sourceCollection, setSourceCollection] = useState(collection);
+  if (sourceCollection !== collection) {
+    setSourceCollection(collection);
+    setBadges(collection.badges);
+  }
   const [previewReadyId, setPreviewReadyId] = useState<string | null>(null);
   const [previewBadge, setPreviewBadge] = useState<TravelBadge | null>(null);
   const mapSection = useRef<HTMLElement>(null);
   const [savingMap, setSavingMap] = useState(false);
   const [mapMessage, setMapMessage] = useState("");
+  const [mapFile, setMapFile] = useState<{ key: string; file: File } | null>(null);
   const visibleBadges = useMemo(() => badges
-    .filter((badge) => category === "all" || badge.category === category)
-    .sort((a, b) => {
-      if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1;
-      const visitDifference = b.visits.length - a.visits.length;
-      return visitDifference || a.artworkIndex - b.artworkIndex;
-    }), [badges, category]);
+    .filter((badge) => badgeMatchesCategory(badge, category))
+    .sort((a, b) => a.nameTh.localeCompare(b.nameTh, "th") || a.id.localeCompare(b.id)), [badges, category]);
   const totals = useMemo(() => Object.fromEntries((Object.keys(CATEGORY_META) as TravelBadgeCategory[]).map((key) => {
     const items = badges.filter((badge) => badge.category === key);
     return [key, { unlocked: items.filter((badge) => badge.unlocked).length, total: items.length }];
   })) as TravelBadgeCollection["totals"], [badges]);
-  const selected = badges.find((badge) => badge.id === selectedId && (category === "all" || badge.category === category))
+  const selected = badges.find((badge) => badge.id === selectedId && badgeMatchesCategory(badge, category))
     || visibleBadges.find((badge) => badge.unlocked)
     || visibleBadges[0];
   const allUnlocked = Object.values(totals).reduce((sum, item) => sum + item.unlocked, 0);
   const allBadges = badges.length;
-  // A map selection must never replace the most frequently visited destination.
-  const mostVisited = visibleBadges
-    .filter((badge) => badge.visits.length > 0)
-    .sort((a, b) => b.visits.length - a.visits.length || a.nameTh.localeCompare(b.nameTh, "th"))[0];
+  const filterTotals = {...totals, international: {
+    unlocked: totals.international.unlocked + totals.japan.unlocked,
+    total: totals.international.total + totals.japan.total,
+  }};
+  const recentBadges = embedded ? latestTripBadges(badges, highlightScope) : [];
+  useEffect(() => {
+    if (embedded || !initialFocus) return;
+    let cancelled = false;
+    let frame = 0;
+    void document.fonts.ready.then(() => {
+      if (cancelled) return;
+      frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => { if (!cancelled) focusBadgeCard(initialFocus, false); }); });
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [embedded, initialFocus]);
 
   useEffect(() => {
     if (!previewReadyId) return;
@@ -409,6 +487,9 @@ export function TravelBadgesPage({
 
   async function mutateManualVisit(badgeId: string, visitedOn?: string) {
     const previous = badges.find((badge) => badge.id === badgeId);
+    if (!visitedOn && (!previous || !canRemoveManualBadgeVisit(previous))) {
+      throw new Error("ยกเลิกได้เฉพาะเข็มกลัดที่กดรับเองและไม่ได้เชื่อมกับทริป");
+    }
     if (visitedOn) {
       setBadges((current) => current.map((badge) => badge.id === badgeId
         ? { ...badge, manualVisitDate: visitedOn, unlocked: true }
@@ -437,6 +518,13 @@ export function TravelBadgesPage({
     setCategory(next);
     setSelectedId(null);
     setPreviewReadyId(null);
+    setMapMessage("");
+  }
+
+  function selectBadgeFromMap(id: string) {
+    setSelectedId(id);
+    setPreviewReadyId(null);
+    window.requestAnimationFrame(() => focusBadgeCard(id));
   }
 
   const mapCategory = category;
@@ -445,14 +533,51 @@ export function TravelBadgesPage({
   const mapSummary = category === "all"
     ? [`ไปมาแล้ว ${allUnlocked} จาก ${allBadges} จุดหมาย`, `ไทย ${totals.thailand.unlocked}/${totals.thailand.total} จังหวัด · ญี่ปุ่น ${totals.japan.unlocked}/${totals.japan.total} จังหวัด`, `นานาชาติ ${totals.international.unlocked}/${totals.international.total} ประเทศ`]
     : [`ไปมาแล้ว ${totals[category].unlocked} จาก ${totals[category].total} ${category === "international" ? "ประเทศ" : "จังหวัด"}`];
+  const showMap = category === "thailand" || category === "japan";
+  const exportKey = JSON.stringify([category, mapTitle, mapSummary, visibleBadges.filter(badge => badge.unlocked).map(badge => badge.id)]);
+  useEffect(() => {
+    if (embedded || !showMap || !mapSection.current) return;
+    let cancelled = false;
+    let started = false;
+    const [, title, summary] = JSON.parse(exportKey) as [string, string, string[], string[]];
+    const prepare = () => {
+      const svg = mapSection.current?.querySelector<SVGSVGElement>(".administrative-map > svg");
+      if (!svg?.querySelector("path") || started) return;
+      started = true;
+      void exportTravelMap(svg, title, summary).then(file => {
+        if (!cancelled) setMapFile({ key: exportKey, file });
+      }).catch(() => {
+        if (!cancelled) setMapMessage("เตรียมรูปไม่สำเร็จ กรุณาเลือกหมวดแผนที่อีกครั้ง");
+      });
+    };
+    const observer = new MutationObserver(prepare);
+    observer.observe(mapSection.current, { childList: true, subtree: true });
+    prepare();
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [embedded, exportKey, showMap]);
+
   async function saveMap() {
-    if (savingMap) return;
-    const svg = mapSection.current?.querySelector<SVGSVGElement>(".administrative-map > svg");
-    if (!svg) { setMapMessage("แผนที่ยังโหลดไม่เสร็จ กรุณาลองอีกครั้ง"); return; }
+    if (savingMap || mapFile?.key !== exportKey) return;
     setSavingMap(true);
     setMapMessage("");
-    try { await exportTravelMap(svg, mapTitle, mapSummary); setMapMessage("ส่งรูปแผนที่ไปยังรายการดาวน์โหลดแล้ว"); }
-    catch (error) { setMapMessage(error instanceof Error ? error.message : "บันทึกรูปไม่สำเร็จ กรุณาลองอีกครั้ง"); }
+    try {
+      const files = [mapFile.file];
+      if (navigator.canShare?.({ files })) {
+        // File is prepared before tapping: Safari requires a live user gesture.
+        await navigator.share({ files });
+      } else {
+        const url = URL.createObjectURL(mapFile.file);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = mapFile.file.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+        setMapMessage("ส่งรูปแผนที่ไปยังรายการดาวน์โหลดแล้ว");
+      }
+    }
+    catch (error) { if (!(error instanceof DOMException && error.name === "AbortError")) setMapMessage(error instanceof Error ? error.message : "บันทึกรูปไม่สำเร็จ กรุณาลองอีกครั้ง"); }
     finally { setSavingMap(false); }
   }
   const filters: Array<{ key: BadgeFilter; label: string; Icon: typeof Trophy }> = [
@@ -466,7 +591,7 @@ export function TravelBadgesPage({
   return (
     <div className={embedded ? "badges-stats-embedded" : "app-shell flow-shell badges-page-shell badges-detail-page"}>
       <ContentRoot id={embedded ? "travel-badges" : undefined} className={embedded ? "analytics-badge-content" : undefined}>
-        {!embedded ? <Link href="/analytics#travel-badges" className="icon-btn badges-back" aria-label="กลับหน้าสถิติ"><ArrowLeft size={22} /></Link> : null}
+        {!embedded ? <div className="badges-back-bar"><Link href="/analytics#travel-badges" className="icon-btn badges-back" aria-label="กลับหน้าสถิติ"><ArrowLeft size={22} /></Link></div> : null}
 
         <div className="badges-screen badges-screen-redesign">
           <section className="badges-intro">
@@ -475,12 +600,12 @@ export function TravelBadgesPage({
               {embedded ? <h2>เข็มกลัดการเดินทาง</h2> : <h1>เข็มกลัดการเดินทาง</h1>}
               <p>เก็บทุกการเดินทาง ให้กลายเป็นความทรงจำ</p>
             </div>
-            {embedded ? <Link className="badges-see-all" href="/badges">ดูทั้งหมด <ArrowRight size={15} /></Link> : null}
+            {embedded ? <Link className="badges-see-all" href={badgesHref}>ดูทั้งหมด <ArrowRight size={15} /></Link> : null}
           </section>
 
-          {!embedded ? <section className="badge-progress-grid" aria-label="ความคืบหน้าการสะสม">
+          {!embedded ? <><section className={`badge-progress-grid${showMap ? "" : " badges-sticky-filter"}`} aria-label="ความคืบหน้าการสะสม">
             {filters.map(({ key, label, Icon }) => {
-              const total = key === "all" ? { unlocked: allUnlocked, total: allBadges } : totals[key];
+              const total = key === "all" ? { unlocked: allUnlocked, total: allBadges } : filterTotals[key];
               return (
                 <button type="button" key={key} className={category === key ? "is-active" : ""} onClick={() => changeCategory(key)} aria-pressed={category === key}>
                   <span className={`badge-stat-icon is-${key}`}><Icon size={18} /></span>
@@ -488,37 +613,42 @@ export function TravelBadgesPage({
                 </button>
               );
             })}
-          </section> : null}
+          </section>
 
-          {!embedded ? <section ref={mapSection} className="badge-map-section badge-map-compact badge-map-expanded">
+          {showMap ? <section ref={mapSection} className="badge-map-section badge-map-compact badge-map-expanded badges-sticky-map">
             <div className="badge-map-copy">
-              <span><MapPinCheck size={13} /> แผนที่เข็มกลัด</span>
               <h2>{mapTitle}</h2>
               <div className="badge-map-counts">{mapSummary.map(line => <strong key={line}>{line}</strong>)}</div>
-              <p>แตะพื้นที่เพื่อดูชื่อ · ซูมแล้วลากเพื่อเลื่อนแผนที่</p>
-              {selectedId && selected ? <strong className="badge-map-selection">{selected.nameTh} · {selected.visits.length} ทริป</strong> : null}
             </div>
-            <AdministrativeMap key={mapCategory} category={mapCategory} badges={mapBadges} selectedId={selected?.id} selectBadge={setSelectedId} />
-            <button type="button" className="badge-map-save" disabled={savingMap} onClick={saveMap}><Download size={18} />{savingMap ? "กำลังสร้างรูป…" : "บันทึกรูปแผนที่"}</button>
+            <AdministrativeMap key={mapCategory} category={mapCategory} badges={mapBadges} selectedId={selected?.id} selectBadge={selectBadgeFromMap} />
+            <div className="badge-map-footer">
+              <div className="administrative-map-legend"><span className="is-visited" /> ไปมาแล้ว <span /> ยังไม่ได้ไป</div>
+              <button type="button" className="badge-map-save" aria-label="บันทึกรูปแผนที่" title="บันทึกรูปแผนที่" disabled={savingMap || mapFile?.key !== exportKey} onClick={saveMap}><Download size={20} /></button>
+            </div>
             {mapMessage ? <p className="badge-map-feedback" role="status">{mapMessage}</p> : null}
           </section> : null}
+          </> : null}
 
-          {embedded && mostVisited ? <Link href="/badges" className="badge-destination-highlight">
-            <div className="badge-highlight-copy">
-              <span>{mostVisited.category === "international" ? "ประเทศที่ไปบ่อยที่สุด" : "จังหวัด / เมืองที่ไปบ่อยที่สุด"}</span>
-              <h2>{mostVisited.nameTh}</h2>
-              <p>{mostVisited.nameEn} · ไปแล้ว {mostVisited.visits.length} ทริป</p>
+          {embedded ? progressCard : null}
+          {embedded && recentBadges.length ? <div className="badge-destination-highlight badge-recent-highlight">
+            <Link href={badgesHref} className="badge-recent-copy" aria-label="ดูเข็มกลัดล่าสุดทั้งหมด">
+              <strong>เข็มกลัด<br />ล่าสุด</strong>
+              <small>จากทริปล่าสุด<br />ย้อนหลัง 4 อัน</small>
+            </Link>
+            <div className="badge-recent-list">
+              {recentBadges.map(({ badge, source, earnedOn }) => <Link scroll={false} href={badgesHrefForScope(highlightScope, badge.id)} className="badge-recent-item" key={badge.id} title={`${badge.nameTh} · ${source} · ${earnedOn}`} aria-label={`ดูเข็มกลัด ${badge.nameTh}`}>
+                <BadgeArtwork badge={badge} size={72} width={72} />
+                <strong>{badge.nameTh}</strong>
+                <small>{source}</small>
+              </Link>)}
             </div>
-            <span className="badge-highlight-art">
-              <BadgeArtwork badge={mostVisited} size={120} width={120} />
-            </span>
-          </Link> : null}
+          </div> : null}
 
-          {embedded && !mostVisited ? <p className="badge-summary-empty">ยังไม่มีข้อมูลการเดินทางในหมวดนี้</p> : null}
+          {embedded && !recentBadges.length ? <p className="badge-summary-empty">ยังไม่มีเข็มกลัดจากทริปที่เดินทางในหมวดนี้</p> : null}
           {!embedded ? <section className="badge-cabinet-section">
             <div className="badges-section-head badge-collection-heading">
               <div><span><Flame size={14} /> COLLECTION</span><h2>{category === "all" ? "คอลเลกชันของคุณ" : `เข็มกลัด · ${CATEGORY_META[category].label}`}</h2></div>
-              <strong>{category === "all" ? allUnlocked : totals[category].unlocked}/{category === "all" ? allBadges : totals[category].total}</strong>
+              <strong>{category === "all" ? allUnlocked : filterTotals[category].unlocked}/{category === "all" ? allBadges : filterTotals[category].total}</strong>
             </div>
             <div className="badge-collection-grid">
               {visibleBadges.map((badge) => (
@@ -538,7 +668,7 @@ export function TravelBadgesPage({
           </section> : null}
         </div>
       </ContentRoot>
-      {previewBadge ? <BadgePreviewDialog key={previewBadge.id} badge={previewBadge} close={() => setPreviewBadge(null)} /> : null}
+      {previewBadge ? <BadgePreviewDialog key={previewBadge.id} badge={previewBadge} close={() => setPreviewBadge(null)} removeManualVisit={() => mutateManualVisit(previewBadge.id)} /> : null}
     </div>
   );
 }

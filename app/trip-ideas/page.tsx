@@ -14,5 +14,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ e
   const session = await getSession();
   if (!session) redirect("/");
   const { edit } = await searchParams;
-  return <TripIdeasPage initialIdeas={await loadTripIdeas(session)} initialEditId={edit} demo={Boolean(session.isDemo)} />;
+  return <TripIdeasPage initialIdeas={await loadTripIdeas(session)} currentUserId={session.userId} initialEditId={edit} demo={Boolean(session.isDemo)} />;
 }

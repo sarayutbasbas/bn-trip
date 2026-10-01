@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { getSession } from "@/src/lib/auth";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { query, transaction } from "@/src/lib/db";
-import { getTripRole, tripCardIdsAreMembers, tripMemberIdsAreMembers } from "@/src/lib/trip-access";
+import { getTripRole, tripCardIdsAreMembers, tripMemberIdsAreMembers, tripExpenseGuestIdsBelongToTrip } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
 import { accommodationSchema } from "@/src/lib/accommodation-validation";
 import { removeAccommodationLinkedRecords, syncAccommodationLinkedRecords } from "@/src/lib/accommodation-linked-records";
@@ -25,6 +25,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     await ensureLatestDatabaseSchema();
     if (!await getTripRole(id, session.userId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const input = accommodationSchema.parse(await request.json());
+    if (!await tripExpenseGuestIdsBelongToTrip(id, input.splitGuestIds)) return NextResponse.json({ error: "คนนอกทริปไม่ถูกต้อง" }, { status: 400 });
+    if (input.paidBy && !(input.paidBy.type === "member"
+      ? await tripMemberIdsAreMembers(id, [input.paidBy.id])
+      : await tripExpenseGuestIdsBelongToTrip(id, [input.paidBy.id]))) return NextResponse.json({ error: "ผู้จ่ายต้องอยู่ในทริปนี้" }, { status: 400 });
+    if (!input.splitMemberIds.length && !input.splitGuestIds.length) return NextResponse.json({ error: "กรุณาเลือกผู้หารค่าใช้จ่ายอย่างน้อย 1 คน" }, { status: 400 });
     if (input.checkOutDay <= input.checkInDay) return NextResponse.json({ error: "วันเช็กเอาต์ต้องอยู่หลังวันเช็กอิน" }, { status: 400 });
     if (!await tripCardIdsAreMembers(id, input.creditCardId ? [input.creditCardId] : [])) return NextResponse.json({ error: "บัตรนี้ไม่ได้เป็นของสมาชิกในทริป" }, { status: 400 });
     if (!await tripMemberIdsAreMembers(id, input.splitMemberIds)) return NextResponse.json({ error: "ผู้หารค่าใช้จ่ายต้องเป็นสมาชิกในทริป" }, { status: 400 });
@@ -37,8 +42,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         name=$3,location=$4,description=$5,night_descriptions=$6::jsonb,night_bedtimes=$7::jsonb,check_in_day=$8,check_out_day=$9,check_in_time=$10::time,
         check_out_time=$11::time,foreign_amount=$12,currency=$13,exchange_rate=$14,
         rate_date=$15,payment_method=$16,credit_card_id=$17,payment_owner_name=$18,
-        split_member_ids=$19::uuid[],booking_platform=$20,includes_breakfast=$21,image_url=$22,updated_at=now()
-        WHERE id=$1 AND trip_id=$2 RETURNING id,cost_item_id`, [accommodationId,id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),JSON.stringify(input.nightBedtimes),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,input.imageUrl]);
+        split_member_ids=$19::uuid[],booking_platform=$20,includes_breakfast=$21,image_url=$22,booking_url=$23,paid_by=CASE WHEN $26 THEN $24::jsonb ELSE paid_by END,split_guest_ids=$25::uuid[],updated_at=now()
+        WHERE id=$1 AND trip_id=$2 RETURNING id,cost_item_id`, [accommodationId,id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),JSON.stringify(input.nightBedtimes),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,input.imageUrl,input.bookingUrl,JSON.stringify(input.paidBy || null),input.splitGuestIds,input.paidBy !== undefined]);
       if (!updated.rows[0]) throw new Error("not_found");
       await syncAccommodationLinkedRecords(client, {
         id: accommodationId, tripId: id, ...input,

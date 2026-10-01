@@ -22,9 +22,12 @@ export function removeMemberFromCost(
   const hadMember = memberIds.includes(userId);
   const removedCard = typeof cost.creditCardId === "string" && cardIds.has(cost.creditCardId);
   const hadSavedSplitCount = cost.splitCount !== undefined;
-  if (!hadMember && !removedCard && !hadSavedSplitCount) return { cost, changed: false };
+  const payer = cost.paidBy as { type?: string; id?: string } | undefined;
+  const removedPayer = payer?.type === "member" && payer.id === userId;
+  if (!hadMember && !removedCard && !hadSavedSplitCount && !removedPayer) return { cost, changed: false };
 
   const next: StoredCost = { ...cost };
+  if (removedPayer) delete next.paidBy;
   delete next.splitCount;
   if (hadMember) {
     const remaining = memberIds.filter((memberId) => memberId !== userId);
@@ -95,7 +98,7 @@ export async function clearRemovedTripMember(
   await client.query(
     `UPDATE trip_accommodations SET
        split_member_ids=CASE
-         WHEN cardinality(array_remove(split_member_ids,$2::uuid))=0 THEN ARRAY[$3::uuid]
+         WHEN cardinality(array_remove(split_member_ids,$2::uuid))=0 AND cardinality(split_guest_ids)=0 THEN ARRAY[$3::uuid]
          ELSE array_remove(split_member_ids,$2::uuid)
        END,
        updated_at=now()
@@ -103,6 +106,7 @@ export async function clearRemovedTripMember(
     [tripId, userId, ownerId],
   );
 
+  await client.query("UPDATE trip_accommodations SET paid_by=NULL,updated_at=now() WHERE trip_id=$1 AND paid_by->>'type'='member' AND paid_by->>'id'=$2", [tripId, userId]);
   const cards = await client.query<{ id: string }>(
     "SELECT id FROM credit_cards WHERE user_id=$1",
     [userId],

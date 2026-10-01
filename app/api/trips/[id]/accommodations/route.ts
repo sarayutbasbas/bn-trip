@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { getSession } from "@/src/lib/auth";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { query, transaction } from "@/src/lib/db";
-import { getTripRole, tripCardIdsAreMembers, tripMemberIdsAreMembers } from "@/src/lib/trip-access";
+import { getTripRole, tripCardIdsAreMembers, tripMemberIdsAreMembers, tripExpenseGuestIdsBelongToTrip } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
 import { syncAccommodationLinkedRecords } from "@/src/lib/accommodation-linked-records";
 import { accommodationSchema } from "@/src/lib/accommodation-validation";
@@ -36,6 +36,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await ensureLatestDatabaseSchema();
     if (!await getTripRole(id, session.userId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const input = accommodationSchema.parse(await request.json());
+    if (!await tripExpenseGuestIdsBelongToTrip(id, input.splitGuestIds)) return NextResponse.json({ error: "คนนอกทริปไม่ถูกต้อง" }, { status: 400 });
+    if (input.paidBy && !(input.paidBy.type === "member"
+      ? await tripMemberIdsAreMembers(id, [input.paidBy.id])
+      : await tripExpenseGuestIdsBelongToTrip(id, [input.paidBy.id]))) return NextResponse.json({ error: "ผู้จ่ายต้องอยู่ในทริปนี้" }, { status: 400 });
+    if (!input.splitMemberIds.length && !input.splitGuestIds.length) return NextResponse.json({ error: "กรุณาเลือกผู้หารค่าใช้จ่ายอย่างน้อย 1 คน" }, { status: 400 });
     if (input.checkOutDay <= input.checkInDay) return NextResponse.json({ error: "วันเช็กเอาต์ต้องอยู่หลังวันเช็กอิน" }, { status: 400 });
     if (!await tripCardIdsAreMembers(id, input.creditCardId ? [input.creditCardId] : [])) return NextResponse.json({ error: "บัตรนี้ไม่ได้เป็นของสมาชิกในทริป" }, { status: 400 });
     if (!await tripMemberIdsAreMembers(id, input.splitMemberIds)) return NextResponse.json({ error: "ผู้หารค่าใช้จ่ายต้องเป็นสมาชิกในทริป" }, { status: 400 });
@@ -48,9 +53,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }>(`INSERT INTO trip_accommodations
         (trip_id,name,location,description,night_descriptions,night_bedtimes,check_in_day,check_out_day,check_in_time,check_out_time,
          foreign_amount,currency,exchange_rate,rate_date,payment_method,credit_card_id,
-         payment_owner_name,split_member_ids,booking_platform,includes_breakfast,image_url,created_by)
-        VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9::time,$10::time,$11,$12,$13,$14,$15,$16,$17,$18::uuid[],$19,$20,$21,$22)
-        RETURNING *`, [id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),JSON.stringify(input.nightBedtimes),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,input.imageUrl,session.userId]);
+         payment_owner_name,split_member_ids,booking_platform,includes_breakfast,image_url,created_by,booking_url,paid_by,split_guest_ids)
+        VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9::time,$10::time,$11,$12,$13,$14,$15,$16,$17,$18::uuid[],$19,$20,$21,$22,$23,$24::jsonb,$25::uuid[])
+        RETURNING *`, [id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),JSON.stringify(input.nightBedtimes),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,input.imageUrl,session.userId,input.bookingUrl,JSON.stringify(input.paidBy || null),input.splitGuestIds]);
       const accommodation = result.rows[0];
       await syncAccommodationLinkedRecords(client, {
         id: accommodation.id, tripId: id, ...input,

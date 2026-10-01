@@ -1,4 +1,8 @@
 "use client";
+import { ExpensePeopleFields } from "./expense-people-fields";
+import { useExpenseGuests, EXPENSE_GUESTS_CHANGED_EVENT } from "./use-expense-guests";
+import type { ExpensePayer } from "@/src/lib/expense-settlement";
+import { safeBookingUrl } from "@/src/lib/booking-url";
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -55,6 +59,9 @@ type Accommodation = {
   name: string;
   location: string;
   booking_platform: BookingPlatform | "";
+  booking_url?: string;
+  paid_by?: ExpensePayer | null;
+  split_guest_ids?: string[];
   includes_breakfast: boolean;
   image_url: string | null;
   description: string;
@@ -468,6 +475,26 @@ export function TripAccommodations({
     [members],
   );
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>(allMemberIds);
+  const [splitGuestIds, setSplitGuestIds] = useState<string[]>([]);
+  const [payerKey, setPayerKey] = useState("");
+  const { guests: expenseGuests, setGuests: setExpenseGuests } = useExpenseGuests(tripId);
+  const [guestName, setGuestName] = useState("");
+  const [addingGuest, setAddingGuest] = useState(false);
+  async function addExpenseGuest() {
+    if (!guestName.trim() || addingGuest) return;
+    setAddingGuest(true);
+    try {
+      const guest = await json<{ id: string; name: string }>(`/api/trips/${tripId}/expense-guests`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: guestName.trim() }),
+      });
+      setExpenseGuests(current => current.some(item => item.id === guest.id) ? current : [...current, guest]);
+      setSplitGuestIds(current => [...new Set([...current, guest.id])]);
+      setGuestName("");
+      window.dispatchEvent(new CustomEvent(EXPENSE_GUESTS_CHANGED_EVENT, { detail: { tripId } }));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "เพิ่มคนนอกทริปไม่สำเร็จ");
+    } finally { setAddingGuest(false); }
+  }
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
   const splitPickerRef = useRef<HTMLDivElement>(null);
   const handledRefreshToken = useRef(refreshToken);
@@ -664,6 +691,9 @@ export function TripAccommodations({
     setImageRemovalPending(false);
     if (imageInputRef.current) imageInputRef.current.value = "";
     setSplitMemberIds(allMemberIds);
+    setSplitGuestIds(expenseGuests.map(guest => guest.id));
+    setPayerKey("");
+    setGuestName("");
     setSplitPickerOpen(false);
     setEditing("new");
   }
@@ -714,7 +744,10 @@ export function TripAccommodations({
     const validIds = (item.split_member_ids || []).filter((id) =>
       allMemberIds.includes(id),
     );
-    setSplitMemberIds(validIds.length ? validIds : allMemberIds);
+    setSplitMemberIds(validIds.length || item.split_guest_ids?.length ? validIds : allMemberIds);
+    setSplitGuestIds(item.split_guest_ids || []);
+    setPayerKey(item.paid_by ? `${item.paid_by.type}:${item.paid_by.id}` : "");
+    setGuestName("");
     setSplitPickerOpen(false);
     setEditing(item);
   }
@@ -759,7 +792,7 @@ export function TripAccommodations({
   }
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editing) return;
+    if (!editing || saving) return;
     const form = new FormData(event.currentTarget);
     const selectedCard = cards.find((card) => card.id === paymentSource);
     const foreignAmount = Number(
@@ -773,10 +806,17 @@ export function TripAccommodations({
       setError("วันเช็กเอาต์ต้องอยู่หลังวันเช็กอิน");
       return;
     }
-    if (members.length && !splitMemberIds.length) {
+    if (!splitMemberIds.length && !splitGuestIds.length) {
       setError("กรุณาเลือกผู้ร่วมทริปอย่างน้อย 1 คน");
       return;
     }
+    const bookingUrl = String(form.get("bookingUrl") || "").trim();
+    if (bookingUrl && !safeBookingUrl(bookingUrl)) { setError("กรุณาใส่ลิงก์ที่พักแบบ https:// หรือ http://"); return; }
+    const [payerType, payerId] = payerKey.split(":");
+    const paidBy: ExpensePayer | null = payerType === "member" && allMemberIds.includes(payerId)
+      ? { type: "member", id: payerId }
+      : payerType === "guest" && expenseGuests.some(guest => guest.id === payerId) ? { type: "guest", id: payerId } : null;
+    if (!paidBy) { setError("กรุณาเลือกผู้จ่ายรายการนี้"); return; }
     setSaving(true);
     setError("");
     try {
@@ -801,6 +841,9 @@ export function TripAccommodations({
       name: String(form.get("name") || ""),
       location: String(form.get("location") || ""),
       bookingPlatform,
+      bookingUrl,
+      paidBy,
+      splitGuestIds,
       includesBreakfast: form.get("includesBreakfast") === "true",
       imageUrl,
       description: nightDescriptions[String(checkInDay)]?.trim() || "",
@@ -1072,6 +1115,10 @@ export function TripAccommodations({
                     </span>
                   </label>
                 </div>
+                <div className="field">
+                  <label htmlFor="accommodation-booking-url">ลิงก์ที่พักที่จอง</label>
+                  <input id="accommodation-booking-url" name="bookingUrl" type="url" maxLength={2000} defaultValue={edit?.booking_url || ""} placeholder="https://th.trip.com/hotels/…" />
+                </div>
                 <div className="form-row">
                   <div className="field">
                     <label>เช็กอิน</label>
@@ -1220,85 +1267,12 @@ export function TripAccommodations({
                         : `1 ${currency} = ${exchangeRate} THB · ${rateEstimated ? "เรตล่าสุดสำหรับวันในอนาคต" : "เรตประจำวันที่"} ${rateDate}`}
                     </p>
                   )}
-                  <div
-                    className="field split-member-field"
-                    ref={splitPickerRef}
-                  >
-                    <label>หารกับ</label>
-                    <button
-                      type="button"
-                      className={`split-member-trigger ${splitPickerOpen ? "is-open" : ""}`}
-                      onClick={() => setSplitPickerOpen((value) => !value)}
-                      aria-expanded={splitPickerOpen}
-                    >
-                      <span>
-                        {splitMemberIds.length === allMemberIds.length
-                          ? "หารทุกคน"
-                          : splitMemberIds.length === 1
-                            ? members.find(
-                                (member) => member.id === splitMemberIds[0],
-                              )?.display_name || "1 คน"
-                            : `${splitMemberIds.length} คน`}
-                      </span>
-                      <ChevronDown size={16} />
-                    </button>
-                    {splitPickerOpen && (
-                      <div className="split-member-menu">
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={
-                              allMemberIds.length > 0 &&
-                              splitMemberIds.length === allMemberIds.length
-                            }
-                            onChange={(event) =>
-                              setSplitMemberIds(
-                                event.target.checked ? allMemberIds : [],
-                              )
-                            }
-                          />
-                          <span className="split-checkmark" />
-                          <span>หารทุกคน</span>
-                        </label>
-                        {members.map((member) => {
-                          const label =
-                            member.display_name || member.email || "-";
-                          return (
-                            <label key={member.id}>
-                              <input
-                                type="checkbox"
-                                checked={splitMemberIds.includes(member.id)}
-                                onChange={(event) =>
-                                  setSplitMemberIds((current) =>
-                                    event.target.checked
-                                      ? [...new Set([...current, member.id])]
-                                      : current.filter(
-                                          (id) => id !== member.id,
-                                        ),
-                                  )
-                                }
-                              />
-                              <span className="split-checkmark" />
-                              <span
-                                className="split-member-avatar"
-                                style={
-                                  member.avatar_url
-                                    ? {
-                                        backgroundImage: `url("${member.avatar_url}")`,
-                                      }
-                                    : undefined
-                                }
-                              >
-                                {!member.avatar_url &&
-                                  label.charAt(0).toUpperCase()}
-                              </span>
-                              <span>{label}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  <ExpensePeopleFields t={text => text} splitMembers={members} expenseGuests={expenseGuests}
+                    splitPickerRef={splitPickerRef} splitPickerOpen={splitPickerOpen} setSplitPickerOpen={setSplitPickerOpen}
+                    splitMemberIds={splitMemberIds} setSplitMemberIds={setSplitMemberIds}
+                    splitGuestIds={splitGuestIds} setSplitGuestIds={setSplitGuestIds}
+                    payerKey={payerKey} setPayerKey={setPayerKey} guestName={guestName} setGuestName={setGuestName}
+                    addingGuest={addingGuest} addExpenseGuest={addExpenseGuest} />
                   <fieldset className="expense-payment-picker accommodation-payment-picker">
                     <legend>ช่องทางชำระ</legend>
                     <label>

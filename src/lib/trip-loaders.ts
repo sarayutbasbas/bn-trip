@@ -1,8 +1,10 @@
 import type { SessionUser } from "@/src/lib/auth";
 import { appendTripSearch } from "@/src/lib/trip-search";
+import { canonicalTripDestination } from "@/src/lib/destination-search";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { query } from "@/src/lib/db";
 import { linkedExpenseIds } from "@/src/lib/linked-expense";
+import { personalExpenseTotals, type SplitExpense } from "@/src/lib/personal-expenses";
 import {
   getDemoCards,
   getDemoItineraries,
@@ -41,6 +43,7 @@ export type DashboardPayload = {
 };
 
 export type FavoriteAccommodation = {
+  booking_url?: string;
   id: string;
   trip_id: string;
   trip_name: string;
@@ -60,7 +63,10 @@ export type CountryHighlight = {
   reviewCount: number;
 };
 
+import { appendTripMemberFilter, parseMemberFilter, tripFilterMembersSql, type TripFilterMember } from "@/src/lib/trip-member-filter";
+
 export type TripDirectoryPayload = {
+  filterMembers: TripFilterMember[];
   items: unknown[];
   total: number;
   years: number[];
@@ -69,6 +75,7 @@ export type TripDirectoryPayload = {
 };
 
 export type TravelAnalyticsPayload = {
+  latestTrip: { id: string; name: string; destination: string; countryCode: string; destinationName: string } | null;
   totals: {
     trips: number;
     countries: number;
@@ -123,6 +130,8 @@ export type TravelAnalyticsCollection = Record<
 
 type AnalyticsTripRow = {
   trip_id: string;
+  name: string;
+  ended_at: string;
   year: number;
   country: string;
   country_code: string | null;
@@ -202,7 +211,7 @@ function aggregateFlightAnalytics(rows: AnalyticsFlightRow[]): TravelAnalyticsPa
     cabins:[...cabins.entries()].map(([name,flights])=>({name,flights})).sort((a,b)=>b.flights-a.flights),
     periods:[...periods.entries()].map(([key,value])=>({key,...value})).sort((a,b)=>b.flights-a.flights),
     months:[...months.entries()].map(([month,flights])=>({month,flights})).sort((a,b)=>b.flights-a.flights),
-    routes:[...routes.entries()].map(([route,flights])=>({route,flights})).sort((a,b)=>b.flights-a.flights).slice(0,8),
+    routes:[...routes.entries()].map(([route,flights])=>({route,flights})).sort((a,b)=>b.flights-a.flights),
   };
 }
 
@@ -264,7 +273,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
         }),
     );
     const tripDestinations = savedDestinations.length
-      ? savedDestinations
+      ? savedDestinations.map(destination => canonicalTripDestination(destination, countryCode))
       : legacyMatches.length
         ? legacyMatches
         : [{
@@ -292,8 +301,14 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
   }
 
   const tripCount = rows.length;
+  const latestTrip = rows.reduce<AnalyticsTripRow | null>((latest, row) => !latest || Date.parse(row.ended_at) > Date.parse(latest.ended_at) || (row.ended_at === latest.ended_at && row.trip_id > latest.trip_id) ? row : latest, null);
   const expense = travelExpense + shoppingExpense;
   return {
+    latestTrip: latestTrip ? {
+      id: latestTrip.trip_id, name: latestTrip.name, destination: latestTrip.destination,
+      countryCode: latestTrip.country_code || inferTripCountry(latestTrip.destination).code,
+      destinationName: latestTrip.trip_destinations?.[0]?.nameTh || latestTrip.destination.split(",")[0].trim(),
+    } : null,
     totals: {
       trips: tripCount,
       countries: countries.size,
@@ -365,22 +380,14 @@ export async function loadTravelAnalytics(
   if (session.isDemo) {
     const dashboard = getDemoTrips(
       new URLSearchParams("mode=dashboard"),
-    ) as { past: Array<{ id: string; start_date: string; destination: string }> };
+    ) as { past: Array<{ id: string; name: string; start_date: string; destination: string; total_days: number; traveller_count: number; return_departure_at?: string | null }> };
     const rows = dashboard.past.map((trip) => {
-      let travelExpense = 0;
-      let shoppingExpense = 0;
-      for (const itinerary of getDemoItineraries(trip.id) as Array<{
-        cost_items?: Array<{ value?: number; category?: string }>;
-      }>) {
-        for (const cost of itinerary.cost_items || []) {
-          const amount = Number(cost.value || 0);
-          if ((cost.category || "").trim().toLowerCase() === "shopping")
-            shoppingExpense += amount;
-          else travelExpense += amount;
-        }
-      }
+      const costs = (getDemoItineraries(trip.id) as Array<{ cost_items?: SplitExpense[] }>).flatMap((itinerary) => itinerary.cost_items || []);
+      const { travelExpense, shoppingExpense } = personalExpenseTotals(costs, session.userId, trip.traveller_count);
       return {
         trip_id: trip.id,
+        name: trip.name,
+        ended_at: trip.return_departure_at || new Date(Date.parse(trip.start_date) + (trip.total_days - 1) * 86400000).toISOString(),
         year: Number(trip.start_date.slice(0, 4)),
         country:
           inferTripCountry(trip.destination).nameEn,
@@ -395,27 +402,24 @@ export async function loadTravelAnalytics(
   }
 
   await ensureLatestDatabaseSchema();
-  const [result,flightResult] = await Promise.all([query<AnalyticsTripRow>(
+  const [result,flightResult] = await Promise.all([query<Omit<AnalyticsTripRow, "travel_expense" | "shopping_expense"> & { cost_items: SplitExpense[]; member_count: number }>(
     `WITH accessible_past AS (
-       SELECT t.id,EXTRACT(YEAR FROM t.start_date)::int AS year,
+       SELECT t.id,t.name,(COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))::text AS ended_at,EXTRACT(YEAR FROM t.start_date)::int AS year,
          COALESCE(NULLIF(t.country_name,''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ') AS country,
-         t.country_code,t.destination,t.trip_destinations
+         t.country_code,t.destination,t.trip_destinations,
+         (1 + (SELECT COUNT(*) FROM trip_collaborators collaborator
+           WHERE collaborator.trip_id=t.id AND collaborator.user_id IS NOT NULL))::int AS member_count
        FROM trips t
        WHERE ${tripAccessSql("t")}
          AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)
            < (now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))
      )
-     SELECT trip.id AS trip_id,trip.year,trip.country,trip.country_code,trip.destination,trip.trip_destinations,
-       COALESCE(SUM(CASE WHEN lower(COALESCE(cost.item->>'category',''))<>'shopping'
-         AND COALESCE(cost.item->>'value','')~'^-?[0-9]+([.][0-9]+)?$'
-         THEN (cost.item->>'value')::numeric ELSE 0 END),0)::text AS travel_expense,
-       COALESCE(SUM(CASE WHEN lower(COALESCE(cost.item->>'category',''))='shopping'
-         AND COALESCE(cost.item->>'value','')~'^-?[0-9]+([.][0-9]+)?$'
-         THEN (cost.item->>'value')::numeric ELSE 0 END),0)::text AS shopping_expense
+     SELECT trip.id AS trip_id,trip.name,trip.ended_at,trip.year,trip.country,trip.country_code,trip.destination,trip.trip_destinations,trip.member_count,
+       COALESCE(jsonb_agg(cost.item) FILTER (WHERE cost.item IS NOT NULL),'[]'::jsonb) AS cost_items
      FROM accessible_past trip
      LEFT JOIN itineraries itinerary ON itinerary.trip_id=trip.id
      LEFT JOIN LATERAL jsonb_array_elements(COALESCE(itinerary.cost_items,'[]'::jsonb)) AS cost(item) ON true
-     GROUP BY trip.id,trip.year,trip.country,trip.country_code,trip.destination,trip.trip_destinations
+     GROUP BY trip.id,trip.name,trip.ended_at,trip.year,trip.country,trip.country_code,trip.destination,trip.trip_destinations,trip.member_count
      ORDER BY trip.year DESC`,
     [session.userId],
   ),query<AnalyticsFlightRow>(
@@ -434,7 +438,10 @@ export async function loadTravelAnalytics(
     [session.userId],
   )]);
   return clientSafe(
-    aggregateTravelAnalyticsCollection(result.rows, flightResult.rows),
+    aggregateTravelAnalyticsCollection(result.rows.map(({ cost_items, member_count, ...trip }) => {
+      const { travelExpense, shoppingExpense } = personalExpenseTotals(cost_items, session.userId, member_count);
+      return { ...trip, travel_expense: travelExpense, shopping_expense: shoppingExpense };
+    }), flightResult.rows),
   );
 }
 
@@ -513,6 +520,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
         accommodation.location,
         accommodation.image_url,
         accommodation.booking_platform,
+        accommodation.booking_url,
         favorite.favorited_at::text
       FROM user_favorite_accommodations favorite
       JOIN trip_accommodations accommodation ON accommodation.id=favorite.accommodation_id
@@ -530,7 +538,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
         LEFT JOIN LATERAL (
           SELECT avg(trip_review.rating) AS average_rating,count(*)::int AS review_count
           FROM trip_reviews trip_review
-          WHERE trip_review.trip_id=t.id
+          WHERE trip_review.trip_id=t.id AND ${submittedReviewSql("t")}
             AND (trip_review.user_id=t.owner_id OR EXISTS (
               SELECT 1 FROM trip_collaborators review_member
               WHERE review_member.trip_id=t.id AND review_member.user_id=trip_review.user_id
@@ -642,6 +650,7 @@ export async function loadTripDirectory(
     where.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${values.length}::int[])`);
   }
   appendTripSearch(where, values, search);
+  appendTripMemberFilter(where, values, parseMemberFilter(params.getAll("member").join(","), session.userId));
   const statusCountValues: Array<string | number | number[] | string[]> = [session.userId];
   const statusCountWhere = [access];
   if (tripType === "domestic") statusCountWhere.push("t.country_code='TH'");
@@ -652,6 +661,7 @@ export async function loadTripDirectory(
     statusCountWhere.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${statusCountValues.length}::int[])`);
   }
   appendTripSearch(statusCountWhere, statusCountValues, search);
+  appendTripMemberFilter(statusCountWhere, statusCountValues, parseMemberFilter(params.getAll("member").join(","), session.userId));
   const order =
     sort === "oldest"
       ? "t.start_date ASC,t.id ASC"
@@ -661,7 +671,8 @@ export async function loadTripDirectory(
           ? "ABS(EXTRACT(EPOCH FROM (COALESCE(t.outbound_departure_at,t.start_date::timestamp)-(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))))) ASC,t.id ASC"
           : "CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 0 WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 1 ELSE 2 END ASC,CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.outbound_departure_at,t.start_date::timestamp) END ASC,CASE WHEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) END DESC,t.id DESC";
   const clause = where.join(" AND ");
-  const [items, total, years, statusCounts] = await Promise.all([
+  const [filterPeople, items, total, years, statusCounts] = await Promise.all([
+    query<TripFilterMember>(tripFilterMembersSql, [session.userId]),
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, 0]),
     query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`, values),
     query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`, [session.userId]),
@@ -675,6 +686,7 @@ export async function loadTripDirectory(
   const counts = statusCounts.rows[0] || {};
   return clientSafe({
     items: items.rows,
+    filterMembers: filterPeople.rows.filter(member => member.id !== session.userId),
     total: count,
     years: years.rows.map((row) => Number(row.year)),
     hasMore: items.rows.length < count,
@@ -784,3 +796,4 @@ export async function loadTripCards(session: SessionUser, id: string) {
     ORDER BY (trip_members.member_role='owner') DESC,member.display_name,card.sort_order,card.created_at DESC`, [session.userId, id]);
   return clientSafe(result.rows);
 }
+import { submittedReviewSql } from "@/src/lib/review-visibility";

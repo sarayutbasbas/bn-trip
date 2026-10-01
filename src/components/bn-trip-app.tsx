@@ -1,5 +1,17 @@
 "use client";
+import { prepareTripPlanDownload, saveTripPlanDownload } from "@/src/lib/trip-plan-download";
+import { useExpenseGuests, EXPENSE_GUESTS_CHANGED_EVENT } from "./use-expense-guests";
+import { ExpensePeopleFields } from "./expense-people-fields";
+import { safeBookingUrl } from "@/src/lib/booking-url";
+import { FetchSkeleton } from "@/src/components/fetch-skeleton";
+import { AutoLoadMore } from "@/src/components/auto-load-more";
+import { LoginScreen as RedesignedLoginScreen } from "@/src/components/login-screen";
 
+import { costSplitCount } from "@/src/lib/personal-expenses";
+import { expenseParticipants } from "@/src/lib/expense-participants";
+import { hasSubmittedReview } from "@/src/lib/review-visibility";
+import { type ExpensePayer } from "@/src/lib/expense-settlement";
+import { ExpenseSettlementSummary } from "@/src/components/expense-settlement-summary";
 import {
   createContext,
   Fragment,
@@ -27,7 +39,11 @@ import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
 import { TripNoteField } from "@/src/components/trip-note-field";
 import { TripImportSettings } from "@/src/components/trip-import-settings";
+import { BadgeHighlightSkeleton } from "@/src/components/badge-skeleton";
 import { fetchTripDirectoryWindow } from "@/src/lib/client-trip-pagination";
+import { TripMemberFilter } from "@/src/components/trip-member-filter";
+import { OfflineDocumentUsage } from "@/src/components/offline-document-usage";
+import { parseMemberFilter, type TripFilterMember } from "@/src/lib/trip-member-filter";
 import { ideaCountdown, ideaTargetDate } from "@/src/lib/trip-idea-display";
 import type { TripIdea } from "@/src/lib/trip-ideas";
 import { TripSegmentedFilter, type TripFilterOption } from "@/src/components/trip-segmented-filter";
@@ -71,6 +87,7 @@ import {
   inferTripCountry,
 } from "@/src/lib/countries";
 import {
+  badgesHrefForScope,
   createCustomTripDestination,
   TRIP_DESTINATION_OPTIONS,
   type TravelBadgeCollection,
@@ -166,18 +183,13 @@ const TripAccommodations = dynamic(
   () => import("@/src/components/trip-accommodations").then((module) => module.TripAccommodations),
   { loading: () => <TripSectionSkeleton variant="accommodations" /> },
 );
-const AnalyticsJourneyMap = dynamic(() => import("@/src/components/analytics-journey-map").then(module => module.AnalyticsJourneyMap));
 const TravelBadgesPage = dynamic(
   () =>
     import("@/src/components/travel-badges-page").then(
       (module) => module.TravelBadgesPage,
     ),
   {
-    loading: () => (
-      <div className="analytics-badges-loading" aria-label="กำลังโหลดเข็มกลัด">
-        <span /><span /><span />
-      </div>
-    ),
+    loading: () => <BadgeHighlightSkeleton />,
   },
 );
 
@@ -195,6 +207,7 @@ type Lang = "TH" | "EN";
 type TripStatus = "all" | "ongoing" | "upcoming" | "past";
 type TripType = "all" | "domestic" | "international";
 type TripFilters = {
+  member?: string;
   status: string;
   type: string;
   year: string;
@@ -319,6 +332,7 @@ export type PaymentCard = {
   member_role?: "owner" | "collaborator";
 };
 type CostItem = {
+  paidBy?: ExpensePayer;
   id?: string;
   key: string;
   value: number;
@@ -1380,9 +1394,7 @@ async function fetchFreshDashboardSnapshot(): Promise<DashboardSnapshot> {
   return snapshot;
 }
 const itineraryCache = new Map<string, Itinerary[]>();
-const COUNTRY_FLAG_ASSET_CODES = new Set([
-  "AE", "AU", "CA", "CH", "CN", "DE", "ES", "FR", "GB", "HK", "ID", "IN", "IT", "JP", "KH", "KR", "LA", "MM", "MY", "NZ", "PH", "SG", "TH", "TW", "US", "VN",
-]);
+const COUNTRY_FLAG_ASSET_CODES = new Set(TRIP_COUNTRIES.map(country => country.code));
 
 export function CountryFlagImage({
   code,
@@ -2131,49 +2143,6 @@ function isLinkedExpense(item: Itinerary | undefined, cost: CostItem | undefined
   );
 }
 
-function costSplitCount(cost: CostItem, fallback = 1) {
-  if (Array.isArray(cost.splitGuestIds)) {
-    return Math.max(
-      1,
-      (cost.splitMemberIds?.length || 0) + cost.splitGuestIds.length,
-    );
-  }
-  const saved = Number(cost.splitCount);
-  if (Number.isInteger(saved) && saved >= 1 && saved <= 100) return saved;
-  const selectedMembers = cost.splitMemberIds?.length || 0;
-  if (selectedMembers) return selectedMembers;
-  return Math.min(100, Math.max(1, Math.floor(Number(fallback) || 1)));
-}
-
-const EXPENSE_GUESTS_CHANGED_EVENT = "bn-trip:expense-guests-changed";
-
-function useExpenseGuests(tripId: string) {
-  const [guests, setGuests] = useState<ExpenseGuest[]>([]);
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const response = await fetch(`/api/trips/${tripId}/expense-guests`);
-        const data = await response.json();
-        if (active && response.ok && Array.isArray(data)) setGuests(data);
-      } catch {
-        // The cost form stays usable for joined members if guest loading fails.
-      }
-    };
-    void load();
-    const onChanged = (event: Event) => {
-      const changedTripId = (event as CustomEvent<{ tripId?: string }>).detail
-        ?.tripId;
-      if (!changedTripId || changedTripId === tripId) void load();
-    };
-    window.addEventListener(EXPENSE_GUESTS_CHANGED_EVENT, onChanged);
-    return () => {
-      active = false;
-      window.removeEventListener(EXPENSE_GUESTS_CHANGED_EVENT, onChanged);
-    };
-  }, [tripId]);
-  return { guests, setGuests };
-}
 
 function costSplitLabel(cost: CostItem, fallback = 1) {
   const count = costSplitCount(cost, fallback);
@@ -2419,71 +2388,7 @@ function useMinuteClock() {
 
 function LoginScreen({ authError }: { authError?: string }) {
   const t = useT();
-  const error = authError
-    ? authError === "google_not_configured"
-      ? "ยังไม่ได้ตั้งค่า Google OAuth"
-      : authError === "demo_login_required"
-        ? "เข้าสู่ระบบเพื่อเพิ่ม แก้ไข หรือลบข้อมูล"
-        : "เข้าสู่ระบบด้วย Google ไม่สำเร็จ"
-    : "";
-  return (
-    <main className="login-page">
-      <section className="login-art">
-        <div className="login-art-top">
-          <Brand />
-          <span className="login-private-pill">
-            <Crown size={12} />
-            {t("พื้นที่ส่วนตัว")}
-          </span>
-        </div>
-        <div className="login-hero-copy">
-          <div className="eyebrow">
-            <Sparkles size={13} /> private journeys · made together
-          </div>
-          <h1>
-            {t("เก็บทุกเส้นทาง")}
-            <br />
-            {t("ไว้ในที่เดียว")}
-          </h1>
-          <p>
-            {t("แพลนที่เที่ยว จดโมเมนต์ และคุมงบ")}
-            <br />
-            {t("ในสมุดเดินทางของ B & N")}
-          </p>
-          <div className="login-route">
-            <span>BKK</span>
-            <div>
-              <Plane size={20} />
-            </div>
-            <span>ANYWHERE</span>
-          </div>
-        </div>
-      </section>
-      <section className="login-panel">
-        <span className="login-sheet-handle" aria-hidden="true" />
-        <div className="login-copy">
-          <span className="mini-kicker">WELCOME BACK</span>
-          <h2>{t("เปิดสมุดเดินทาง")}</h2>
-          <p>{t("เข้าสู่ระบบด้วย Google Account ของคุณ")}</p>
-        </div>
-        {error && <p className="login-error">{t(error)}</p>}
-        <a className="primary-btn google-login-btn" href="/api/auth/google">
-          <span className="google-mark">G</span>
-          <span>{t("เข้าสู่ระบบด้วย Google")}</span>
-          <ArrowRight size={17} />
-        </a>
-        <a className="demo-login-btn" href="/api/auth/demo">
-          <Sparkles size={16} />
-          <span>{t("ทดลองใช้ก่อน")}</span>
-          <ArrowRight size={16} />
-        </a>
-        <p className="login-hint">
-          <Crown size={12} />
-          {t("ทุกบัญชี Google สามารถเริ่มสร้างทริปได้")}
-        </p>
-      </section>
-    </main>
-  );
+  return <RedesignedLoginScreen authError={authError} translate={t} />;
 }
 
 function TripCardFacts({ trip }: { trip: Trip }) {
@@ -3079,7 +2984,11 @@ function TravelBadgeProgressCard({
   return (
     <section className="dashboard-badge-section" aria-label={t("เข็มกลัดท่องเที่ยว")}>
       <button type="button" onClick={onClick} aria-label={t("เปิดเข็มกลัดท่องเที่ยว")}>
-        <span className="dashboard-badge-ring" style={{ "--badge-progress": `${progress * 3.6}deg` } as CSSProperties}>
+        <span className="dashboard-badge-ring">
+          <svg viewBox="0 0 70 70" aria-hidden="true">
+            <circle cx="35" cy="35" r="31" fill="none" stroke="rgba(255,164,104,.22)" strokeWidth="8" />
+            {progress > 0 && <circle cx="35" cy="35" r="31" fill="none" stroke="var(--orange)" strokeWidth="8" pathLength="100" strokeDasharray={`${Math.min(100, progress)} 100`} strokeLinecap="round" transform="rotate(-90 35 35)" />}
+          </svg>
           <b>{progress}%</b>
         </span>
         <span className="dashboard-badge-copy">
@@ -3217,7 +3126,7 @@ function Dashboard({
             {status === "past" && <Images size={18} />}
             {t(title)}
           </h2>
-          <span className="section-trip-count">{t(`${count} ทริป`)}</span>
+          {status !== "upcoming" && <span className="section-trip-count">{t(`${count} ทริป`)}</span>}
         </div>
         {description && <p>{t(description)}</p>}
       </div>
@@ -3409,14 +3318,12 @@ function Dashboard({
                 className="dashboard-favorite-hotel-card"
                 key={hotel.id}
               >
-                <button
-                  type="button"
+                <Link
                   className="dashboard-favorite-hotel-open"
-                  onClick={() =>
-                    router.push(
-                      `/trips/${hotel.trip_id}?view=stays&accommodation=${hotel.id}`,
-                    )
-                  }
+                  href={safeBookingUrl(hotel.booking_url) || `/trips/${hotel.trip_id}?view=stays&accommodation=${hotel.id}`}
+                  target="_self"
+                  prefetch={false}
+                  rel={safeBookingUrl(hotel.booking_url) ? "external noreferrer" : undefined}
                   aria-label={`${t("เปิดที่พัก")} ${hotel.name}`}
                 >
                   <span className="dashboard-favorite-hotel-image">
@@ -3432,7 +3339,7 @@ function Dashboard({
                   <strong>{hotel.name}</strong>
                   <small>{hotel.location || hotel.destination}</small>
                   <em>{hotel.trip_name}</em>
-                </button>
+                </Link>
                 <button
                   type="button"
                   className="dashboard-favorite-hotel-remove"
@@ -3506,25 +3413,69 @@ function AnalyticsYearTrend({
 }) {
   const t = useT();
   const chartId = useId();
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [barLayout, setBarLayout] = useState({ slots: 6, gap: 16 });
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry.contentRect.width;
+      if (width <= 0) return;
+      // Pack 28px bars with a ~16px gap, leaving 30% of the next bar visible.
+      const slots = Math.max(1, Math.floor((width - 8.4) / 44));
+      const gap = (width - (slots + 0.3) * 28) / slots;
+      setBarLayout(previous => previous.slots === slots && previous.gap === gap ? previous : { slots, gap });
+    });
+    observer.observe(chart);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const closePopover = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest(".analytics-year-popover")) return;
+      chartRef.current?.querySelectorAll<HTMLElement>(".analytics-year-popover:popover-open").forEach(popover => popover.hidePopover());
+    };
+    window.addEventListener("scroll", closePopover, { passive: true, capture: true });
+    window.addEventListener("resize", closePopover);
+    return () => {
+      window.removeEventListener("scroll", closePopover, true);
+      window.removeEventListener("resize", closePopover);
+    };
+  }, []);
   const chronological = [...years].sort((a, b) => a.year - b.year);
   const maxTrips = Math.max(1, ...chronological.map((item) => item.trips));
   return (
-    <div className="analytics-year-chart">
-      <p className="analytics-chart-hint">{t("แตะกราฟเพื่อดูรายละเอียดแต่ละปี")}</p>
-      <div className="analytics-year-bars" aria-label={t("การเดินทางในแต่ละปี")}>
+    <div ref={chartRef} className="analytics-year-chart">
+      <div className={`analytics-year-bars${chronological.length > barLayout.slots ? " has-scroll-peek" : ""}`} style={{ "--year-bar-gap": `${barLayout.gap}px` } as CSSProperties} tabIndex={chronological.length > barLayout.slots ? 0 : undefined} aria-label={t("การเดินทางในแต่ละปี")}>
         {chronological.map((point) => (
           <div className="analytics-year-column" key={point.year}>
-            <button type="button" className="analytics-year-bar" popoverTarget={`${chartId}-${point.year}`} aria-label={`${point.year}: ${point.trips} ${tripLabel}, ${point.destinations} ${t("จุดหมาย")}`}>
+            <button type="button" className="analytics-year-bar" popoverTarget={`${chartId}-${point.year}`} aria-label={`${point.year}: ${point.trips} ${tripLabel}, ${point.destinations} ${t("จุดหมาย")}`} onClick={event => {
+              event.preventDefault();
+              const popover = document.getElementById(`${chartId}-${point.year}`);
+              if (!popover) return;
+              if (popover.matches(":popover-open")) { popover.hidePopover(); return; }
+              popover.showPopover();
+              const anchor = (event.currentTarget.querySelector(".analytics-year-bar-fill") || event.currentTarget).getBoundingClientRect();
+              const box = popover.getBoundingClientRect();
+              const left = Math.max(12, Math.min(window.innerWidth - box.width - 12, anchor.left + anchor.width / 2 - box.width / 2));
+              const above = anchor.top - box.height - 10;
+              const top = Math.max(12, Math.min(window.innerHeight - box.height - 12, above >= 12 ? above : anchor.bottom + 10));
+              popover.style.left = `${left}px`;
+              popover.style.top = `${top}px`;
+              popover.dataset.side = above >= 12 ? "above" : "below";
+              popover.style.setProperty("--popover-arrow-x", `${Math.max(18, Math.min(box.width - 18, anchor.left + anchor.width / 2 - left))}px`);
+            }}>
               <span className="analytics-year-bar-fill" style={{ height: `${Math.max(4, point.trips / maxTrips * 100)}%` }}><b>{point.trips}</b></span>
               <strong>{point.year}</strong>
             </button>
             <div id={`${chartId}-${point.year}`} popover="auto" className="analytics-year-popover">
               <button type="button" popoverTarget={`${chartId}-${point.year}`} popoverTargetAction="hide" aria-label={t("ปิด")}><X size={18} /></button>
+              <div className="analytics-year-popover-content">
               <h3><CalendarDays size={18} />{point.year}</h3>
               <p><MapPin size={17} />{t("จุดหมายที่ไป")} <b>{point.destinations} {t("ที่")}</b></p>
               <p><Luggage size={17} />{t("การเดินทาง")} <b>{point.trips} {tripLabel}</b></p>
               <p><WalletCards size={17} />{t("ค่าใช้จ่ายรวม")} <b>{money(point.totalExpense)}</b></p>
               <small>{t("นับจุดหมายไม่ซ้ำภายในปี จากเมืองหรือจังหวัดของทริป")}</small>
+              </div>
             </div>
           </div>
         ))}
@@ -3547,6 +3498,7 @@ function TravelAnalyticsDashboard({
   const t = useT();
   const lang = useContext(LanguageContext);
   const [analytics, setAnalytics] = useState(datasets);
+  const router = useRouter();
   const [scope, setScope] = useState<TravelAnalyticsScope>("all");
   const [refreshing, setRefreshing] = useState(false);
   const data = analytics[scope];
@@ -3578,19 +3530,41 @@ function TravelAnalyticsDashboard({
     };
   }, [refreshAnalytics, refreshRequestRef]);
   const money = (value: number) => `฿${bahtFormat(value)}`;
+  const rankedCountries = data.countries.filter(item => item.countryCode !== "TH");
   const maxCountryTrips = Math.max(
     1,
-    ...data.countries.map((item) => item.trips),
+    ...rankedCountries.map((item) => item.trips),
   );
   const maxDestinationTrips = Math.max(
     1,
     ...data.destinations.map((item) => item.trips),
   );
   const flightInsights = data.flights;
-  const ranking = scope === "domestic" ? data.destinations : data.countries;
+  const ranking = scope === "domestic" ? data.destinations.slice(0, 10) : rankedCountries;
   const topAirline = flightInsights.airlines[0];
-  const topPeriod = [...flightInsights.periods].sort((a, b) => b.flights - a.flights)[0];
+  const topPeriod = flightInsights.periods.filter(period => period.flights > 0).sort((a, b) => b.flights - a.flights)[0];
   const topRoute = flightInsights.routes[0];
+  const topMonth = [...flightInsights.months].sort((a,b) => b.flights-a.flights || a.month-b.month)[0];
+  const topCabin = [...flightInsights.cabins].sort((a,b) => b.flights-a.flights)[0];
+  const peakYear = [...data.years].sort((a,b) => b.trips-a.trips || b.year-a.year)[0];
+  const firstTravelYear = [...data.years].sort((a, b) => a.year - b.year)[0];
+  const favoriteDestination = [...data.destinations].sort((a, b) => b.trips - a.trips || a.nameTh.localeCompare(b.nameTh, "th"))[0];
+  const monthLabel = topMonth ? new Intl.DateTimeFormat(lang === "EN" ? "en" : "th", {month:"long"}).format(new Date(2020, topMonth.month-1, 1)) : t("ยังไม่มีข้อมูล");
+  const moreInsights = [
+    {label:"เดือนที่บินบ่อย",value:monthLabel,detail:topMonth ? `${topMonth.flights} ${t("เที่ยว")}` : "—",Icon:CalendarDays,tone:"orange"},
+    {label:"ชั้นโดยสารที่ใช้บ่อย",value:topCabin?.name || t("ยังไม่มีข้อมูล"),detail:topCabin ? `${topCabin.flights} ${t("เที่ยว")}` : "—",Icon:Luggage,tone:"blue"},
+    {label:"เวลาบินเฉลี่ย",value:flightInsights.totals.averageDurationHours > 0 ? `${flightInsights.totals.averageDurationHours.toFixed(1)} ${lang === "EN" ? "hrs" : "ชม."}` : "—",detail:lang === "EN" ? "Per flight segment" : "ต่อช่วงบินที่มีข้อมูล",Icon:Clock,tone:"mint"},
+    {label:"ปีที่เที่ยวมากที่สุด",value:peakYear ? String(peakYear.year) : "—",detail:peakYear ? `${peakYear.trips} ${t("ทริป")}` : "—",Icon:CalendarDays,tone:"orange"},
+    {label:"ทริปเฉลี่ยต่อปี",value:data.years.length ? (data.totals.trips/data.years.length).toFixed(1) : "—",detail:lang === "EN" ? "Across active travel years" : "เฉพาะปีที่มีทริป",Icon:ChartNoAxesColumnIncreasing,tone:"blue"},
+    {label:"ช็อปปิ้งเฉลี่ยต่อทริป",value:money(data.totals.averageShoppingExpense),detail:lang === "EN" ? "Your share" : "เฉพาะส่วนของเรา",Icon:WalletCards,tone:"mint"},
+    {label:"ค่าเที่ยวเฉลี่ยต่อทริป",value:money(data.totals.averageTravelExpense),detail:lang === "EN" ? "Your share, excluding shopping" : "ส่วนของเรา ไม่รวมช็อปปิ้ง",Icon:MapPin,tone:"orange"},
+    {label:"เมืองที่กลับไปบ่อย",value:favoriteDestination ? (lang === "EN" ? favoriteDestination.nameEn : favoriteDestination.nameTh) : "—",detail:favoriteDestination ? `${favoriteDestination.trips} ${t("ทริป")}` : t("ยังไม่มีข้อมูล"),Icon:MapPin,tone:"blue"},
+    {label:"ปีแรกที่มีทริป",value:firstTravelYear ? String(firstTravelYear.year) : "—",detail:lang === "EN" ? "From your recorded trips" : "จากทริปที่บันทึกไว้",Icon:CalendarDays,tone:"mint"},
+    {label:"สายการบินที่เคยใช้",value:String(flightInsights.airlines.filter(airline => airline.name !== "ไม่ระบุ").length),detail:lang === "EN" ? "Distinct recorded airlines" : "สายการบินไม่ซ้ำกัน",Icon:Plane,tone:"orange"},
+    {label:"เส้นทางบินที่เคยไป",value:String(flightInsights.routes.length),detail:lang === "EN" ? "Distinct recorded routes" : "เส้นทางที่บันทึก ไม่ซ้ำกัน",Icon:Navigation,tone:"blue"},
+    {label:"ทริปที่มีเที่ยวบิน",value:data.totals.trips ? `${Math.round(flightInsights.totals.trips / data.totals.trips * 100)}%` : "—",detail:`${flightInsights.totals.trips} / ${data.totals.trips} ${t("ทริป")}`,Icon:Luggage,tone:"mint"},
+    {label:"สัดส่วนช็อปปิ้ง",value:data.totals.expense > 0 ? `${Math.round(data.totals.shoppingExpense / data.totals.expense * 100)}%` : "—",detail:lang === "EN" ? "Of your recorded spending" : "จากค่าใช้จ่ายส่วนของเรา",Icon:WalletCards,tone:"orange"},
+  ];
   const locationCount = scope === "domestic" ? data.totals.destinations : data.totals.countries;
   const scopeOptions: TripFilterOption<TravelAnalyticsScope>[] = [
     { value: "all", label: t("ทั้งหมด"), Icon: Luggage, count: analytics.all.totals.trips, tone: "all" },
@@ -3598,18 +3572,21 @@ function TravelAnalyticsDashboard({
     { value: "international", label: t("ต่างประเทศ"), Icon: Globe2, count: analytics.international.totals.trips, tone: "international" },
   ];
   const scopeFilter = <TripSegmentedFilter value={scope} options={scopeOptions} onChange={setScope} ariaLabel={t("กรองสถิติการเดินทาง")} tripLabel={t("ทริป")} className="analytics-type-options" />;
-  const badgeSection = <TravelBadgesPage collection={badges} embedded />;
+  const badgeSection = <TravelBadgesPage collection={badges} embedded highlightScope={scope} progressCard={<TravelBadgeProgressCard unlocked={badges.badges.filter(badge => badge.unlocked).length} total={badges.badges.length} onClick={() => router.push(badgesHrefForScope(scope))} />} />;
   const analyticsHero = <PageIntro
     title={t("ความทรงจำของเรา")}
     titleIcon={<Heart size={22} fill="currentColor" />}
     subtitle={t("เก็บทุกการเดินทาง ให้เป็นเรื่องราวที่สวยงามเสมอ")}
   />;
 
+  if (refreshing) return <div className="screen analytics-screen analytics-redesign">{analyticsHero}{scopeFilter}<FetchSkeleton rows={5} label={t("กำลังอัปเดต…")} /></div>;
+
   if (!data.totals.trips)
     return (
       <div className="screen analytics-screen analytics-redesign">
         {analyticsHero}
         {scopeFilter}
+        {badgeSection}
         <article className="card analytics-empty">
           <ChartNoAxesColumnIncreasing size={28} />
           <h2>{t("ยังไม่มีทริปที่ผ่านมาให้สรุป")}</h2>
@@ -3617,7 +3594,6 @@ function TravelAnalyticsDashboard({
             {t("เมื่อทริปจบแล้ว สถิติจะปรากฏที่หน้านี้โดยอัตโนมัติ")}
           </p>
         </article>
-        {badgeSection}
       </div>
     );
 
@@ -3626,21 +3602,21 @@ function TravelAnalyticsDashboard({
       {analyticsHero}
 
       {scopeFilter}
+      {badgeSection}
 
       <section className="analytics-memory-kpis" aria-label={t("สถิติการเดินทาง")}>
-        <article className="is-orange"><i><Luggage size={24} /></i><div><strong>{data.totals.trips}</strong><b>{t("ทริปทั้งหมด")}</b><small>{t("การเดินทางที่เต็มไปด้วยเรื่องราว")}</small></div></article>
-        <article className="is-mint"><i><Globe2 size={24} /></i><div><strong>{locationCount}</strong><b>{t(scope === "domestic" ? "จังหวัดที่เคยไป" : "ประเทศที่เคยไป")}</b><small>{t("โลกกว้างยังมีอีกมากให้ค้นหา")}</small></div></article>
-        <article className="is-pink"><i><MapPin size={24} /></i><div><strong>{data.totals.destinations}</strong><b>{t("จุดหมายที่บันทึกไว้")}</b><small>{t("ทุกสถานที่คือความทรงจำ")}</small></div></article>
-        <article className="is-blue"><i><WalletCards size={24} /></i><div><strong>{money(data.totals.averageExpense)}</strong><b>{t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}</b><small>{t("จากค่าใช้จ่ายที่บันทึกไว้")}</small></div></article>
+        <article className="is-orange"><i><Luggage size={24} /></i><div><strong>{data.totals.trips}</strong><b>{t("ทริปทั้งหมด")}</b><small>{lang === "EN" ? "Travel memories" : "ความทรงจำ"}</small></div></article>
+        <article className="is-mint"><i><Globe2 size={24} /></i><div><strong>{locationCount}</strong><b>{t(scope === "domestic" ? "จังหวัดที่เคยไป" : "ประเทศที่เคยไป")}</b><small>{lang === "EN" ? "Visited" : "เดินทางไปแล้ว"}</small></div></article>
+        <article className="is-pink"><i><MapPin size={24} /></i><div><strong>{data.totals.destinations}</strong><b>{lang === "EN" ? "Destinations" : "จุดหมาย"}</b><small>{lang === "EN" ? "Recorded" : "ที่บันทึกไว้"}</small></div></article>
+        <article className="is-blue"><i><WalletCards size={24} /></i><div><strong title={money(data.totals.averageExpense)}>{money(data.totals.averageExpense)}</strong><b title={t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}>{lang === "EN" ? "Avg. / trip" : "เฉลี่ยต่อทริป"}</b><small>{lang === "EN" ? "Your share" : "เฉพาะของเรา"}</small></div></article>
       </section>
-
-      <AnalyticsJourneyMap key={scope} scope={scope} data={data} english={lang === "EN"} />
 
       <div className="analytics-memory-grid">
         <section className="analytics-ranking-card">
-          <div className="analytics-memory-section-head"><h2><ChartNoAxesColumnIncreasing size={18} />{t(scope === "domestic" ? "จังหวัดที่ไปบ่อยที่สุด" : "ประเทศที่เราไปบ่อยที่สุด")}</h2></div>
+          <div className="analytics-memory-section-head"><h2><ChartNoAxesColumnIncreasing size={18} />{scope === "domestic" ? (lang === "EN" ? "Top 10 most visited provinces" : "10 อันดับจังหวัดที่ไปบ่อยที่สุด") : t("ประเทศที่เราไปบ่อยที่สุด")}</h2></div>
           <div className="analytics-ranking-list">
-            {ranking.slice(0, 5).map((item, index) => {
+            {!ranking.length && <p className="page-sub">{t("ยังไม่มีข้อมูล")}</p>}
+            {ranking.map((item, index) => {
               const domestic = "nameTh" in item;
               const label = domestic ? (lang === "EN" ? item.nameEn : item.nameTh) : item.country;
               const count = item.trips;
@@ -3663,9 +3639,9 @@ function TravelAnalyticsDashboard({
           <article className="is-orange"><i><Plane size={20} /></i><span><small>{t("สายการบินที่ใช้บ่อย")}</small><strong>{topAirline?.name || t("ยังไม่มีข้อมูล")}</strong><em>{topAirline ? `${topAirline.flights} ${t("เที่ยว")}` : "—"}</em></span></article>
           <article className="is-blue"><i><Moon size={20} /></i><span><small>{t("ช่วงเวลาที่บินบ่อย")}</small><strong>{topPeriod ? t(topPeriod.label) : t("ยังไม่มีข้อมูล")}</strong><em>{topPeriod ? `${topPeriod.flights} ${t("เที่ยว")}` : "—"}</em></span></article>
           <article className="is-mint"><i><Navigation size={20} /></i><span><small>{t("เส้นทางที่บินบ่อย")}</small><strong>{topRoute?.route || t("ยังไม่มีข้อมูล")}</strong><em>{topRoute ? `${topRoute.flights} ${t("เที่ยว")}` : "—"}</em></span></article>
+          {moreInsights.map(({label,value,detail,Icon,tone}) => <article className={`is-${tone}`} key={label}><i><Icon size={20} /></i><span><small title={t(label)}>{t(label)}</small><strong title={value}>{value}</strong><em title={detail}>{detail}</em></span></article>)}
         </div>
       </section>
-      {badgeSection}
     </div>
   );
 }
@@ -3774,7 +3750,7 @@ function TripsDirectory({
   onRefreshComplete,
 }: {
   initialFilters: TripFilters;
-  initialData?: { items: Trip[]; total: number; years: number[]; hasMore: boolean; statusCounts?: Record<TripStatus,number> };
+  initialData?: { items: Trip[]; total: number; years: number[]; filterMembers?: TripFilterMember[]; hasMore: boolean; statusCounts?: Record<TripStatus,number> };
   revision: number;
   selectTrip: (trip: Trip, origin: string) => void;
   manageCollaborators: (trip: Trip) => void;
@@ -3799,6 +3775,9 @@ function TripsDirectory({
     validType(initialFilters.type),
   );
   const [selectedYears, setSelectedYears] = useState<string[]>(()=>parseYears(initialFilters.year));
+  const [selectedMembers, setSelectedMembers] = useState(() => parseMemberFilter(initialFilters.member || ""));
+  const [draftMembers, setDraftMembers] = useState(selectedMembers);
+  const [filterMembers, setFilterMembers] = useState<TripFilterMember[]>(initialData?.filterMembers || []);
   const [queryText, setQueryText] = useState(initialFilters.q || "");
   const sort = "latest";
   const [items, setItems] = useState<Trip[]>(() =>
@@ -3812,12 +3791,18 @@ function TripsDirectory({
   const [draftYears,setDraftYears]=useState<string[]>(()=>parseYears(initialFilters.year));
   const [loading, setLoading] = useState(!initialData);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState("");
+  const filterKey = JSON.stringify([status, tripType, selectedYears, selectedMembers, queryText.trim(), sort]);
+  const [loadedFilterKey, setLoadedFilterKey] = useState(filterKey);
+  const [directoryError, setDirectoryError] = useState("");
+  const previousQueryRef = useRef(queryText);
+  const directoryLoading = loading || filterKey !== loadedFilterKey;
   const [refreshToken, setRefreshToken] = useState(0);
   const [now] = useState(() => Date.now());
   const skipInitialFetch = useRef(Boolean(initialData));
   const hasContentRef = useRef(Boolean(initialData));
   const visibleTripCountRef = useRef(Math.max(20, initialData?.items.length || 0));
-  const activeFiltersRef = useRef(JSON.stringify([status, tripType, selectedYears, queryText.trim(), sort]));
+  const activeFiltersRef = useRef(JSON.stringify([status, tripType, selectedYears, selectedMembers, queryText.trim(), sort]));
   const directoryRequestRef = useRef(0);
   const refreshingDirectoryRef = useRef(false);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
@@ -3895,16 +3880,20 @@ function TripsDirectory({
     const requestId = ++directoryRequestRef.current;
     loadMoreControllerRef.current?.abort();
     loadMoreControllerRef.current = null;
-    const filterKey = JSON.stringify([status, tripType, selectedYears, queryText.trim(), sort]);
+    setLoadingMore(false);
+    setLoadMoreError("");
+    const filterKey = JSON.stringify([status, tripType, selectedYears, selectedMembers, queryText.trim(), sort]);
     if (activeFiltersRef.current !== filterKey) {
       visibleTripCountRef.current = 20;
       activeFiltersRef.current = filterKey;
     }
     refreshingDirectoryRef.current = true;
+    const searchChanged = previousQueryRef.current !== queryText;
+    previousQueryRef.current = queryText;
     const timer = window.setTimeout(
       async () => {
-        const showInitialLoading = !hasContentRef.current;
-        if (showInitialLoading) setLoading(true);
+        setLoading(true);
+        setDirectoryError("");
         const params = new URLSearchParams({
           mode: "list",
           status,
@@ -3914,6 +3903,7 @@ function TripsDirectory({
           offset: "0",
         });
         if (selectedYears.length) params.set("year", selectedYears.join(","));
+        if (selectedMembers.length) params.set("member", selectedMembers.join(","));
         if (queryText.trim()) params.set("q", queryText.trim());
         const visibleParams = new URLSearchParams(params);
         visibleParams.delete("mode");
@@ -3922,10 +3912,9 @@ function TripsDirectory({
         if (status === "all") visibleParams.delete("status");
         if (tripType === "all") visibleParams.delete("type");
         if (sort === "latest") visibleParams.delete("sort");
-        router.replace(
-          visibleParams.size ? `/trips?${visibleParams}` : "/trips",
-          { scroll: false },
-        );
+        // This list already fetches its own API. Do not start a second server
+        // navigation for the same filters and wait for both responses.
+        window.history.replaceState(window.history.state, "", visibleParams.size ? `/trips?${visibleParams}` : "/trips");
         try {
           const data = await fetchTripDirectoryWindow<Trip>(params, visibleTripCountRef.current, controller.signal);
           if (controller.signal.aborted || requestId !== directoryRequestRef.current) return;
@@ -3940,10 +3929,12 @@ function TripsDirectory({
           setItems(nextItems);
           visibleTripCountRef.current = Math.max(20, nextItems.length);
           setYears(Array.isArray(data.years) ? data.years : []);
+          setFilterMembers(data.filterMembers || []);
           if(data.statusCounts)setStatusCounts({all:Number(data.statusCounts.all||0),ongoing:Number(data.statusCounts.ongoing||0),upcoming:Number(data.statusCounts.upcoming||0),past:Number(data.statusCounts.past||0)});
           setHasMore(Boolean(data.hasMore));
           hasContentRef.current = true;
         } catch (error) {
+          if (!controller.signal.aborted && requestId === directoryRequestRef.current) setDirectoryError(error instanceof Error ? error.message : "โหลดทริปไม่สำเร็จ");
           if (
             (error as Error).name !== "AbortError" &&
             !hasContentRef.current
@@ -3952,14 +3943,15 @@ function TripsDirectory({
             setHasMore(false);
           }
         } finally {
-          if (!controller.signal.aborted) {
+          if (!controller.signal.aborted && requestId === directoryRequestRef.current) {
+            setLoadedFilterKey(filterKey);
             refreshingDirectoryRef.current = false;
             setLoading(false);
             onRefreshComplete?.();
           }
         }
       },
-      queryText === initialFilters.q ? 0 : 250,
+      searchChanged ? 250 : 0,
     );
     return () => {
       controller.abort();
@@ -3969,6 +3961,7 @@ function TripsDirectory({
     status,
     tripType,
     selectedYears,
+    selectedMembers,
     queryText,
     sort,
     revision,
@@ -3978,11 +3971,12 @@ function TripsDirectory({
     onRefreshComplete,
   ]);
   async function loadMore() {
-    if (loadMoreControllerRef.current || refreshingDirectoryRef.current) return;
+    if (!hasMore || directoryLoading || loadMoreControllerRef.current || refreshingDirectoryRef.current) return;
     const controller = new AbortController();
     loadMoreControllerRef.current = controller;
     const requestId = directoryRequestRef.current;
     setLoadingMore(true);
+    setLoadMoreError("");
     const params = new URLSearchParams({
       mode: "list",
       status,
@@ -3992,23 +3986,30 @@ function TripsDirectory({
       offset: String(items.length),
     });
     if (selectedYears.length) params.set("year", selectedYears.join(","));
+    if (selectedMembers.length) params.set("member", selectedMembers.join(","));
     if (queryText.trim()) params.set("q", queryText.trim());
     try {
       const response = await fetch(`/api/trips?${params}`, { signal: controller.signal, cache: "no-store" });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      if (!response.ok) throw new Error(data.error || t("โหลดทริปไม่สำเร็จ"));
       if (controller.signal.aborted || requestId !== directoryRequestRef.current) return;
-      visibleTripCountRef.current = items.length + (Array.isArray(data.items) ? data.items.length : 0);
-      setItems((current) => [
-        ...current,
-        ...(Array.isArray(data.items) ? data.items : []),
-      ]);
+      const existingIds = new Set(items.map(trip => trip.id));
+      const nextItems: Trip[] = (Array.isArray(data.items) ? data.items : []).filter((trip: Trip) => {
+        if (existingIds.has(trip.id)) return false;
+        existingIds.add(trip.id);
+        return true;
+      });
+      if (!nextItems.length && data.hasMore) throw new Error(t("โหลดทริปไม่สำเร็จ"));
+      visibleTripCountRef.current = items.length + nextItems.length;
+      setItems((current) => [...current, ...nextItems]);
       setHasMore(Boolean(data.hasMore));
     } catch (error) {
-      if (!controller.signal.aborted) console.error("Load more trips failed", error);
+      if (!controller.signal.aborted && requestId === directoryRequestRef.current) setLoadMoreError(error instanceof Error ? error.message : t("โหลดทริปไม่สำเร็จ"));
     } finally {
-      if (loadMoreControllerRef.current === controller) loadMoreControllerRef.current = null;
-      setLoadingMore(false);
+      if (loadMoreControllerRef.current === controller) {
+        loadMoreControllerRef.current = null;
+        setLoadingMore(false);
+      }
     }
   }
   const statuses: TripFilterOption<TripStatus>[] = [
@@ -4021,7 +4022,7 @@ function TripsDirectory({
     {value:"domestic",label:"ในประเทศ",Icon:MapPin},
     {value:"international",label:"ต่างประเทศ",Icon:Globe2},
   ];
-  const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0;
+  const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0||selectedMembers.length>0;
   const firstPastTripIndex = status === "all"
     ? items.findIndex((trip) => tripTemporalStatus(trip, now).past)
     : -1;
@@ -4049,22 +4050,22 @@ function TripsDirectory({
               </button>
             )}
           </label>
-          <button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label={t("กำลังใช้ตัวกรอง")}/>:null}</button>
+          <button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setDraftMembers([...selectedMembers]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label={t("กำลังใช้ตัวกรอง")}/>:null}</button>
           <button className="trip-directory-add-button" type="button" onClick={createTrip} aria-label={t("สร้างทริปใหม่")} title={t("สร้างทริปใหม่")}><Plus size={21}/></button>
       </div>
       {filtersOpen&&(
         <BottomSheet
           title={t("เลือกตัวกรองทริป")}
-          subtitle={t("เลือกประเภทและปีที่ต้องการได้มากกว่า 1 ปี แล้วกดยืนยันเพื่อแสดงผล")}
+          subtitle={t("เลือกปีและผู้ร่วมทริปได้หลายคน แล้วกดแสดงผล")}
           closeLabel={t("ยกเลิก")}
           onClose={()=>setFiltersOpen(false)}
-          onSubmit={(event)=>{event.preventDefault();setTripType(draftTripType);setSelectedYears([...draftYears].sort((a,b)=>Number(b)-Number(a)));setFiltersOpen(false)}}
+          onSubmit={(event)=>{event.preventDefault();setTripType(draftTripType);setSelectedYears([...draftYears].sort((a,b)=>Number(b)-Number(a)));setSelectedMembers([...draftMembers]);setFiltersOpen(false)}}
           className="trip-directory-filter-sheet"
           bodyClassName="bottom-sheet-body trip-directory-filter-body"
           submitLabel={t("แสดงผล")}
           deleteLabel={t("รีเซ็ตตัวกรอง")}
           deleteIcon={<RotateCcw size={18}/>}
-          onDelete={()=>{setDraftTripType("all");setDraftYears([]);setTripType("all");setSelectedYears([]);setFiltersOpen(false)}}
+          onDelete={()=>{setDraftTripType("all");setDraftYears([]);setDraftMembers([]);setSelectedMembers([]);setTripType("all");setSelectedYears([]);setFiltersOpen(false)}}
         >
           <section className="trip-directory-filter-section">
             <h3>{t("ประเภททริป")}</h3>
@@ -4079,14 +4080,15 @@ function TripsDirectory({
               {years.map(value=>{const stringValue=String(value);const active=draftYears.includes(stringValue);return <button type="button" key={value} className={active?"active":""} onClick={()=>setDraftYears(current=>active?current.filter(item=>item!==stringValue):[...current,stringValue])} aria-pressed={active}>{value}</button>})}
             </div>
           </section>
+          <TripMemberFilter members={filterMembers} selected={draftMembers} onChange={setDraftMembers} />
         </BottomSheet>
       )}
       <TripSegmentedFilter value={status} options={statuses} onChange={setStatus} ariaLabel={t("กรองทริปตามสถานะ")} tripLabel={t("ทริป")}/>
-      {loading ? (
+      {directoryLoading ? (
         <div className="compact-trip-grid compact-trip-list-skeleton" role="status" aria-label={t("กำลังโหลดทริป…")}>
           {Array.from({length:4},(_,index)=><span className="compact-trip-skeleton-card" key={index}><i/><b><em/><em/><em/></b></span>)}
         </div>
-      ) : items.length ? (
+      ) : directoryError ? <div role="alert" className="card"><p>{directoryError}</p><button type="button" onClick={() => { setLoading(true); setRefreshToken(value => value + 1); }}>{t("ลองอีกครั้ง")}</button></div> : items.length ? (
         <>
           <div className="compact-trip-grid">
             {items.map((trip, index) => (
@@ -4103,14 +4105,9 @@ function TripsDirectory({
             ))}
           </div>
           {hasMore && (
-            <button
-              className="load-more-btn"
-              onClick={loadMore}
-              disabled={loadingMore}
-            >
-              {t(loadingMore ? "กำลังโหลดทริป…" : "โหลดเพิ่มเติม")}
-            </button>
+            <AutoLoadMore key={filterKey} loading={loadingMore} error={loadMoreError} count={items.length} onLoad={loadMore} retryLabel={t("ลองอีกครั้ง")} fallbackLabel={t("โหลดเพิ่มเติม")} />
           )}
+          {loadingMore ? <FetchSkeleton rows={2} label={t("กำลังโหลดทริป…")} /> : null}
         </>
       ) : (
         <EmptyState
@@ -4290,6 +4287,8 @@ function TripSectionNav({
   const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
   const [confirmDownload, setConfirmDownload] = useState(false);
+  const [downloadFile, setDownloadFile] = useState<File | null>(null);
+  const [downloadError, setDownloadError] = useState("");
   useEffect(() => {
     if (!moreOpen) return;
     const root = document.documentElement;
@@ -4383,17 +4382,32 @@ function TripSectionNav({
             </div>
           </section>
         </div>, document.body)}
-      {confirmDownload && (
+      {(confirmDownload || downloadFile) && (
         <ConfirmDialog
+          key={downloadFile ? "save-plan" : "prepare-plan"}
           confirmation={{
-            title: "ดาวน์โหลดแผนทริป?",
-            description: "ยืนยันเพื่อเริ่มดาวน์โหลดแผนทริปลงอุปกรณ์นี้",
-            confirmLabel: "ยืนยันดาวน์โหลด",
-            onConfirm: () => {
-              window.location.assign(`/api/trips/${trip.id}/export-plan`);
+            title: downloadFile ? "ไฟล์แผนทริปพร้อมแล้ว" : "ดาวน์โหลดแผนทริป?",
+            description: downloadError || (downloadFile ? "กดบันทึกไฟล์ แล้วเลือกบันทึกไปยังไฟล์ในเมนูของเครื่อง หน้าแอปจะยังอยู่ที่เดิม" : "ยืนยันเพื่อเริ่มดาวน์โหลดแผนทริปลงอุปกรณ์นี้"),
+            confirmLabel: downloadFile ? "บันทึกไฟล์" : "ยืนยันดาวน์โหลด",
+            busyLabel: downloadFile ? "กำลังบันทึก…" : "กำลังเตรียมไฟล์…",
+            onConfirm: async () => {
+              setDownloadError("");
+              try {
+                if (downloadFile) await saveTripPlanDownload(downloadFile);
+                else setDownloadFile(await prepareTripPlanDownload(trip.id, trip.name));
+              } catch (error) {
+                if (!(error instanceof Error && error.name === "AbortError")) {
+                  setDownloadError(error instanceof Error ? error.message : "ดาวน์โหลดไม่สำเร็จ กรุณาลองใหม่");
+                }
+                throw error;
+              }
             },
           }}
-          close={() => setConfirmDownload(false)}
+          close={() => {
+            setConfirmDownload(false);
+            setDownloadError("");
+            if (downloadFile) setDownloadFile(null);
+          }}
         />
       )}
     </>
@@ -5389,9 +5403,9 @@ function TripHub({
                               <AccommodationBookingText
                                 platform={item.accommodation_booking_platform}
                               />
-                              <p>
-                                <MapPin size={10} />
-                                {item.address || t("ยังไม่ได้ระบุสถานที่")}
+                              <p className="event-location">
+                                <MapPin size={10} aria-hidden="true" />
+                                <span title={item.address || undefined}>{item.address || t("ยังไม่ได้ระบุสถานที่")}</span>
                               </p>
                               {item.accommodation_id && (
                                 <>
@@ -5759,9 +5773,9 @@ function TimelineScreen({
                       <div className="timeline-title-row">
                         <h3>{item.place_name}</h3>
                       </div>
-                      <p>
-                        <MapPin size={10} />
-                        {item.address || t("ยังไม่ได้ระบุที่อยู่")}
+                      <p className="event-location">
+                        <MapPin size={10} aria-hidden="true" />
+                        <span title={item.address || undefined}>{item.address || t("ยังไม่ได้ระบุที่อยู่")}</span>
                       </p>
                       {item.accommodation_id && (
                         <>
@@ -6607,6 +6621,7 @@ function PlanExpensesContent({
             members={trip.members || []}
             guests={expenseGuests}
           />
+          <ExpenseSettlementSummary costs={allCosts} members={trip.members || []} guests={expenseGuests} />
         </div>
       </details>
       <div className="expense-list-heading">
@@ -6725,7 +6740,7 @@ function PlanExpensesContent({
                         )
                           return null;
                         const isBaht = (cost.currency || "THB") === "THB";
-                        const card = findPaymentCard(cards, cost);
+                        const participants = expenseParticipants(cost, trip.members || [], expenseGuests);
                         const splitLabel = costSplitLabel(cost, trip.traveller_count);
                         return (
                           <button
@@ -6752,16 +6767,16 @@ function PlanExpensesContent({
                                 <small>{costSourceLabel(cost)}</small>
                               )}
                               {splitLabel ? <small className="expense-row-split">{splitLabel}</small> : null}
-                              <small className="expense-row-payment">
-                                {card ? (
-                                  <PaymentOwnerAvatar card={card} />
-                                ) : (
-                                  <CashPaymentIcon className="expense-cash-mark" />
-                                )}
-                                <span>
-                                  {card ? cardPaymentLabel(card) : t("เงินสด")}
+                              {participants.length > 0 && (
+                                <span className="expense-participant-stack" role="img" aria-label={`${t("หารค่าใช้จ่ายกับ")}: ${participants.map(person => person.name).join(", ")}`}>
+                                  {participants.slice(0, 3).map(person => (
+                                    <span key={person.id} className="expense-participant-avatar" title={person.name} style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>
+                                      {!person.avatar && person.name.trim().charAt(0).toUpperCase()}
+                                    </span>
+                                  ))}
+                                  {participants.length > 3 && <span className="expense-participant-avatar expense-participant-more" title={participants.slice(3).map(person => person.name).join(", ")}>+{participants.length - 3}</span>}
                                 </span>
-                              </small>
+                              )}
                             </span>
                           </button>
                         );
@@ -7244,8 +7259,8 @@ function StorageUsagePanel({ lang }: { lang: Lang }) {
           <RefreshCw size={16} />
         </button>
       </div>
-      {loading && !data ? (
-        <p className="storage-loading">{t("กำลังตรวจสอบพื้นที่…")}</p>
+      {loading ? (
+        <FetchSkeleton rows={2} label={t("กำลังตรวจสอบพื้นที่…")} />
       ) : error ? (
         <p className="login-error">{error}</p>
       ) : (
@@ -7342,6 +7357,7 @@ function SettingsContent({
   );
   const [cardsExpanded, setCardsExpanded] = useState(false);
   const [sortingCards, setSortingCards] = useState(false);
+  const [cardSortTurns, setCardSortTurns] = useState(0);
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [savingOrder, setSavingOrder] = useState(false);
   const [draftCards, setDraftCards] = useState(cards);
@@ -7520,13 +7536,14 @@ function SettingsContent({
                       draftCardsRef.current = cards;
                       setDraftCards(cards);
                       setSortingCards((value) => !value);
+                      setCardSortTurns((value) => value + 1);
                     }
                   }}
                   aria-label={t(sortingCards ? "เสร็จแล้ว" : "จัดลำดับบัตร")}
                   title={t(sortingCards ? "เสร็จแล้ว" : "จัดลำดับบัตร")}
                   aria-pressed={sortingCards}
                 >
-                  <ArrowUpDown size={26} />
+                  <ArrowUpDown size={26} style={{ transform: `rotate(${cardSortTurns * 360}deg)` }} />
                 </button>
               )}
               <button
@@ -7630,6 +7647,7 @@ function SettingsContent({
               </span>
               <div>
                 <strong>{t("เอกสารออฟไลน์")}</strong>
+                <OfflineDocumentUsage english={lang === "EN"} />
                 <small>
                   {t("ลบเอกสารที่ดาวน์โหลดไว้จากทุกทริปบนอุปกรณ์นี้")}
                 </small>
@@ -8273,8 +8291,8 @@ function ReviewsSheet({
 }) {
   const t = useT();
   const [items, setItems] = useState<TripReview[]>([]);
-  const [average, setAverage] = useState(Number(trip.review_average || 0));
-  const [count, setCount] = useState(Number(trip.review_count || 0));
+  const [average, setAverage] = useState(0);
+  const [count, setCount] = useState(0);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState("");
   const [originalRating, setOriginalRating] = useState(0);
@@ -8305,7 +8323,7 @@ function ReviewsSheet({
         setReview(savedReview);
         setOriginalRating(savedRating);
         setOriginalReview(savedReview);
-        setEditingOwnReview(!savedRating);
+        setEditingOwnReview(!hasSubmittedReview(own));
       })
       .catch((reason) => {
         if ((reason as Error).name !== "AbortError") setError("โหลดรีวิวไม่สำเร็จ");
@@ -8359,7 +8377,9 @@ function ReviewsSheet({
   const hasChanges =
     rating >= 1 &&
     rating <= 5 &&
+    review.trim().length > 0 &&
     (rating !== originalRating || review !== originalReview);
+  const scoresVisible = !loading && hasSubmittedReview({ rating: originalRating, review: originalReview });
   function cancelEditingOwnReview() {
     setRating(originalRating);
     setReview(originalReview);
@@ -8378,13 +8398,13 @@ function ReviewsSheet({
             <X size={18} />
           </button>
         </div>
-        <div className="review-average-card">
+        {scoresVisible ? <div className="review-average-card">
           <span><Star size={23} fill="currentColor" /></span>
           <div><small>{t("คะแนนเฉลี่ย")}</small><strong>{count ? average.toFixed(1) : "—"}</strong></div>
           <b>{count} {t("รีวิว")}</b>
-        </div>
+        </div> : !loading && <p className="review-privacy-notice">{t("บันทึกรีวิวพร้อมให้คะแนนของคุณก่อน จึงจะเห็นรีวิว คะแนนของเพื่อน และคะแนนเฉลี่ยทริป")}</p>}
         {loading ? (
-          <div className="review-loading">{t("กำลังโหลดรีวิว")}</div>
+          <FetchSkeleton label={t("กำลังโหลดรีวิว")} />
         ) : (
           <div className="review-member-list">
             {items.map((item) => {
@@ -8407,7 +8427,7 @@ function ReviewsSheet({
                     />
                     <div className="field review-text-field">
                       <label htmlFor={`trip-review-${item.user_id}`}>{t("เขียนรีวิวของคุณ")}</label>
-                      <textarea id={`trip-review-${item.user_id}`} value={review} onChange={(event) => setReview(event.target.value)} maxLength={2000} rows={4} placeholder={t("เล่าความประทับใจ สิ่งที่ชอบ หรือสิ่งที่อยากปรับในทริปหน้า")} />
+                      <textarea id={`trip-review-${item.user_id}`} value={review} onChange={(event) => setReview(event.target.value)} required maxLength={2000} rows={4} placeholder={t("เล่าความประทับใจ สิ่งที่ชอบ หรือสิ่งที่อยากปรับในทริปหน้า")} />
                     </div>
                     <div className="review-form-actions">
                       <button className="primary-btn" disabled={saving || !hasChanges}>{saving ? t("กำลังบันทึก…") : t("บันทึกรีวิว")}</button>
@@ -8438,6 +8458,12 @@ function ReviewsSheet({
                     {item.rating ? <><ReviewStars value={itemRating} /><p className={item.review ? "review-quote" : "review-empty"}>{item.review ? `“${item.review}”` : t("ยังไม่ได้รีวิว")}</p></> : <p className="review-empty">{t("ยังไม่ได้รีวิว")}</p>}
                   </article>
                 );
+              if (!scoresVisible) return (
+                <article className="review-member-card is-locked" key={item.user_id}>
+                  <div className="review-member-head"><ReviewMemberAvatar item={item} /><strong>{item.display_name}</strong></div>
+                  <p className="review-empty">{t("คะแนนและรีวิวจะเปิดเผยหลังคุณบันทึกรีวิวแล้ว")}</p>
+                </article>
+              );
               return (
                 <article className="review-member-card" key={item.user_id}>
                   <div className="review-member-head">
@@ -8663,7 +8689,7 @@ function CollaboratorsSheet({
         {error && <p className="login-error">{t(error)}</p>}
         <div className="collaborator-list">
           {loading ? (
-            <p>{t("กำลังโหลด…")}</p>
+            <FetchSkeleton label={t("กำลังโหลด…")} />
           ) : items.length ? (
             items.map((item) => (
               <div
@@ -8814,6 +8840,7 @@ function CostSheet({
   const existingSplitMemberIds = (existing?.splitMemberIds || []).filter(
     (id) => allSplitMemberIds.includes(id),
   );
+  const [payerKey, setPayerKey] = useState(existing?.paidBy ? `${existing.paidBy.type}:${existing.paidBy.id}` : "");
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>(
     existing && Array.isArray(existing.splitMemberIds)
       ? existingSplitMemberIds
@@ -8995,9 +9022,16 @@ function CostSheet({
       setError("กรุณาเลือกอย่างน้อย 1 คนสำหรับหารค่าใช้จ่าย");
       return;
     }
+    const [payerType, payerId] = payerKey.split(":");
+    const paidBy: ExpensePayer | undefined = payerType === "member" && allSplitMemberIds.includes(payerId)
+      ? { type: "member", id: payerId }
+      : payerType === "guest" && expenseGuests.some(guest => guest.id === payerId)
+        ? { type: "guest", id: payerId } : undefined;
+    if (!paidBy) { setError("กรุณาเลือกผู้จ่ายรายการนี้"); return; }
     const paymentSource = String(form.get("paymentSource") || "cash");
     const selectedCard = cards.find((card) => card.id === paymentSource);
     const cost: CostItem = {
+      paidBy,
       id: existing?.id || crypto.randomUUID(),
       key: String(form.get("title") || "").trim(),
       category: String(form.get("category") || "อื่น ๆ"),
@@ -9113,6 +9147,7 @@ function CostSheet({
               </select>
             </div>
           </div>
+          <div className="expense-title-row">
           <div className="field">
             <label>{t("รายการ")}</label>
             <input
@@ -9143,144 +9178,8 @@ function CostSheet({
               ))}
             </select>
           </div>
-          <div className="field split-member-field" ref={splitPickerRef}>
-              <label>{t("หารค่าใช้จ่ายกับ")}</label>
-              <button
-                type="button"
-                className={`split-member-trigger ${splitPickerOpen ? "is-open" : ""}`}
-                onClick={() => setSplitPickerOpen((value) => !value)}
-                aria-expanded={splitPickerOpen}
-              >
-                <span>
-                  {splitMemberIds.length + splitGuestIds.length === 0
-                    ? t("ยังไม่ได้เลือก")
-                    : splitMemberIds.length + splitGuestIds.length ===
-                        allSplitMemberIds.length + expenseGuests.length
-                      ? t("ทุกคน")
-                      : t(`${splitMemberIds.length + splitGuestIds.length} คน`)}
-                </span>
-                <ChevronDown size={16} />
-              </button>
-              {splitPickerOpen && (
-                <div className="split-member-menu">
-                  <label className="split-all-option">
-                    <input
-                      type="checkbox"
-                      name="splitAll"
-                      checked={
-                        allSplitMemberIds.length > 0 &&
-                        splitMemberIds.length === allSplitMemberIds.length &&
-                        splitGuestIds.length === expenseGuests.length
-                      }
-                      onChange={(event) => {
-                        setSplitMemberIds(
-                          event.target.checked ? allSplitMemberIds : [],
-                        );
-                        setSplitGuestIds(
-                          event.target.checked
-                            ? expenseGuests.map((guest) => guest.id)
-                            : [],
-                        );
-                      }}
-                    />
-                    <span className="split-checkmark" aria-hidden="true" />
-                    <span>{t("ทุกคน")}</span>
-                  </label>
-                  {splitMembers.map((member) => {
-                    const label = member.display_name || member.email || "-";
-                    return (
-                      <label key={member.id}>
-                        <input
-                          type="checkbox"
-                          name="splitMember"
-                          value={member.id}
-                          checked={splitMemberIds.includes(member.id)}
-                          onChange={(event) => {
-                            const next = event.target.checked
-                              ? [...new Set([...splitMemberIds, member.id])]
-                              : splitMemberIds.filter((id) => id !== member.id);
-                            setSplitMemberIds(next);
-                          }}
-                        />
-                        <span className="split-checkmark" aria-hidden="true" />
-                        <span
-                          className="split-member-avatar"
-                          style={
-                            member.avatar_url
-                              ? {
-                                  backgroundImage: `url("${member.avatar_url}")`,
-                                }
-                              : undefined
-                          }
-                        >
-                          {!member.avatar_url && label.charAt(0).toUpperCase()}
-                        </span>
-                        <span>{label}</span>
-                      </label>
-                    );
-                  })}
-                  {expenseGuests.map((guest) => (
-                    <div className="split-guest-option" key={guest.id}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          name="splitGuest"
-                          value={guest.id}
-                          checked={splitGuestIds.includes(guest.id)}
-                          onChange={(event) =>
-                            setSplitGuestIds((current) =>
-                              event.target.checked
-                                ? [...new Set([...current, guest.id])]
-                                : current.filter((id) => id !== guest.id),
-                            )
-                          }
-                        />
-                        <span className="split-checkmark" aria-hidden="true" />
-                        <span className="split-member-avatar is-guest">
-                          <UserRound size={16} aria-hidden="true" />
-                        </span>
-                        <span>{guest.name}</span>
-                        <small className="split-guest-tag">{t("คนนอก")}</small>
-                      </label>
-                      <button
-                        type="button"
-                        className="split-guest-delete"
-                        onClick={() => requestDeleteExpenseGuest(guest)}
-                        disabled={Boolean(deletingGuestId)}
-                        aria-label={`${t("ลบ")} ${guest.name}`}
-                        title={t("ลบคนนอกทริป")}
-                      >
-                        <Trash2 size={15} aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))}
-                  <div className="split-guest-add">
-                    <UserPlus size={17} aria-hidden="true" />
-                    <input
-                      type="text"
-                      maxLength={120}
-                      value={guestName}
-                      onChange={(event) => setGuestName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter") return;
-                        event.preventDefault();
-                        void addExpenseGuest();
-                      }}
-                      placeholder={t("เพิ่มชื่อ เช่น พ่อ แม่")}
-                      aria-label={t("ชื่อคนนอกทริป")}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void addExpenseGuest()}
-                      disabled={!guestName.trim() || addingGuest}
-                    >
-                      {addingGuest ? t("กำลังเพิ่ม…") : t("เพิ่ม")}
-                    </button>
-                  </div>
-                </div>
-              )}
-              <small>{t("เพิ่มคนนอกได้โดยไม่ต้องเชิญอีเมลหรือจอยทริป")}</small>
-            </div>
+          </div>
+          <ExpensePeopleFields t={t} splitPickerRef={splitPickerRef} splitPickerOpen={splitPickerOpen} setSplitPickerOpen={setSplitPickerOpen} splitMemberIds={splitMemberIds} setSplitMemberIds={setSplitMemberIds} splitGuestIds={splitGuestIds} setSplitGuestIds={setSplitGuestIds} splitMembers={splitMembers} expenseGuests={expenseGuests} guestName={guestName} setGuestName={setGuestName} addingGuest={addingGuest} addExpenseGuest={addExpenseGuest} requestDeleteExpenseGuest={requestDeleteExpenseGuest} deletingGuestId={deletingGuestId} payerKey={payerKey} setPayerKey={setPayerKey} />
           <div className="form-row money-currency-row">
             <div className="field">
               <label>{t("ยอดเงิน")}</label>
@@ -10393,7 +10292,7 @@ function ModalForm({
               </div>
               <section className="timeline-document-editor">
                 <div className="timeline-document-heading"><div><strong>{t("เอกสารแนบ")}</strong><small>{t("เพิ่มรูปหรือ PDF พร้อมตั้งชื่อไฟล์")}</small></div></div>
-                {documentsLoading?<p className="timeline-document-loading">{t("กำลังโหลดเอกสาร…")}</p>:null}
+                {documentsLoading?<FetchSkeleton rows={2} label={t("กำลังโหลดเอกสาร…")} />:null}
                 {(timelineDocuments.length>0||pendingTimelineDocuments.length>0)&&<div className="timeline-document-list">
                   {timelineDocuments.map(document=><div className="timeline-document-row" key={document.id}><TimelineDocumentThumbnail url={`/api/trips/${trip?.id}/documents/${document.id}/file`} title={document.title} mimeType={document.mime_type} onClick={()=>openStoredDocument(document)}/><button type="button" className="timeline-document-open" onClick={()=>openStoredDocument(document)}><strong>{document.title}</strong></button>{canDeleteCurrent?<button type="button" disabled={documentDeletingId===document.id} onClick={()=>askRemoveExistingDocument(document)} aria-label={t("ลบเอกสาร")}><Trash2 size={15}/></button>:null}</div>)}
                   {pendingTimelineDocuments.map(document=><div className="timeline-document-row is-pending" key={document.id}><PendingTimelineDocumentThumbnail document={document} onClick={()=>openPendingDocument(document)}/><button type="button" className="timeline-document-open" onClick={()=>openPendingDocument(document)}><strong>{document.title}</strong><small>{t("พร้อมอัปโหลดเมื่อกดบันทึก")}</small></button><button type="button" onClick={()=>askRemovePendingDocument(document)} aria-label={t("นำออกจากลิสต์")}><Trash2 size={15}/></button></div>)}
@@ -10523,7 +10422,7 @@ export function BNTripApp({
   initialItineraries?: Itinerary[];
   initialTripCards?: PaymentCard[];
   initialTripFilters?: TripFilters;
-  initialTripDirectory?: { items: Trip[]; total: number; years: number[]; hasMore: boolean; statusCounts?: Record<TripStatus,number> };
+  initialTripDirectory?: { items: Trip[]; total: number; years: number[]; filterMembers?: TripFilterMember[]; hasMore: boolean; statusCounts?: Record<TripStatus,number> };
   initialTripPreset?: TripCreationPreset | null;
 }) {
   const initialDashboardTrips = initialDashboard
@@ -11006,6 +10905,8 @@ export function BNTripApp({
       });
       setTripRevision((value) => value + 1);
       if (!modal.trip) itineraryCache.set(saved.id, []);
+      // Clear prefetched route data so badges reflect added/removed trip cities.
+      router.refresh();
       if (modal.trip && data.hasFlights === false) {
         itineraryCache.delete(saved.id);
         invalidateClientResourcesContaining(`trip:${saved.id}:`);
@@ -11330,8 +11231,8 @@ export function BNTripApp({
       }
       action(...args);
     };
-  const content = loading ? (
-    <div className="card">กำลังโหลดข้อมูล…</div>
+  const content = loading || (page === "dashboard" && refreshingDashboard) ? (
+    <FetchSkeleton rows={4} />
   ) : page === "dashboard" ? (
     <Dashboard
       trips={trips}

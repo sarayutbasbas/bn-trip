@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { BadgeHighlightSkeleton } from "@/src/components/badge-skeleton";
 
 type LoadingPage = "home" | "trips" | "ideas" | "analytics" | "settings";
 
@@ -74,12 +75,18 @@ function AnalyticsLoading() {
   return <div className="route-skeleton-screen route-skeleton-analytics">
     <Intro page="analytics" />
     <div className="route-skeleton-filters">{[0, 1, 2].map(index => <Block key={index} />)}</div>
+    <BadgeHighlightSkeleton />
     <div className="route-skeleton-kpis">{[0, 1, 2, 3].map(index => <div className="route-skeleton-kpi" key={index}>
       <Block className="route-skeleton-kpi-icon" />
       <div><Block className="route-skeleton-line is-title" /><Block className="route-skeleton-line" /></div>
     </div>)}</div>
-    <div className="route-skeleton-map"><Block className="route-skeleton-section-title" /><Block className="route-skeleton-map-art" /></div>
-    <div className="route-skeleton-analytics-cards">{[0, 1].map(index => <Block key={index} />)}</div>
+    <div className="route-skeleton-ranking"><Block className="route-skeleton-section-title" />{[0, 1, 2, 3, 4].map(index => <div key={index}><Block className="route-skeleton-ranking-icon" /><Block className="route-skeleton-line" /></div>)}</div>
+    <div className="route-skeleton-year-chart">
+      <Block className="route-skeleton-section-title" /><Block className="route-skeleton-line" />
+      <div className="route-skeleton-year-bars">{[40, 70, 100].map(height => <Block key={height} className={`is-height-${height}`} />)}</div>
+      <div className="route-skeleton-year-summary"><Block /><Block /></div>
+    </div>
+    <div className="route-skeleton-ranking"><Block className="route-skeleton-section-title" />{[0, 1, 2].map(index => <div key={index}><Block className="route-skeleton-ranking-icon" /><Block className="route-skeleton-line" /></div>)}</div>
   </div>;
 }
 

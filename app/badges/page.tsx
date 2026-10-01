@@ -10,8 +10,11 @@ export const metadata: Metadata = {
   description: "สะสมเข็มกลัดและปักหมุดสถานที่ที่เคยเดินทางไปกับ RouteRao",
 };
 
-export default async function BadgesPage() {
+export default async function BadgesPage({ searchParams }: { searchParams: Promise<{ category?: string | string[]; focus?: string | string[] }> }) {
   const session = await getSession();
   if (!session) redirect("/");
-  return <TravelBadgesPage collection={await loadTravelBadges(session)} />;
+  const { category, focus } = await searchParams;
+  const initialCategory = category === "thailand" || category === "japan" || category === "international" ? category : "all";
+  const initialFocus = typeof focus === "string" && focus.length <= 160 ? focus : undefined;
+  return <TravelBadgesPage key={`${initialCategory}:${initialFocus || ""}`} initialCategory={initialCategory} initialFocus={initialFocus} collection={await loadTravelBadges(session)} />;
 }

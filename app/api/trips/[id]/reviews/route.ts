@@ -5,6 +5,7 @@ import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { query } from "@/src/lib/db";
 import { getTripRole } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
+import { visibleTripReviews } from "@/src/lib/review-visibility";
 
 const reviewSchema = z.object({
   rating: z
@@ -15,7 +16,7 @@ const reviewSchema = z.object({
       (value) => Math.abs(value * 10 - Math.round(value * 10)) < 1e-9,
       "Rating must use one decimal place",
     ),
-  review: z.string().trim().max(2000),
+  review: z.string().trim().min(1).max(2000),
 });
 
 type ReviewRow = {
@@ -61,13 +62,7 @@ async function listReviews(tripId: string, userId: string) {
      ORDER BY member.sort_order,member.display_name,member.user_id`,
     [tripId, userId],
   );
-  const ratings = result.rows
-    .map((row) => Number(row.rating))
-    .filter((rating) => Number.isFinite(rating) && rating > 0);
-  const average = ratings.length
-    ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
-    : 0;
-  return { items: result.rows, average, count: ratings.length };
+  return visibleTripReviews(result.rows);
 }
 
 export async function GET(

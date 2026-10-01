@@ -2,6 +2,17 @@ import { TRIP_COUNTRIES, inferTripCountry } from "@/src/lib/countries";
 
 export type TravelBadgeCategory = "thailand" | "japan" | "international";
 
+export function badgesHrefForScope(scope: "all" | "domestic" | "international", focus?: string) {
+  const params = new URLSearchParams();
+  if (scope !== "all") params.set("category", scope === "domestic" ? "thailand" : "international");
+  if (focus) params.set("focus", focus);
+  return params.size ? `/badges?${params}` : "/badges";
+}
+
+export function badgeMatchesCategory(badge: {category: TravelBadgeCategory; countryCode: string}, category: "all" | TravelBadgeCategory) {
+  return category === "all" || (category === "international" ? badge.countryCode !== "TH" : badge.category === category);
+}
+
 export type BadgeTripVisit = {
   id: string;
   name: string;
@@ -29,6 +40,21 @@ export type TravelBadge = TravelBadgeDefinition & {
   visits: BadgeTripVisit[];
   manualVisitDate: string | null;
 };
+
+export function canRemoveManualBadgeVisit(badge: Pick<TravelBadge, "manualVisitDate" | "visits">) {
+  return Boolean(badge.manualVisitDate) && badge.visits.length === 0;
+}
+
+export function latestTripBadges(badges: TravelBadge[], scope: "all" | "domestic" | "international", limit = 4) {
+  return badges.filter(badge => badge.unlocked && (scope === "all" || (scope === "domestic" ? badge.countryCode === "TH" : badge.countryCode !== "TH")))
+    .flatMap(badge => {
+      // Highlight recent travel only, never manual claims or first-unlock dates.
+      const latestTrip = [...badge.visits].sort((a, b) => b.startDate.localeCompare(a.startDate) || a.id.localeCompare(b.id))[0];
+      return latestTrip ? [{ badge, earnedOn: latestTrip.startDate, source: latestTrip.name }] : [];
+    })
+    .sort((a, b) => b.earnedOn.localeCompare(a.earnedOn) || a.badge.nameTh.localeCompare(b.badge.nameTh, "th") || a.badge.id.localeCompare(b.badge.id))
+    .slice(0, limit);
+}
 
 export type TravelBadgeCollection = {
   badges: TravelBadge[];
@@ -230,12 +256,14 @@ export function createCustomTripDestination(countryCode: string, name: string): 
   const countryBadge = TRAVEL_BADGE_CATALOG.find(
     (badge) => badge.category === "international" && badge.countryCode === normalizedCountry,
   );
+  const regionalBadge = TRAVEL_BADGE_CATALOG.find((badge) => badge.countryCode === normalizedCountry && badge.category !== "international"
+    && badge.aliases.some((alias) => alias.toLowerCase() === normalizedName.toLowerCase()));
   return {
     id: `${CUSTOM_DESTINATION_PREFIX}${normalizedCountry}:${encodeURIComponent(normalizedName)}`,
     countryCode: normalizedCountry,
     nameTh: normalizedName,
     nameEn: normalizedName,
-    badgeId: countryBadge?.id || "",
+    badgeId: regionalBadge?.id || countryBadge?.id || "",
     searchTerms: [normalizedName.toLowerCase()],
   };
 }
@@ -274,7 +302,14 @@ function tripMatchesBadge(trip: BadgeTripSource, badge: TravelBadgeDefinition) {
   const code = tripCountryCode(trip);
   if (code !== badge.countryCode) return false;
   if (trip.trip_destinations?.length) {
-    return trip.trip_destinations.some((destination) => destination.badgeId === badge.id);
+    return trip.trip_destinations.some((destination) => {
+      if (destination.countryCode && destination.countryCode.toUpperCase() !== code) return false;
+      if (badge.category === "international") return true;
+      if (destination.badgeId === badge.id || destination.id === `${code}:${badge.slug}`) return true;
+      // Older/custom selections may not have a badgeId. Match only the saved
+      // city itself, never unrelated text elsewhere in the trip.
+      return [destination.nameTh, destination.nameEn].some((name) => name && badge.aliases.some((alias) => alias.toLowerCase() === name.trim().toLowerCase()));
+    });
   }
   if (badge.category === "international") return true;
   const haystack = `${trip.destination} ${trip.country_name || ""}`.toLowerCase();

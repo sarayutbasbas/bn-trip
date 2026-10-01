@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { expensePayerSchema } from "@/src/lib/expense-payer-validation";
 import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
 import { getTripRole,tripCardIdsAreMembers,tripExpenseGuestIdsBelongToTrip,tripMemberIdsAreMembers } from "@/src/lib/trip-access";
@@ -20,6 +21,7 @@ const schema=z.object({
   transportMode:z.string().max(100).optional(),
   transportNote:z.string().max(1000).optional(),
   costItems:z.array(z.object({
+    paidBy:expensePayerSchema.optional(),
     id:z.string().optional(),key:z.string().trim().min(1).max(100),value:z.number().min(0),
     category:z.string().max(60).optional(),currency:z.string().length(3).optional(),
     foreignAmount:z.number().min(0).optional(),exchangeRate:z.number().positive().optional(),rateDate:z.string().optional(),
@@ -50,6 +52,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     }
     if(!await tripCardIdsAreMembers(existing.trip_id,costItems.flatMap(item=>item.creditCardId?[item.creditCardId]:[])))return NextResponse.json({error:"บัตรนี้ไม่ได้เป็นของสมาชิกในทริป"},{status:400});
     if(!await tripMemberIdsAreMembers(existing.trip_id,costItems.flatMap(item=>item.splitMemberIds||[])))return NextResponse.json({error:"ผู้หารค่าใช้จ่ายต้องเป็นสมาชิกในทริป"},{status:400});
+    if(!await tripMemberIdsAreMembers(existing.trip_id,costItems.flatMap(item=>item.paidBy?.type==="member"?[item.paidBy.id]:[])) || !await tripExpenseGuestIdsBelongToTrip(existing.trip_id,costItems.flatMap(item=>item.paidBy?.type==="guest"?[item.paidBy.id]:[])))return NextResponse.json({error:"ผู้จ่ายต้องเป็นสมาชิกหรือคนนอกที่เพิ่มไว้ในทริปนี้"},{status:400});
     if(!await tripExpenseGuestIdsBelongToTrip(existing.trip_id,costItems.flatMap(item=>item.splitGuestIds||[])))return NextResponse.json({error:"คนนอกที่เลือกไม่ได้อยู่ในทริปนี้"},{status:400});
     const duplicate=await query("SELECT 1 FROM itineraries WHERE trip_id=$1 AND day_number=$2 AND start_time=$3::time AND id<>$4 LIMIT 1",[existing.trip_id,x.dayNumber,x.startTime,id]);if(duplicate.rowCount)return NextResponse.json({error:"วันและเวลานี้มีแผนอยู่แล้ว กรุณาเลือกเวลาอื่น"},{status:409});
     if(role==="view"&&existing.cost_items.length>x.costItems.length){const nextIds=new Set(x.costItems.map(item=>item.id).filter(Boolean));const removed=existing.cost_items.filter(item=>!item.id||!nextIds.has(item.id));if(removed.some(item=>!item.id))return NextResponse.json({error:"สิทธิ์ View ไม่มีสิทธิลบค่าใช้จ่าย"},{status:403});const moved=await query<{id:string}>("SELECT DISTINCT cost->>'id' AS id FROM itineraries other CROSS JOIN LATERAL jsonb_array_elements(other.cost_items) cost WHERE other.trip_id=$1 AND other.id<>$2 AND cost->>'id'=ANY($3::text[])",[existing.trip_id,id,removed.map(item=>item.id)]);const movedIds=new Set(moved.rows.map(row=>row.id));if(removed.some(item=>!movedIds.has(item.id!)))return NextResponse.json({error:"สิทธิ์ View ไม่มีสิทธิลบค่าใช้จ่าย"},{status:403});}

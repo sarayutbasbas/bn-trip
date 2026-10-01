@@ -138,6 +138,7 @@ const EMPTY: Workspace = {
   documentQuotaBytes: 100 * 1024 * 1024,
   documentUsageBytes: 0,
 };
+import { notifyOfflineDocumentsChanged } from "@/src/lib/offline-document-usage";
 const offlineKey = (tripId: string) => `bn-trip-offline-documents:${tripId}`;
 const tripCategoryValue = (name: string) => `trip:${name}`;
 const checklistCategoryPayload = (value: string) =>
@@ -807,6 +808,7 @@ export function TripWorkspace({
       const next = [...new Set([...offlineIds, item.id])];
       setOfflineIds(next);
       localStorage.setItem(offlineKey(tripId), JSON.stringify(next));
+      notifyOfflineDocumentsChanged();
       notify("ดาวน์โหลดเอกสารออฟไลน์สำเร็จแล้ว");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "ดาวน์โหลดไม่สำเร็จ");
@@ -820,6 +822,7 @@ export function TripWorkspace({
     const next = offlineIds.filter((id) => id !== item.id);
     setOfflineIds(next);
     localStorage.setItem(offlineKey(tripId), JSON.stringify(next));
+    notifyOfflineDocumentsChanged();
   }
   useEffect(() => {
     if (

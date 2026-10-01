@@ -62,6 +62,7 @@ export async function DELETE(
              SELECT 1
              FROM jsonb_array_elements(COALESCE(cost_items,'[]'::jsonb)) AS cost(item)
              WHERE jsonb_exists(COALESCE(cost.item->'splitGuestIds','[]'::jsonb),$2)
+               OR (cost.item->'paidBy'->>'type'='guest' AND cost.item->'paidBy'->>'id'=$2)
            )
          FOR UPDATE`,
         [id, guestId],
@@ -72,7 +73,15 @@ export async function DELETE(
       for (const itinerary of itineraries.rows) {
         const nextCosts = itinerary.cost_items.map((cost) => {
           const guestIds = stringIds(cost.splitGuestIds);
-          if (!guestIds.includes(guestId)) return cost;
+          const payer = cost.paidBy as { type?: string; id?: string } | undefined;
+          const removedPayer = payer?.type === "guest" && payer.id === guestId;
+          if (!guestIds.includes(guestId)) {
+            if (!removedPayer) return cost;
+            affectedCosts += 1;
+            const nextCost = { ...cost };
+            delete nextCost.paidBy;
+            return nextCost;
+          }
           affectedCosts += 1;
           const nextGuestIds = guestIds.filter((value) => value !== guestId);
           const memberIds = stringIds(cost.splitMemberIds);
@@ -80,6 +89,7 @@ export async function DELETE(
             ...cost,
             splitGuestIds: nextGuestIds,
           };
+          if (removedPayer) delete nextCost.paidBy;
           delete nextCost.splitCount;
           if (!memberIds.length && !nextGuestIds.length) {
             nextCost.splitMemberIds = [row.owner_id];
@@ -93,6 +103,15 @@ export async function DELETE(
         );
       }
 
+      await client.query(
+        `UPDATE trip_accommodations SET
+           split_guest_ids=array_remove(split_guest_ids,$2::uuid),
+           split_member_ids=CASE WHEN cardinality(split_member_ids)=0 AND cardinality(array_remove(split_guest_ids,$2::uuid))=0 THEN ARRAY[$3::uuid] ELSE split_member_ids END,
+           paid_by=CASE WHEN paid_by->>'type'='guest' AND paid_by->>'id'=$2::text THEN NULL ELSE paid_by END,
+           updated_at=now()
+         WHERE trip_id=$1 AND ($2::uuid=ANY(split_guest_ids) OR (paid_by->>'type'='guest' AND paid_by->>'id'=$2::text))`,
+        [id, guestId, row.owner_id],
+      );
       await client.query(
         "DELETE FROM trip_expense_guests WHERE trip_id=$1 AND id=$2",
         [id, guestId],

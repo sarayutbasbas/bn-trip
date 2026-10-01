@@ -130,7 +130,7 @@ export async function syncFlightLinkedRecords(client: PoolClient, input: LinkedF
     ) LIMIT 1`, [input.tripId, costId]);
   if (existingCost.rows[0]) {
     const row = existingCost.rows[0];
-    const costs = row.cost_items.map((item) => item.id === costId ? cost : item);
+    const costs = row.cost_items.map((item) => item.id === costId ? { ...cost, ...(item.paidBy ? { paidBy: item.paidBy } : {}) } : item);
     await client.query("UPDATE itineraries SET cost_items=$2::jsonb,updated_at=now() WHERE id=$1", [row.id, JSON.stringify(costs)]);
   } else {
     await client.query("UPDATE itineraries SET cost_items=cost_items || $2::jsonb,updated_at=now() WHERE id=$1", [itineraryId, JSON.stringify([cost])]);

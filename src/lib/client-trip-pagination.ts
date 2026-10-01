@@ -1,7 +1,8 @@
+import type { TripFilterMember } from "./trip-member-filter";
 export async function fetchTripDirectoryWindow<T>(params: URLSearchParams, visibleCount: number, signal?: AbortSignal) {
   const target = Math.max(20, visibleCount);
   const items: T[] = [];
-  let latest: { items: T[]; years: number[]; hasMore: boolean; statusCounts?: { all: number; ongoing: number; upcoming: number; past: number } } | undefined;
+  let latest: { items: T[]; years: number[]; filterMembers?: TripFilterMember[]; hasMore: boolean; statusCounts?: { all: number; ongoing: number; upcoming: number; past: number } } | undefined;
   while (items.length < target) {
     const page = new URLSearchParams(params);
     page.set("limit", String(Math.min(50, target - items.length)));

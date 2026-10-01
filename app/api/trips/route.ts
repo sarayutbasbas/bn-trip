@@ -10,6 +10,7 @@ import { appendTripSearch } from "@/src/lib/trip-search";
 import { loadDashboard } from "@/src/lib/trip-loaders";
 import { resolveTripDestinations } from "@/src/lib/travel-badges";
 import { tripNoteSchema } from "@/src/lib/trip-note";
+import { appendTripMemberFilter, parseMemberFilter, tripFilterMembersSql, type TripFilterMember } from "@/src/lib/trip-member-filter";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const countryCodeSchema=z.string().length(2).transform(value=>value.toUpperCase()).refine(value=>Boolean(countryByCode(value)),{message:"Invalid country"});
@@ -28,6 +29,7 @@ export async function GET(request:Request) {
     const status=params.get("status")||"all";
     const tripType=params.get("type")||"all";
     const filterYears=selectedYears(params);
+    const filterMembers=parseMemberFilter(params.getAll("member").join(","),session.userId);
     const search=(params.get("q")||"").trim().slice(0,80);
     const sort=params.get("sort")||"latest";
     const limit=Math.min(50,Math.max(1,Number(params.get("limit")||20)));
@@ -41,15 +43,18 @@ export async function GET(request:Request) {
     if(tripType==="international")where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
     if(filterYears.length){values.push(filterYears);where.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${values.length}::int[])`)}
     appendTripSearch(where,values,search);
+    appendTripMemberFilter(where,values,filterMembers);
     const statusCountValues:Array<string|number|number[]|string[]>=[session.userId];
     const statusCountWhere=[access];
     if(tripType==="domestic")statusCountWhere.push("t.country_code='TH'");
     if(tripType==="international")statusCountWhere.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
     if(filterYears.length){statusCountValues.push(filterYears);statusCountWhere.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${statusCountValues.length}::int[])`)}
     appendTripSearch(statusCountWhere,statusCountValues,search);
+    appendTripMemberFilter(statusCountWhere,statusCountValues,filterMembers);
     const order=sort==="oldest"?"t.start_date ASC,t.id ASC":sort==="name"?"t.name ASC,t.id ASC":sort==="nearest"?"ABS(EXTRACT(EPOCH FROM (COALESCE(t.outbound_departure_at,t.start_date::timestamp)-(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))))) ASC,t.id ASC":"CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 0 WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN 1 ELSE 2 END ASC,CASE WHEN COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.outbound_departure_at,t.start_date::timestamp) END ASC,CASE WHEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) THEN COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) END DESC,t.id DESC";
     const clause=where.join(" AND ");
-    const [items,total,years,statusCounts]=await Promise.all([
+    const [filterPeople,items,total,years,statusCounts]=await Promise.all([
+      query<TripFilterMember>(tripFilterMembersSql,[session.userId]),
       query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,limit,offset]),
       query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`,values),
       query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`,[session.userId]),
@@ -61,7 +66,7 @@ export async function GET(request:Request) {
     ]);
     const count=Number(total.rows[0]?.count||0);
     const counts=statusCounts.rows[0]||{};
-    return NextResponse.json({items:items.rows,total:count,years:years.rows.map(row=>row.year),hasMore:offset+items.rows.length<count,statusCounts:{all:Number(counts.total||0),ongoing:Number(counts.ongoing||0),upcoming:Number(counts.upcoming||0),past:Number(counts.past||0)}});
+    return NextResponse.json({filterMembers:filterPeople.rows.filter(member=>member.id!==session.userId),items:items.rows,total:count,years:years.rows.map(row=>row.year),hasMore:offset+items.rows.length<count,statusCounts:{all:Number(counts.total||0),ongoing:Number(counts.ongoing||0),upcoming:Number(counts.upcoming||0),past:Number(counts.past||0)}});
   }
   const result = await query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} ORDER BY t.start_date DESC`,[session.userId]); return NextResponse.json(result.rows);
 }

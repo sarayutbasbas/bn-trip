@@ -626,6 +626,18 @@ const migrations = [
       "ALTER TABLE trip_ideas ADD CONSTRAINT trip_ideas_planned_target_check CHECK (kind <> 'planned' OR target_month IS NOT NULL AND target_year IS NOT NULL)",
     ],
   },
+  {
+    version: 49,
+    statements: [
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS booking_url TEXT NOT NULL DEFAULT ''",
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS paid_by JSONB",
+      "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS split_guest_ids UUID[] NOT NULL DEFAULT '{}'",
+      `UPDATE trip_accommodations accommodation SET paid_by=cost.item->'paidBy',
+         split_guest_ids=ARRAY(SELECT jsonb_array_elements_text(COALESCE(cost.item->'splitGuestIds','[]'::jsonb)))::uuid[]
+       FROM itineraries itinerary, LATERAL jsonb_array_elements(itinerary.cost_items) cost(item)
+       WHERE itinerary.trip_id=accommodation.trip_id AND cost.item->>'id'=accommodation.cost_item_id::text`,
+    ],
+  },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

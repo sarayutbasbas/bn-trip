@@ -62,13 +62,6 @@ export async function exportTravelMap(svg: SVGSVGElement, title: string, summary
     ctx.font = "18px sans-serif";
     ctx.fillText("Map data: Natural Earth · OpenStreetMap contributors · geoBoundaries", 60, top + 900);
     const png = await new Promise<Blob>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("บันทึกรูปไม่สำเร็จ")), "image/png"));
-    const downloadUrl = URL.createObjectURL(png);
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = "RouteRao-travel-map.png";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+    return new File([png], "RouteRao-travel-map.png", { type: "image/png" });
   } finally { URL.revokeObjectURL(url); }
 }

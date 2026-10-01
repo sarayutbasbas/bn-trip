@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { query } from "@/src/lib/db";
 import { clearFirstItineraryTransport } from "@/src/lib/itinerary-order";
+import type { ExpensePayer } from "./expense-settlement";
 
 export type AccommodationLinkedInput = {
   id: string;
@@ -21,6 +22,8 @@ export type AccommodationLinkedInput = {
   creditCardId?: string | null;
   paymentOwnerName?: string | null;
   splitMemberIds: string[];
+  splitGuestIds?: string[];
+  paidBy?: ExpensePayer | null;
   costItemId: string;
 };
 
@@ -53,6 +56,7 @@ function accommodationCost(input: AccommodationLinkedInput) {
     creditCardId: input.creditCardId || undefined,
     paymentOwnerName: input.paymentOwnerName || undefined,
     splitMemberIds: input.splitMemberIds,
+    splitGuestIds: input.splitGuestIds || [],
   };
 }
 
@@ -60,6 +64,13 @@ export async function syncAccommodationLinkedRecords(
   client: PoolClient,
   input: AccommodationLinkedInput,
 ) {
+  // Rebuilding linked itinerary rows must not discard the manually chosen payer.
+  const previousCost = await client.query<{ paid_by: unknown }>(
+    `SELECT cost->'paidBy' AS paid_by FROM itineraries,
+      LATERAL jsonb_array_elements(cost_items) cost
+     WHERE trip_id=$1 AND cost->>'id'=$2 LIMIT 1`,
+    [input.tripId, input.costItemId],
+  );
   const previousDays = await client.query<{ day_number: number }>(
     "SELECT DISTINCT day_number FROM itineraries WHERE trip_id=$1 AND accommodation_id=$2",
     [input.tripId, input.id],
@@ -71,7 +82,8 @@ export async function syncAccommodationLinkedRecords(
   );
 
   const nights = input.checkOutDay - input.checkInDay;
-  const cost = input.foreignAmount > 0 ? [accommodationCost(input)] : [];
+  const paidBy = input.paidBy === undefined ? previousCost.rows[0]?.paid_by : input.paidBy;
+  const cost = input.foreignAmount > 0 ? [{ ...accommodationCost(input), ...(paidBy ? { paidBy } : {}) }] : [];
   const affectedDays = previousDays.rows.map((row) => row.day_number);
   for (let night = 1; night <= nights; night += 1) {
     const dayNumber = input.checkInDay + night - 1;
@@ -155,7 +167,7 @@ export async function syncAccommodationCostsFromItineraries(tripId: string) {
     await query(
       `UPDATE trip_accommodations SET foreign_amount=$2,currency=$3,exchange_rate=$4,
        rate_date=$5,payment_method=$6,credit_card_id=$7,payment_owner_name=$8,
-       split_member_ids=$9::uuid[],updated_at=now() WHERE id=$1`,
+       split_member_ids=$9::uuid[],split_guest_ids=$10::uuid[],paid_by=$11::jsonb,updated_at=now() WHERE id=$1`,
       [
         row.id,
         Number(item.foreignAmount ?? item.value ?? 0),
@@ -166,6 +178,8 @@ export async function syncAccommodationCostsFromItineraries(tripId: string) {
         typeof item.creditCardId === "string" ? item.creditCardId : null,
         typeof item.paymentOwnerName === "string" ? item.paymentOwnerName : null,
         splitMemberIds,
+        Array.isArray(item.splitGuestIds) ? item.splitGuestIds : [],
+        JSON.stringify(item.paidBy || null),
       ],
     );
   }

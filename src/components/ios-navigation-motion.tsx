@@ -22,7 +22,7 @@ const DETAIL_ROUTE = /^\/trips\/[^/]+(?:\/(?:itinerary|expenses|documents\/[^/]+
 const scrollPositions = new Map<string, number>();
 
 function isDetailRoute(pathname: string) {
-  return DETAIL_ROUTE.test(pathname);
+  return pathname === "/badges" || DETAIL_ROUTE.test(pathname);
 }
 
 export function IosNavigationMotion({ children }: { children: ReactNode }) {
@@ -141,8 +141,9 @@ export function IosNavigationMotion({ children }: { children: ReactNode }) {
     completingRef.current = true;
     pendingBackRef.current = true;
     clearMotion();
-    router.back();
-  }, [clearMotion, router]);
+    if (pathname === "/badges") router.push("/analytics#travel-badges");
+    else router.back();
+  }, [clearMotion, pathname, router]);
 
   useEffect(() => {
     const guard = edgeGuardRef.current;

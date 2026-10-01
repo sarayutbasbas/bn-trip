@@ -1,6 +1,8 @@
 "use client";
+import { FetchSkeleton } from "@/src/components/fetch-skeleton";
 
 import { useEffect,useMemo,useState,type FormEvent,type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,11 +16,13 @@ import { PageIntro } from "@/src/components/page-intro";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications,type InvitationNotification } from "@/src/components/invitation-notifications";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
-import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
 import { TripNoteField } from "@/src/components/trip-note-field";
 import { ideaCountdown, ideaTargetDate } from "@/src/lib/trip-idea-display";
 import { TripSegmentedFilter, type TripFilterOption } from "@/src/components/trip-segmented-filter";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
+import { tripMatchesSearch } from "@/src/lib/destination-search";
+import { TripMemberFilter } from "@/src/components/trip-member-filter";
+import { collectFilterMembers, matchesMemberFilter } from "@/src/lib/trip-member-filter";
 
 type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
@@ -81,7 +85,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   const locationIds=locations.map(location=>location.id).sort();
   const originalLocationIds=(current?.trip_destinations||[]).map(location=>location.id).sort();
   const unchanged=Boolean(current)&&!coverFile&&name.trim()===(current?.name||"").trim()&&countryCode===(current?.country_code||initialCountry.code)&&locationIds.join("|")===originalLocationIds.join("|")&&kind===current?.kind&&targetMonth===(current?.target_month||null)&&targetYear===(current?.target_year||null)&&note.trim()===(current?.note||"").trim();
-  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");let coverImageUrl=current?.cover_image_url||"/travel-postcard-fallback.jpg";if(coverFile){const upload=new FormData();upload.set("file",coverFile);const uploaded=await readResponse(await fetch("/api/uploads",{method:"POST",body:upload}));if(typeof uploaded.url!=="string"||!uploaded.url)throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");coverImageUrl=uploaded.url}await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl});scrollPageToTopAfterOverlay()}catch(caught){setError((caught as Error).message)}}
+  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");let coverImageUrl=current?.cover_image_url||"/travel-postcard-fallback.jpg";if(coverFile){const upload=new FormData();upload.set("file",coverFile);const uploaded=await readResponse(await fetch("/api/uploads",{method:"POST",body:upload}));if(typeof uploaded.url!=="string"||!uploaded.url)throw new Error("ไม่พบ URL ของรูปที่อัปโหลด");coverImageUrl=uploaded.url}await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl})}catch(caught){setError((caught as Error).message)}}
   return <><BottomSheet
     title={promote?"กำหนดช่วงเวลาที่อยากไป":current?"แก้ไขรายการ":"เพิ่มสถานที่ที่อยากไป"}
     subtitle={promote?"เลือกเดือนและปีเพื่อย้ายมาเป็นทริปที่เล็งไว้":current?"แก้ไขข้อมูลของทริปที่เล็งไว้หรือลิสต์สักวันหนึ่ง":"บันทึกสถานที่ที่อยากเดินทางไปในอนาคต"}
@@ -115,22 +119,25 @@ function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:Trip
   const suggestions=recent.filter(value=>!items.some(item=>item.email===value));
   return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)close()}}><section className="modal collaborators-sheet"><div className="modal-head"><div><h2>ผู้ร่วมวางแผน</h2><p>{canManage?"แชร์รายการนี้ให้เพื่อนช่วยดูและแก้ไขข้อมูลร่วมกัน":"รายชื่อผู้ที่วางแผนรายการนี้ร่วมกัน"}</p></div><button type="button" className="icon-btn" onClick={close} aria-label="ปิด"><X size={18}/></button></div>
     {canManage?<form className="collaborator-form" onSubmit={add}><div className="field"><label>อีเมลผู้ร่วมวางแผน</label><input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="friend@gmail.com" value={email} onChange={event=>setEmail(event.target.value)} required/></div><button className="primary-btn" disabled={saving}><UserPlus size={16}/>{saving?"กำลังเพิ่ม…":"เพิ่มผู้ร่วมวางแผน"}</button>{suggestions.length?<div className="recent-collaborators"><small>เลือกจากคนที่เพิ่มล่าสุด</small><div>{suggestions.map(value=><button type="button" key={value} onClick={()=>setEmail(value)}>{value}</button>)}</div></div>:null}</form>:null}
-    {error?<p className="login-error">{error}</p>:null}<div className="collaborator-list">{loading?<p>กำลังโหลด…</p>:items.length?items.map(item=><div className={`collaborator-row idea-collaborator-row ${canManage?"":"is-readonly"}`} key={item.id}><span className="collaborator-avatar" style={item.avatar_url?{backgroundImage:`url("${item.avatar_url}")`}:undefined}>{!item.avatar_url&&(item.display_name||item.email).charAt(0).toUpperCase()}</span><div className="collaborator-copy"><strong>{item.display_name||item.email}</strong><small>{item.display_name?item.email:item.joined?"เข้าร่วมแล้ว":"แชร์ด้วยอีเมลแล้ว"}</small></div>{canManage?<button type="button" className="delete-record-btn" onClick={()=>confirm({title:`ลบผู้ร่วมวางแผน “${item.email}”?`,description:"บุคคลนี้จะไม่สามารถเปิดหรือแก้ไขรายการนี้ได้อีก",confirmLabel:"ลบผู้ร่วมวางแผน",onConfirm:()=>remove(item)})} aria-label="ลบผู้ร่วมวางแผน"><Trash2 size={17}/></button>:<span className="collaborator-access-badge is-view">ร่วมวางแผน</span>}</div>):<p className="collaborator-empty">ยังไม่มีผู้ร่วมวางแผน</p>}</div>
+    {error?<p className="login-error">{error}</p>:null}<div className="collaborator-list">{loading?<FetchSkeleton label="กำลังโหลดผู้ร่วมวางแผน" />:items.length?items.map(item=><div className={`collaborator-row idea-collaborator-row ${canManage?"":"is-readonly"}`} key={item.id}><span className="collaborator-avatar" style={item.avatar_url?{backgroundImage:`url("${item.avatar_url}")`}:undefined}>{!item.avatar_url&&(item.display_name||item.email).charAt(0).toUpperCase()}</span><div className="collaborator-copy"><strong>{item.display_name||item.email}</strong><small>{item.display_name?item.email:item.joined?"เข้าร่วมแล้ว":"แชร์ด้วยอีเมลแล้ว"}</small></div>{canManage?<button type="button" className="delete-record-btn" onClick={()=>confirm({title:`ลบผู้ร่วมวางแผน “${item.email}”?`,description:"บุคคลนี้จะไม่สามารถเปิดหรือแก้ไขรายการนี้ได้อีก",confirmLabel:"ลบผู้ร่วมวางแผน",onConfirm:()=>remove(item)})} aria-label="ลบผู้ร่วมวางแผน"><Trash2 size={17}/></button>:<span className="collaborator-access-badge is-view">ร่วมวางแผน</span>}</div>):<p className="collaborator-empty">ยังไม่มีผู้ร่วมวางแผน</p>}</div>
   </section></div>;
 }
 
-export function TripIdeasPage({initialIdeas,initialEditId,demo}:{initialIdeas:TripIdea[];initialEditId?:string;demo:boolean}){
+export function TripIdeasPage({initialIdeas,initialEditId,demo,currentUserId}:{initialIdeas:TripIdea[];initialEditId?:string;demo:boolean;currentUserId:string}){
+  const [selectedMembers,setSelectedMembers]=useState<string[]>([]);
+  const [draftMembers,setDraftMembers]=useState<string[]>([]);
   const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor|undefined>(()=>{const idea=initialIdeas.find(item=>item.id===initialEditId);return idea?{idea,promote:false}:undefined});const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [kindFilter,setKindFilter]=useState<"all"|TripIdeaKind>("all");const [tripType,setTripType]=useState<IdeaTripType>("all");const [selectedYears,setSelectedYears]=useState<string[]>([]);const [filtersOpen,setFiltersOpen]=useState(false);const [draftTripType,setDraftTripType]=useState<IdeaTripType>("all");const [draftYears,setDraftYears]=useState<string[]>([]);const [profile,setProfile]=useState<HeaderProfile|null>(null);const [refreshing,setRefreshing]=useState(false);
   const availableYears=useMemo(()=>[...new Set(ideas.filter(idea=>idea.kind==="planned").map(idea=>idea.target_year).filter((year):year is number=>typeof year==="number"))].sort((a,b)=>b-a),[ideas]);
   const hasDomestic=ideas.some(idea=>idea.country_code==="TH");
   const hasInternational=ideas.some(idea=>idea.country_code!=="TH");
-  const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0;
+  const filterMembers=useMemo(()=>collectFilterMembers(ideas,currentUserId),[ideas,currentUserId]);
+  const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0||selectedMembers.length>0;
   const tripTypes=[
     {value:"all" as const,label:"ทั้งหมด",Icon:Luggage},
     ...(hasDomestic?[{value:"domestic" as const,label:"ในประเทศ",Icon:MapPin}]:[]),
     ...(hasInternational?[{value:"international" as const,label:"ต่างประเทศ",Icon:Globe2}]:[]),
   ];
-  const searchedIdeas=useMemo(()=>{const keyword=query.trim().toLocaleLowerCase();return ideas.filter(idea=>(!keyword||`${idea.name} ${idea.destination} ${idea.note} ${countryByCode(idea.country_code)?.nameTh||""} ${countryByCode(idea.country_code)?.nameEn||""}`.toLocaleLowerCase().includes(keyword))&&(tripType==="all"||(tripType==="domestic")===(idea.country_code==="TH"))&&(!selectedYears.length||(idea.kind==="planned"&&idea.target_year!==null&&selectedYears.includes(String(idea.target_year)))))},[ideas,query,tripType,selectedYears]);
+  const searchedIdeas=useMemo(()=>ideas.filter(idea=>matchesMemberFilter(idea.members,selectedMembers)&&tripMatchesSearch(idea,query)&&(tripType==="all"||(tripType==="domestic")===(idea.country_code==="TH"))&&(!selectedYears.length||(idea.kind==="planned"&&idea.target_year!==null&&selectedYears.includes(String(idea.target_year))))),[ideas,query,tripType,selectedYears,selectedMembers]);
   const filteredIdeas=kindFilter==="all"?searchedIdeas:searchedIdeas.filter(idea=>idea.kind===kindFilter);
   const plannedIdeas=filteredIdeas.filter(idea=>idea.kind==="planned");
   const somedayIdeas=filteredIdeas.filter(idea=>idea.kind==="someday");
@@ -160,7 +167,7 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo}:{initialIdeas:Tr
   },[]);
   useEffect(()=>{const root=document.documentElement;const sheetOpen=Boolean(editing||sharing);root.classList.toggle("sheet-open",sheetOpen);root.classList.toggle("confirm-open",Boolean(confirmation));return()=>root.classList.remove("sheet-open","confirm-open")},[editing,sharing,confirmation]);
   function notify(message:string){setToast(message);window.setTimeout(()=>setToast(""),2400)}
-  function openFilters(){setDraftTripType(tripType);setDraftYears([...selectedYears]);setFiltersOpen(true)}
+  function openFilters(){setDraftTripType(tripType);setDraftYears([...selectedYears]);setDraftMembers([...selectedMembers]);setFiltersOpen(true)}
   function openForm(idea:TripIdea|null,promote=false){if(demo){notify("เข้าสู่ระบบเพื่อเพิ่มหรือแก้ไขรายการ");return}setEditing({idea,promote})}
   async function save(draft:IdeaDraft){setBusy(true);try{const current=editing?.idea||null;const saved=await readResponse(await fetch(current?`/api/trip-ideas/${current.id}`:"/api/trip-ideas",{method:current?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(draft)})) as TripIdea;setIdeas(items=>sortIdeas(current?items.map(item=>item.id===saved.id?saved:item):[...items,saved]));setEditing(undefined);notify(current?"บันทึกทริปที่เล็งไว้แล้ว":"เพิ่มทริปที่เล็งไว้แล้ว")}finally{setBusy(false)}}
   async function remove(idea:TripIdea){await readResponse(await fetch(`/api/trip-ideas/${idea.id}`,{method:"DELETE"}));setIdeas(items=>items.filter(item=>item.id!==idea.id));setEditing(undefined);notify("ลบออกจากลิสต์แล้ว")}
@@ -185,7 +192,7 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo}:{initialIdeas:Tr
   function convertToTrip(idea:TripIdea){if(demo){notify("เข้าสู่ระบบเพื่อสร้างทริปจริง");return}router.push(`/?tripIdea=${encodeURIComponent(idea.id)}`)}
   const avatarLabel=(profile?.display_name||profile?.email||"?").trim();
   return <div className="app-shell flow-shell trip-ideas-page-shell">
-    {toast?<div className="toast toast-success" role="status"><CheckCircle2 size={17}/>{toast}</div>:null}
+    {toast&&typeof document!=="undefined"?createPortal(<div className="toast toast-success" role="status" aria-live="polite"><CheckCircle2 size={17}/>{toast}</div>,document.body):null}
     <main>
       <header className="mobile-head flow-header"><Link className="brand" href="/" aria-label="RouteRao · หน้าแรก"><Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized/><div>RouteRao<small>travel smarter together</small></div></Link><nav className="mobile-actions" aria-label="เมนูหลัก"><button className="icon-btn home-refresh-btn" type="button" onClick={()=>void refreshAll()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing?"analytics-refresh-spinning":""} size={24}/></button><InvitationNotifications onChanged={invitationChanged}/><button className="home-profile-btn" type="button" onClick={()=>router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์"><span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url?{backgroundImage:`url("${profile.avatar_url}")`}:undefined}>{!profile?.avatar_url&&avatarLabel.charAt(0).toUpperCase()}</span></span></button></nav></header>
       <div className="trip-ideas-screen">
@@ -193,16 +200,16 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo}:{initialIdeas:Tr
         <div className="trip-ideas-search-row"><label className="trip-search trip-ideas-search"><Search size={20}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="ค้นหาทริป เมือง หรือประเทศ" aria-label="ค้นหาทริป เมือง หรือประเทศ"/>{query?<button type="button" onClick={()=>setQuery("")} aria-label="ล้างคำค้นหา"><X size={15}/></button>:null}</label><button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={openFilters} aria-expanded={filtersOpen} aria-label="ตั้งค่าตัวกรอง" title="ตั้งค่าตัวกรอง"><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label="กำลังใช้ตัวกรอง"/>:null}</button><button className="trip-ideas-add-button" type="button" onClick={()=>openForm(null)} aria-label="เพิ่มทริปที่เล็งไว้" title="เพิ่มทริปที่เล็งไว้"><Plus size={21}/></button></div>
         {filtersOpen?<BottomSheet
           title="เลือกตัวกรองทริป"
-          subtitle="เลือกประเภทและปีที่ต้องการได้มากกว่า 1 ปี แล้วกดยืนยันเพื่อแสดงผล"
+          subtitle="เลือกปีและผู้ร่วมทริปได้หลายคน แล้วกดแสดงผล"
           closeLabel="ยกเลิก"
           onClose={()=>setFiltersOpen(false)}
-          onSubmit={event=>{event.preventDefault();setTripType(draftTripType);setSelectedYears([...draftYears].sort((a,b)=>Number(b)-Number(a)));setFiltersOpen(false)}}
+          onSubmit={event=>{event.preventDefault();setTripType(draftTripType);setSelectedYears([...draftYears].sort((a,b)=>Number(b)-Number(a)));setSelectedMembers([...draftMembers]);setFiltersOpen(false)}}
           className="trip-directory-filter-sheet"
           bodyClassName="bottom-sheet-body trip-directory-filter-body"
           submitLabel="แสดงผล"
           deleteLabel="รีเซ็ตตัวกรอง"
           deleteIcon={<RotateCcw size={18}/>}
-          onDelete={()=>{setDraftTripType("all");setDraftYears([]);setTripType("all");setSelectedYears([]);setFiltersOpen(false)}}
+          onDelete={()=>{setDraftTripType("all");setDraftYears([]);setDraftMembers([]);setSelectedMembers([]);setTripType("all");setSelectedYears([]);setFiltersOpen(false)}}
         >
           <section className="trip-directory-filter-section">
             <h3>ประเภททริป</h3>
@@ -217,10 +224,11 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo}:{initialIdeas:Tr
               {availableYears.map(year=>{const value=String(year);const active=draftYears.includes(value);return <button type="button" key={year} className={active?"active":""} onClick={()=>setDraftYears(current=>active?current.filter(item=>item!==value):[...current,value])} aria-pressed={active}>{year}</button>})}
             </div>
           </section>:null}
+          <TripMemberFilter members={filterMembers} selected={draftMembers} onChange={setDraftMembers}/>
         </BottomSheet>:null}
         <TripSegmentedFilter value={kindFilter} options={kindFilters} onChange={setKindFilter} ariaLabel="กรองทริปที่เล็งไว้" tripLabel="ทริป" className="trip-ideas-type-filter"/>
         <section className="trip-ideas-list" aria-label="รายการทริปที่เล็งไว้">
-          {filteredIdeas.length?<div className="trip-idea-groups">
+          {refreshing?<FetchSkeleton rows={4} label="กำลังโหลดทริปที่เล็งไว้" />:filteredIdeas.length?<div className="trip-idea-groups">
             {plannedIdeas.length?<section className="trip-ideas-group" aria-label="ทริปที่เล็งไว้"><div className="trip-ideas-grid">{plannedIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} convert={()=>convertToTrip(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
             {somedayIdeas.length?<section className="trip-ideas-group" aria-label="ลิสต์สักวันหนึ่ง">{kindFilter==="all"?<div className="trip-ideas-divider"><span/><h2>ลิสต์สักวันหนึ่ง</h2><span/></div>:null}<div className="trip-ideas-grid">{somedayIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
           </div>:<div className="trip-ideas-empty"><Search size={25}/><strong>{hasActiveTripFilters?"ไม่พบทริปที่ตรงกับตัวกรอง":query?"ไม่พบทริปที่ค้นหา":kindFilter!=="all"?"ยังไม่มีทริปในหมวดนี้":"ยังไม่มีทริปที่เล็งไว้"}</strong><span>{hasActiveTripFilters?"ลองเปลี่ยนประเภททริปหรือปีที่เลือก":query?"ลองค้นหาด้วยชื่อเมืองหรือประเทศอื่น":kindFilter!=="all"?"ลองเลือกหมวดอื่น หรือเพิ่มทริปใหม่":"เพิ่มสถานที่ที่อยากไปเก็บไว้ก่อนได้"}</span></div>}

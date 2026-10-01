@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getCurrentAccount } from "@/src/lib/client-account";
+import { notifyOfflineDocumentsChanged } from "@/src/lib/offline-document-usage";
 
 export function PwaRuntime(){
   const [offline,setOffline]=useState(false);
@@ -13,6 +14,7 @@ export async function clearPrivateOfflineData(){
   Object.keys(localStorage).filter(key=>key.startsWith("bn-trip-offline-")).forEach(key=>localStorage.removeItem(key));
   localStorage.removeItem("bn-trip-offline-user-id");
   navigator.serviceWorker?.controller?.postMessage({type:"CLEAR_PRIVATE_DATA"});
+  notifyOfflineDocumentsChanged();
 }
 
 export async function clearOfflineDocuments(){
@@ -21,4 +23,5 @@ export async function clearOfflineDocuments(){
     .filter(key=>key.startsWith("bn-trip-offline-documents:"))
     .forEach(key=>localStorage.removeItem(key));
   navigator.serviceWorker?.controller?.postMessage({type:"CLEAR_OFFLINE_DOCUMENTS"});
+  notifyOfflineDocumentsChanged();
 }

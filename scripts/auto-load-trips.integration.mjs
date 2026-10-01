@@ -1,0 +1,65 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+const browser=(...args)=>execFileSync("npx",["--yes","agent-browser","--session","auto-trips",...args],{encoding:"utf8",timeout:45000});
+const evaluate=code=>JSON.parse(browser("eval",code));
+const count=()=>evaluate("document.querySelectorAll('.compact-trip-card').length");
+try {
+  browser("open","http://localhost:8001");
+  browser("eval",'fetch("/api/auth/demo",{redirect:"manual"}).then(()=>true)');
+  browser("set","viewport","390","844");
+  browser("open","http://localhost:8001/trips");
+  browser("wait",".compact-trip-card");
+  evaluate(`(async()=>{
+    const realFetch=window.fetch.bind(window),seed=(await (await realFetch('/api/trips')).json())[0];
+    window.requests=[];window.failOnce=true;
+    window.fetch=async(input,options)=>{
+      const url=new URL(String(input),location.href);
+      if(url.pathname!='/api/trips'||url.searchParams.get('mode')!=='list')return realFetch(input,options);
+      const offset=Number(url.searchParams.get('offset')||0),status=url.searchParams.get('status');
+      window.requests.push({offset,status});
+      if(offset===20&&window.holdMore)await new Promise(resolve=>{window.releaseMore=resolve});
+      await new Promise(resolve=>setTimeout(resolve,250));
+      if(offset===40&&window.failOnce){window.failOnce=false;return Response.json({error:'Temporary test failure'},{status:503})}
+      const total=status==='past'?55:1;
+      return Response.json({items:Array.from({length:Math.max(0,Math.min(20,total-offset))},(_,i)=>({...seed,id:'a1000000-0000-4000-8000-'+String(offset+i).padStart(12,'0'),name:'Auto trip '+(offset+i),start_date:'2024-01-01'})),total,hasMore:offset+20<total,years:[2024],statusCounts:{all:55,past:55,upcoming:1}});
+    };return true;
+  })()`);
+  browser("click",".status-filter .status-past");
+  browser("wait",".auto-load-more");
+  assert.equal(count(),20);
+  assert.equal(evaluate("document.querySelector('.auto-load-more button')===null"),true);
+  browser("eval","document.querySelector('.auto-load-more').scrollIntoView({block:'end',behavior:'instant'})");
+  browser("wait","#trip-card-a1000000-0000-4000-8000-000000000039");
+  assert.equal(count(),40);
+  assert.deepEqual(evaluate("window.requests.map(r=>r.offset)"),[0,20]);
+  browser("eval","document.querySelector('.auto-load-more').scrollIntoView({block:'end',behavior:'instant'})");
+  browser("wait",".auto-load-more [role=alert]");
+  assert.equal(count(),40);
+  evaluate("new Promise(r=>setTimeout(()=>r(true),700))");
+  assert.deepEqual(evaluate("window.requests.map(r=>r.offset)"),[0,20,40]);
+  browser("click",".auto-load-more button");
+  browser("wait","#trip-card-a1000000-0000-4000-8000-000000000054");
+  assert.equal(count(),55);
+  assert.equal(evaluate("document.querySelector('.auto-load-more')===null"),true);
+  assert.equal(evaluate("new Set([...document.querySelectorAll('.compact-trip-card')].map(c=>c.id)).size"),55);
+  browser("screenshot","/tmp/auto-load-trips.png");
+  browser("click",".status-filter .status-upcoming");
+  browser("wait",".compact-trip-card");
+  assert.equal(count(),1);
+  assert.equal(evaluate("window.requests.at(-1).offset"),0);
+  browser("click",".status-filter .status-past");
+  browser("wait",".auto-load-more");
+  evaluate("window.holdMore=true;true");
+  browser("eval","document.querySelector('.auto-load-more').scrollIntoView({block:'end',behavior:'instant'})");
+  browser("wait","--fn","typeof window.releaseMore === 'function'");
+  browser("click",".status-filter .status-upcoming");
+  browser("wait",".compact-trip-card");
+  evaluate("window.releaseMore();new Promise(r=>setTimeout(()=>r(true),700))");
+  assert.equal(count(),1);
+  console.log("PASS: scroll loads 20→40→55; one request per page; errors retain cards and stop retries; manual retry succeeds; filters reset offset");
+  console.log("PASS: delayed old page cannot append after switching filters");
+  browser("open","http://localhost:8001/trip-ideas");
+  browser("wait",".trip-idea-card");
+  assert.equal(evaluate("document.querySelector('.load-more-btn')===null"),true);
+  console.log("PASS: ideas remain fully loaded without a load-more button");
+} finally {browser("close");}

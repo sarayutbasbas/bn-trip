@@ -1,4 +1,5 @@
 "use client";
+import { FetchSkeleton } from "@/src/components/fetch-skeleton";
 
 import Image from "next/image";
 import { useCallback,useEffect,useRef,useState } from "react";
@@ -30,16 +31,22 @@ export function InvitationNotifications({onChanged}:{onChanged?:(result:Invitati
   const rootRef=useRef<HTMLDivElement>(null);
   const [items,setItems]=useState<InvitationNotification[]>([]);
   const [open,setOpen]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const requestRef=useRef(0);
   const [busyId,setBusyId]=useState("");
   const [error,setError]=useState("");
   const load=useCallback(async()=>{
+    const requestId=++requestRef.current;
+    setLoading(true);setError("");
     try{
       const data=await readResponse(await fetch("/api/invitations",{cache:"no-store"}));
-      setItems(Array.isArray(data)?data:[]);
+      if(requestId!==requestRef.current)return;
+      const next=Array.isArray(data)?data:[];
+      setItems(next);
+      if(!next.length)setOpen(false);
     }catch{
-      setItems([]);
-      setOpen(false);
-    }
+      if(requestId===requestRef.current)setError("โหลดคำเชิญไม่สำเร็จ กรุณาลองอีกครั้ง");
+    }finally{if(requestId===requestRef.current)setLoading(false)}
   },[]);
   useEffect(()=>{
     const initialLoad=window.setTimeout(()=>void load(),0);
@@ -79,12 +86,12 @@ export function InvitationNotifications({onChanged}:{onChanged?:(result:Invitati
   }
   const hasItems=items.length>0;
   return <div className="invitation-notification" ref={rootRef}>
-    <button className="icon-btn home-notification-btn" type="button" onClick={()=>{if(hasItems)setOpen(value=>!value)}} aria-label="การแจ้งเตือน" title="การแจ้งเตือน" aria-expanded={hasItems?open:false} aria-haspopup={hasItems?"dialog":undefined}>
+    <button className="icon-btn home-notification-btn" type="button" onClick={()=>{if(!hasItems)return;setOpen(value=>!value);if(!open)void load()}} aria-label="การแจ้งเตือน" title="การแจ้งเตือน" aria-expanded={open} aria-haspopup="dialog">
       <Bell size={24}/>{hasItems?<i className="notification-dot"/>:null}
     </button>
-    {open&&hasItems?<section className="invitation-popover" role="dialog" aria-label="คำเชิญใหม่">
+    {open?<section className="invitation-popover" role="dialog" aria-label="คำเชิญใหม่">
       <div className="invitation-popover-list">
-        {items.map(invitation=><article className="invitation-popover-card" key={invitation.id}>
+        {loading?<FetchSkeleton rows={2} label="กำลังโหลดคำเชิญ" />:items.map(invitation=><article className="invitation-popover-card" key={invitation.id}>
           <Image src={invitation.cover_image_url||"/travel-postcard-fallback.jpg"} alt="" width={62} height={62} unoptimized/>
           <div className="invitation-popover-copy"><span className={`invitation-kind is-${invitation.invitation_type}`}>{invitation.invitation_type==="trip_idea"?<Users size={11}/>:<Plane size={11}/>} {invitation.invitation_type==="trip_idea"?"ทริปที่เล็งไว้":"ทริป"}</span><strong>{invitation.trip_name}</strong><small><MapPin size={10}/>{invitation.destination}</small><p>{invitation.owner_name||invitation.owner_email} เชิญคุณเข้าร่วม</p></div>
           <div className="invitation-popover-actions">

@@ -1,0 +1,60 @@
+// Isolated local Docker fixtures only; removed in finally.
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { Pool } from "pg";
+import { SignJWT } from "jose";
+const base = "http://localhost:8001";
+const db = new Pool({ connectionString: "postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip" });
+const owner = randomUUID(), member = randomUUID(), trip = randomUUID();
+const email = `review-${owner}@example.invalid`;
+const env = JSON.parse(execFileSync("docker", ["inspect", "bn-trip-app-1"], {encoding:"utf8"}))[0].Config.Env;
+const secret = env.find(v => v.startsWith("AUTH_SECRET="))?.slice(12) || "dev-only-change-me-before-production";
+const token = await new SignJWT({email,displayName:"Review owner",demo:false}).setProtectedHeader({alg:"HS256"}).setSubject(owner).setIssuedAt().setExpirationTime("1h").sign(new TextEncoder().encode(secret));
+const api = (path, method="GET", body) => fetch(base+path,{method,headers:{cookie:`bn_trip_session=${token}`,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
+const browser = (...args) => execFileSync("npx",["--yes","agent-browser","--session","review-privacy",...args],{encoding:"utf8",timeout:45000});
+const evaluate = code => JSON.parse(browser("eval",code));
+try {
+  await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Review owner'),($3,$4,'Review friend')",[owner,email,member,`review-${member}@example.invalid`]);
+  await db.query("INSERT INTO trips(id,owner_id,name,destination,start_date,total_days) VALUES($1,$2,'Review privacy fixture','Bangkok','2026-01-01',1)",[trip,owner]);
+  await db.query("INSERT INTO trip_collaborators(trip_id,email,user_id,invited_by) VALUES($1,$2,$3,$4)",[trip,`review-${member}@example.invalid`,member,owner]);
+  await db.query("INSERT INTO trip_reviews(trip_id,user_id,rating,review) VALUES($1,$2,4,'Hidden friend review')",[trip,member]);
+  const hidden = await (await api(`/api/trips/${trip}/reviews`)).json();
+  assert.equal(hidden.scoresVisible,false);
+  assert.equal(hidden.average,0);
+  assert.equal(hidden.items.find(r=>!r.is_current_user).rating,null);
+  assert.equal(hidden.items.find(r=>!r.is_current_user).review,null);
+  const detail = await (await api(`/api/trips/${trip}`)).json();
+  assert.equal(detail.review_average,0);
+  assert.equal((await api(`/api/trips/${trip}/reviews`,"PUT",{rating:2,review:" "})).status,400);
+  browser("open",base);
+  browser("cookies","set","bn_trip_session",token);
+  browser("set","viewport","390","844");
+  browser("open",`${base}/trips/${trip}`);
+  browser("eval",'document.querySelector(".trip-rating-badge.is-interactive").click()');
+  browser("wait",".review-privacy-notice");
+  assert.equal(evaluate('document.querySelectorAll(".review-average-card").length'),0);
+  assert.equal(evaluate('document.querySelector(".reviews-sheet").textContent.includes("Hidden friend review")'),false);
+  browser("click", '.review-rating-value button[aria-label="เพิ่มคะแนน 0.1"]');
+  browser("fill", '.review-text-field textarea', "My independent review");
+  assert.equal(evaluate('document.querySelectorAll(".review-average-card").length'),0);
+  browser("click", '.review-form-actions .primary-btn');
+  browser("wait", ".review-average-card");
+  const saved = await (await api(`/api/trips/${trip}/reviews`)).json();
+  assert.equal(saved.scoresVisible,true);
+  assert.equal(saved.average,2.5);
+  assert.equal(saved.items.find(r=>!r.is_current_user).rating,"4.0");
+  const revealed = await (await api(`/api/trips/${trip}`)).json();
+  assert.equal(revealed.review_average,2.5);
+  browser("open",`${base}/trips/${trip}`);
+  browser("eval",'document.querySelector(".trip-rating-badge.is-interactive").click()');
+  browser("wait",".review-average-card");
+  assert.equal(evaluate('document.querySelector(".reviews-sheet").textContent.includes("Hidden friend review")'),true);
+  console.log("PASS: API and mobile UI hide friend/average before saved review; reject empty text; reveal after save; trip summary respects gate");
+} finally {
+  try { browser("close"); } catch {}
+  await db.query("DELETE FROM trips WHERE id=$1 AND owner_id=$2",[trip,owner]);
+  await db.query("DELETE FROM users WHERE id=ANY($1::uuid[])",[[owner,member]]);
+  await db.end();
+  console.log("Removed isolated local review fixtures");
+}

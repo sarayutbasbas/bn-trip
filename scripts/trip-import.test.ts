@@ -71,6 +71,24 @@ async function largeBookingFixture() {
   return workbook;
 }
 
+test("blank, whitespace-only and formatted rows across all sheets never create records", async () => {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await createTripTemplate());
+  for (const name of ["ทริป", "ไทม์ไลน์", "ค่าใช้จ่าย", "ที่พัก", "เที่ยวบิน"]) {
+    const sheet = workbook.getWorksheet(name)!;
+    sheet.getRow(10).values = sheet.getRow(2).values;
+    sheet.getCell("A10").value = "REAL01";
+    sheet.getRow(3).values = [];
+    sheet.getCell("A4").value = " \t\n ";
+    sheet.getCell("B4").value = "\u00a0";
+    sheet.getCell("E5").numFmt = "@";
+    sheet.getCell("A800").border = { bottom: { style: "thin" } };
+  }
+  const batch = await parse(workbook);
+  assert.deepEqual([batch.trips.length, batch.plans.length, batch.expenseCount, batch.stays.length, batch.flights.length], [1, 1, 1, 1, 1]);
+  assert.ok(batch.plans.every(plan => plan.name.trim().length > 0));
+});
+
 test("accepts 500 hotels and 500 flights plus examples and rejects the 501st real row", async () => {
   const workbook = await largeBookingFixture();
   const batch = await parse(workbook);

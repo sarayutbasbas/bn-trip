@@ -72,7 +72,7 @@ export function useBlockingSubmit() {
   return { saving, guard };
 }
 
-export function BlockingSaveOverlay({ visible }: { visible: boolean }) {
+export function BlockingSaveOverlay({ visible, title = "กำลังบันทึก…", description = "กรุณารอสักครู่" }: { visible: boolean; title?: string; description?: string }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!visible) return;
@@ -90,8 +90,8 @@ export function BlockingSaveOverlay({ visible }: { visible: boolean }) {
     <div className="save-progress-backdrop" role="presentation">
       <div ref={dialogRef} className="save-progress-dialog" role="alertdialog" aria-modal="true" aria-labelledby="save-progress-title" aria-describedby="save-progress-description" tabIndex={-1}>
         <span className="save-progress-spinner" aria-hidden="true" />
-        <strong id="save-progress-title">กำลังบันทึก…</strong>
-        <span id="save-progress-description">กรุณารอสักครู่</span>
+        <strong id="save-progress-title">{title}</strong>
+        <span id="save-progress-description">{description}</span>
       </div>
     </div>,
     document.body,
