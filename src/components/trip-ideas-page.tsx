@@ -63,7 +63,13 @@ function IdeaCard({idea,edit,convert,share}:{idea:TripIdea;edit:()=>void;convert
       <p>{country?<span className="trip-country-flag"><CountryFlagImage code={country.code} label=""/></span>:<MapPinned size={13}/>}<span>{formatTripDestination(idea.destination,idea.country_code,country?.nameTh,idea.trip_destinations)}</span></p>
       {targetDate?<small className="trip-idea-target-date"><CalendarDays size={11}/><span>{targetDate}</span></small>:null}
       {detail?<small className="trip-idea-note">{detail}</small>:null}
-      <div className="trip-idea-card-footer"><IdeaAvatars members={idea.members||[]} open={share}/>{idea.kind==="planned"&&convert?<button className="trip-idea-convert" type="button" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={15}/> สร้างทริป</button>:null}</div>
+      <div className="trip-idea-card-footer">
+        <IdeaAvatars members={idea.members||[]} open={share}/>
+        <div className="trip-idea-footer-actions">
+          {idea.access_role === "owner" && <button className="trip-idea-invite" type="button" onClick={event=>{stop(event);share()}} aria-label="เชิญเพื่อนร่วมวางแผน" title="เชิญเพื่อนร่วมวางแผน"><UserPlus size={16}/></button>}
+          {idea.kind==="planned"&&convert?<button className="trip-idea-convert" type="button" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={15}/> สร้างทริป</button>:null}
+        </div>
+      </div>
     </div>
   </article>;
 }

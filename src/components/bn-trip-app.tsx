@@ -4147,10 +4147,13 @@ function TripHeader({
           <ChevronLeft size={21} />
         </button>
       )}
-      {(editTrip || trip.summary_image_url) && (
+      {(editTrip || trip.summary_image_url || (trip.access_role === "owner" && manageMembers)) && (
         <div className="trip-cover-actions">
           {trip.summary_image_url && <button type="button" onClick={() => setPlanImageOpen(true)} aria-label={t("แพลนเที่ยว")} title={t("แพลนเที่ยว")}>
             <ImageIcon size={20} />
+          </button>}
+          {trip.access_role === "owner" && manageMembers && <button type="button" onClick={manageMembers} aria-label={t("เชิญเพื่อนร่วมทริป")} title={t("เชิญเพื่อนร่วมทริป")}>
+            <UserPlus size={20} />
           </button>}
           {editTrip && <button type="button" onClick={editTrip} aria-label={t("แก้ไข")} title={t("แก้ไข")}>
             <Pencil size={20} />
