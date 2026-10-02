@@ -1,4 +1,5 @@
 "use client";
+import { tripDurationDays } from "@/src/lib/trip-duration";
 import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
 import { TripCoverArt, TripCoverCarousel } from "./trip-cover-gallery";
 import { prepareTripPlanDownload, saveTripPlanDownload } from "@/src/lib/trip-plan-download";
@@ -2123,8 +2124,8 @@ function tripHeaderRangeLabel(trip: Trip) {
     );
   };
   return activeLang === "EN"
-    ? `${label(trip.outbound_departure_at)} - ${label(trip.return_departure_at)} (${trip.total_days} days)`
-    : `${label(trip.outbound_departure_at)} - ${label(trip.return_departure_at)} (${trip.total_days} วัน)`;
+    ? `${label(trip.outbound_departure_at)} - ${label(trip.return_departure_at)} (${tripDurationDays(trip)} days)`
+    : `${label(trip.outbound_departure_at)} - ${label(trip.return_departure_at)} (${tripDurationDays(trip)} วัน)`;
 }
 function moneyFormat(value: string | number) {
   const clean = String(value ?? "")
@@ -2410,7 +2411,7 @@ function TripCardFacts({ trip }: { trip: Trip }) {
     <div className="trip-card-facts">
       {dateRangeLabel && <span><CalendarDays size={11} />{dateRangeLabel}</span>}
       {dateRangeLabel && hasDuration && <i className="trip-card-facts-separator" aria-hidden="true">•</i>}
-      {hasDuration && <span><Moon size={11} fill="currentColor" />{t(`${trip.total_days} วัน`)}</span>}
+      {hasDuration && <span><Moon size={11} fill="currentColor" />{t(`${tripDurationDays(trip)} วัน`)}</span>}
     </div>
   );
 }
@@ -2528,6 +2529,7 @@ function TripCard({
           </p>
         )}
         <TripCardFacts trip={trip} />
+        {trip.note?.trim() && <div className="home-trip-note">{trip.note.trim()}</div>}
         <TripCardFlights trip={trip} />
         {hasBudget && (
           <div className="trip-meta">
@@ -2576,6 +2578,7 @@ function HomeTripIdeaCard({
           <span>{destinationLabel}</span>
         </p>}
         {targetDate && <div className="trip-card-facts"><span><CalendarDays size={11} />คาดการณ์ช่วง {targetDate}</span></div>}
+        {idea.note?.trim() && <div className="home-trip-note">{idea.note.trim()}</div>}
       </div>
     </article>
   );
@@ -7036,11 +7039,12 @@ function CardSheet({
   );
 }
 
-function SettingsGlass({ children }: { children: ReactNode }) {
+function SettingsGlass({ children, dragging = false }: { children: ReactNode; dragging?: boolean }) {
   return (
     <LiquiGlass
       className="settings-liquid-glass"
       contentClassName="settings-liquid-glass-content"
+      material={dragging ? "clear" : "auto"}
       radius={20}
       blur={1.5}
       refraction={58}
@@ -7310,6 +7314,7 @@ function SettingsContent({
   const orderedCards = cardDrag.ordered;
   const visibleCards =
     cardsExpanded || cardDrag.selectedId ? orderedCards : orderedCards.slice(0, 4);
+  const draggedCard = cards.find(card => card.id === cardDrag.drag?.id);
   return (
     <div className="screen">
       <div className="settings-list">
@@ -7368,7 +7373,7 @@ function SettingsContent({
           <ChevronRight size={18} />
         </a>
         </SettingsGlass>
-        <SettingsGlass>
+        <SettingsGlass dragging={Boolean(cardDrag.drag)}>
         <article className="card payment-settings-card">
           <div className="section-head">
             <div>
@@ -7385,22 +7390,24 @@ function SettingsContent({
               </button>
             </div>
           </div>
-          {cards.length > 1 && <small className="saved-card-drag-hint" role="status">{t(cardDrag.message || "กดค้างที่ไอคอน แล้วแตะบัตรปลายทาง")}</small>}
-          {cardDrag.selectedId && <button className="text-btn card-move-cancel" type="button" onClick={cardDrag.cancel}>{t("ยกเลิกการย้าย")}</button>}
+          {cards.length > 1 && <small className="saved-card-drag-hint" role="status">{t(cardDrag.message || "กดค้างที่ไอคอน แล้วลากเพื่อเรียงบัตร")}</small>}
+          {cardDrag.selectedId && !cardDrag.drag && <button className="text-btn card-move-cancel" type="button" onClick={cardDrag.cancel}>{t("ยกเลิกการย้าย")}</button>}
           {cards.length > 0 && (
             <div
-              className={`saved-card-list ${cards.length > 1 ? "two-columns" : ""} ${cardDrag.selectedId ? "is-selecting-destination" : ""}`}
+              ref={cardDrag.gridRef}
+              className={`saved-card-list ${cards.length > 1 ? "two-columns" : ""} ${cardDrag.drag ? "is-dragging" : ""}`}
             >
               {visibleCards.map((card) => (
                 <div
-                  className={`saved-card-row ${cardDrag.selectedId === card.id ? "is-move-source" : ""}`}
+                  className={`saved-card-row ${cardDrag.selectedId === card.id ? cardDrag.drag ? "is-drag-placeholder" : "is-move-source" : ""}`}
+                  style={cardDrag.rowStyle(card.id)}
                   key={card.id}
                   data-card-id={card.id}
                 >
                   <button
                     type="button"
                     className="saved-card-main"
-                    onClick={() => cardDrag.selectedId ? void cardDrag.place(card.id) : setCardSheet({ card })}
+                    onClick={() => { if(cardDrag.canClick()) { if(cardDrag.selectedId)cardDrag.place(card.id);else setCardSheet({ card }); } }}
                     disabled={savingOrder}
                     aria-label={`${t(cardDrag.selectedId ? "ย้ายมาที่บัตร" : "แก้ไขบัตร")} ${card.nickname}`}
                   >
@@ -7413,9 +7420,9 @@ function SettingsContent({
                   {cards.length > 1 && (
                     <button type="button" className="saved-card-drag-handle" disabled={savingOrder}
                       aria-label={`${t("กดค้างเพื่อย้ายบัตร")} ${card.nickname}`} aria-pressed={cardDrag.selectedId === card.id}
-                      title={t("กดค้างเพื่อเลือก แล้วแตะบัตรปลายทาง")}
+                      title={t("กดค้างแล้วลากเพื่อย้ายบัตร")}
                       onPointerDown={event=>cardDrag.pointerDown(event,card.id)}
-                      onClick={event=>{event.preventDefault();if(event.detail===0)cardDrag.select(card.id)}} onContextMenu={event=>event.preventDefault()}><GripVertical size={18}/></button>
+                      onClick={event=>{event.preventDefault();if(event.detail===0&&cardDrag.canClick())cardDrag.select(card.id)}} onContextMenu={event=>event.preventDefault()}><GripVertical size={18}/></button>
                   )}
                 </div>
               ))}
@@ -7438,6 +7445,9 @@ function SettingsContent({
           )}
         </article>
         </SettingsGlass>
+        {cardDrag.drag && draggedCard && createPortal(<div ref={cardDrag.ghostRef} className="saved-card-drag-ghost" aria-hidden="true" style={{left:0,top:0,width:cardDrag.drag.width,height:cardDrag.drag.height,transform:`translate3d(${cardDrag.drag.x}px,${cardDrag.drag.y}px,0)`}}>
+          <CardBrandLogo brand={draggedCard.brand} className="saved-card-icon" /><span><strong>{draggedCard.nickname}</strong><small>x-{draggedCard.last_four}</small></span><GripVertical size={18}/>
+        </div>,document.body)}
         <SettingsGlass>
         <TripImportSettings onImported={() => { tripListCache = null; dashboardSnapshotCache = null; }} />
         </SettingsGlass>
@@ -11050,6 +11060,7 @@ export function BNTripApp({
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ orderedIds: nextCards.map((card) => card.id) }),
+        signal: AbortSignal.timeout(15000),
       });
       setCards(saved);
     } catch (error) {

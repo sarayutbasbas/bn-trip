@@ -75,24 +75,34 @@ try {
   browser('click','.saved-card-row:first-child .saved-card-drag-handle');
   assert.deepEqual((await api('/api/cards')).map(card=>card.id),before.map(card=>card.id));
   const handle=evaluate(`(()=>{const r=document.querySelector('.saved-card-drag-handle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
-  browser('mouse','move',String(handle.x),String(handle.y));browser('mouse','down');browser('wait','.is-move-source');browser('mouse','up');
+  browser('mouse','move',String(handle.x),String(handle.y));browser('mouse','down');browser('wait','.saved-card-drag-ghost');
   assert.equal(evaluate(`document.querySelectorAll('.saved-card-row').length`),5);
   const target=evaluate(`(()=>{const r=document.querySelectorAll('.saved-card-row')[3].getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
   browser('mouse','move',String(target.x),String(target.y));
   assert.deepEqual((await api('/api/cards')).map(card=>card.id),before.map(card=>card.id));
-  assert(evaluate(`!document.querySelector('.saved-card-drag-ghost')`));
-  browser('screenshot','/tmp/settings-card-select.png');
-  browser('click','.saved-card-row:nth-child(4) .saved-card-main');
+  assert(evaluate(`!!document.querySelector('.saved-card-drag-ghost')`));
+  browser('screenshot','/tmp/settings-card-drag.png');
+  browser('mouse','up');
   browser('wait','--fn',`document.querySelectorAll('.saved-card-row')[3].dataset.cardId===${JSON.stringify(before[0].id)}`);
   browser('wait','--fn',`!document.querySelector('.saved-card-drag-ghost')&&!document.querySelector('.saved-card-drag-handle').disabled`);
   assert.deepEqual((await api('/api/cards')).map(card=>card.id),[before[1].id,before[2].id,before[3].id,before[0].id,before[4].id]);
   browser('click','.saved-card-expand');
   const cancelHandle=evaluate(`(()=>{const r=document.querySelector('.saved-card-drag-handle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
-  browser('mouse','move',String(cancelHandle.x),String(cancelHandle.y));browser('mouse','down');browser('wait','.is-move-source');browser('mouse','up');browser('press','Escape');
+  browser('mouse','move',String(cancelHandle.x),String(cancelHandle.y));browser('mouse','down');browser('wait','.saved-card-drag-ghost');browser('press','Escape');browser('mouse','up');
   assert.deepEqual((await api('/api/cards')).map(card=>card.id),[before[1].id,before[2].id,before[3].id,before[0].id,before[4].id]);
   browser('click','.saved-card-expand');
   browser('wait','--fn',`document.querySelector('.saved-card-row').dataset.cardId!==${JSON.stringify(before[0].id)}`);
   assert.equal((await api('/api/cards'))[0].id,before[1].id);
   browser('click','.saved-card-expand');assert.equal(evaluate(`document.querySelectorAll('.saved-card-row').length`),5);
-  console.log('PASS settings: profile edit/save/cancel, admin panel, 1/5 cards, 2-row grid, long-press then tap destination without dragging, cancel, editable last four, historical expenses unchanged');
+  for(const cancellation of ['pointercancel','blur']){
+    evaluate(`document.querySelector('.payment-settings-card').scrollIntoView({block:'center'});true`);
+    evaluate(`(()=>{const h=document.querySelector('.saved-card-drag-handle'),r=h.getBoundingClientRect();window.__dragPoint={x:r.x+r.width/2,y:r.y+r.height/2};h.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,isPrimary:true,pointerType:'touch',pointerId:91,clientX:window.__dragPoint.x,clientY:window.__dragPoint.y}));return true})()`);
+    browser('wait','.saved-card-drag-ghost');
+    evaluate(`(()=>{for(let i=0;i<150;i++)window.dispatchEvent(new PointerEvent('pointermove',{pointerId:91,pointerType:'touch',clientX:window.__dragPoint.x+(i%30),clientY:window.__dragPoint.y+(i%50),cancelable:true}));return true})()`);
+    evaluate(`window.dispatchEvent(new Event('${cancellation}'));true`);
+    browser('wait','--fn',`!document.querySelector('.saved-card-drag-ghost')&&!document.querySelector('.is-dragging')`);
+    browser('click','.saved-card-main');browser('wait','input[name=lastFour]');browser('click','.card-sheet .modal-head button');
+  }
+  assert.deepEqual((await api('/api/cards')).map(card=>card.id),[before[1].id,before[2].id,before[3].id,before[0].id,before[4].id]);
+  console.log('PASS settings: mobile cards, long-press drag/drop insertion, Escape/touch cancel/blur cleanup, rapid pointer moves, editing works after cancellation, historical expenses unchanged');
 } finally {try{browser('close')}catch{}await db.query('DELETE FROM users WHERE id=$1',[id]);await db.end()}

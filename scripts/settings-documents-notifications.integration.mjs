@@ -40,7 +40,11 @@ try{
   assert(evaluate(`!document.querySelector('.nearby-flight-section')`));
   console.log('PASS no live-flight placeholder for a trip without flights');
   browser('open',`${base}/trips/${trip.id}?workspace=documents`);browser('wait','.document-thumbnail img');
-  assert(evaluate(`!document.querySelector('.document-view-button')&&(()=>{const el=document.querySelector('.document-thumbnail'),r=el.getBoundingClientRect(),s=getComputedStyle(el);return r.width===r.height&&s.borderTopWidth==='0px'&&s.borderRadius==='0px'})()`));
+  for(const width of [320,390,430]){
+    browser('set','viewport',String(width),'844');
+    assert(evaluate(`!document.querySelector('.document-view-button')&&(()=>{const el=document.querySelector('.document-thumbnail'),r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect(),s=getComputedStyle(el),img=el.querySelector('img').getBoundingClientRect();return Math.abs(r.left-p.left)<=1&&Math.abs(r.top-p.top)<=1&&Math.abs(r.bottom-p.bottom)<=1&&s.borderTopWidth==='0px'&&parseFloat(s.borderTopLeftRadius)>0&&Math.abs(img.height-r.height)<1&&document.documentElement.scrollWidth<=innerWidth})()`));
+  }
+  browser('set','viewport','390','844');browser('screenshot','/tmp/document-list-edge-to-edge.png');
   browser('click','.document-thumbnail');browser('wait','.attachment-preview-overlay');browser('press','Escape');
   browser('click','.document-edit-button');
   browser('wait','.document-picker-preview img');
