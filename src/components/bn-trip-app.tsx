@@ -4147,12 +4147,12 @@ function TripHeader({
           <ChevronLeft size={21} />
         </button>
       )}
-      {(editTrip || trip.summary_image_url || (trip.access_role === "owner" && manageMembers)) && (
+      {(editTrip || trip.summary_image_url || ((trip.access_role === "owner" || trip.access_role === "admin") && manageMembers)) && (
         <div className="trip-cover-actions">
           {trip.summary_image_url && <button type="button" onClick={() => setPlanImageOpen(true)} aria-label={t("แพลนเที่ยว")} title={t("แพลนเที่ยว")}>
             <ImageIcon size={20} />
           </button>}
-          {trip.access_role === "owner" && manageMembers && <button type="button" onClick={manageMembers} aria-label={t("เชิญเพื่อนร่วมทริป")} title={t("เชิญเพื่อนร่วมทริป")}>
+          {(trip.access_role === "owner" || trip.access_role === "admin") && manageMembers && <button type="button" onClick={manageMembers} aria-label={t("เชิญเพื่อนร่วมทริป")} title={t("เชิญเพื่อนร่วมทริป")}>
             <UserPlus size={20} />
           </button>}
           {editTrip && <button type="button" onClick={editTrip} aria-label={t("แก้ไข")} title={t("แก้ไข")}>
@@ -4184,7 +4184,7 @@ function TripHeader({
         limit={3}
         onClick={manageMembers}
         actionLabel={
-          trip.access_role !== "owner"
+          trip.access_role !== "owner" && trip.access_role !== "admin"
             ? t("ออกจากทริป")
             : t("จัดการผู้ร่วมทริป")
         }
@@ -5212,7 +5212,7 @@ function TripHub({
           goBack={() => router.replace(backHref)}
           editTrip={editTrip}
           manageMembers={
-            trip.access_role !== "owner"
+            trip.access_role !== "owner" && trip.access_role !== "admin"
               ? leaveTrip
               : manageCollaborators
           }
@@ -8264,6 +8264,7 @@ function CollaboratorsSheet({
 }) {
   const t = useT();
   const canManage = trip.access_role === "owner";
+  const canInvite = trip.access_role === "owner" || trip.access_role === "admin";
   const [items, setItems] = useState<Collaborator[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [email, setEmail] = useState("");
@@ -8396,7 +8397,9 @@ function CollaboratorsSheet({
               {t(
                 canManage
                   ? "กำหนด View สำหรับเพิ่มและแก้ไข หรือ Admin สำหรับลบข้อมูลได้ด้วย"
-                  : "ดูสมาชิกในทริป หรือเลือกออกจากทริปนี้",
+                  : canInvite
+                    ? "เชิญผู้ร่วมทริปเพิ่ม หรือเลือกออกจากทริปนี้"
+                    : "ดูสมาชิกในทริป หรือเลือกออกจากทริปนี้",
               )}
             </p>
           </div>
@@ -8409,7 +8412,7 @@ function CollaboratorsSheet({
             <X size={18} />
           </button>
         </div>
-        {canManage && (
+        {canInvite && (
           <form className="collaborator-form" onSubmit={add}>
             <div className="field">
               <label>{t("อีเมลผู้ร่วมทริป")}</label>
@@ -8509,7 +8512,7 @@ function CollaboratorsSheet({
             <p className="collaborator-empty">{t("ยังไม่มีผู้ร่วมทริป")}</p>
           )}
         </div>
-        {!canManage && (
+        {trip.access_role !== "owner" && (
           <button
             type="button"
             className="primary-btn collaborator-leave-btn"
