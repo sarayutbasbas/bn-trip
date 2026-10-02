@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
 import { getStorageBackend } from "@/src/lib/storage";
+import { isStorageAdmin } from "@/src/lib/storage-admin";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -15,7 +16,6 @@ type UsageMetric={
   percent:number|null;status:"ok"|"estimated"|"unavailable";detail:string;itemCount?:number;
 };
 
-const adminEmail=(process.env.STORAGE_ADMIN_EMAIL||"sarayutkongpeng@gmail.com").trim().toLowerCase();
 const numericEnv=(name:string,fallback:number)=>{const value=Number(process.env[name]);return Number.isFinite(value)&&value>0?value:fallback};
 const ratio=(used:number|null,limit:number|null)=>used===null||!limit?null:Math.round(used/limit*1000)/10;
 const metricTimeout=<T,>(promise:Promise<T>,fallback:T,timeoutMs=6000)=>Promise.race([promise,new Promise<T>(resolve=>setTimeout(()=>resolve(fallback),timeoutMs))]);
@@ -54,7 +54,8 @@ async function blobUsage():Promise<UsageMetric>{
   if(getStorageBackend()!=="blob")return {id:"blob",label:"Vercel Blob",usedBytes:null,limitBytes,percent:null,status:"unavailable",detail:"สภาพแวดล้อมนี้ใช้ local storage · ตรวจ Blob ได้บน Vercel deployment"};
   try{
     let cursor:string|undefined;let usedBytes=0;let itemCount=0;let pages=0;
-    do{const result=await list({prefix:"uploads/",limit:1000,cursor});for(const blob of result.blobs){usedBytes+=blob.size;itemCount++}cursor=result.hasMore?result.cursor:undefined;pages++}while(cursor&&pages<100);
+    const abortSignal=AbortSignal.timeout(5500);
+    do{const result=await list({limit:1000,cursor,abortSignal});for(const blob of result.blobs){usedBytes+=blob.size;itemCount++}cursor=result.hasMore?result.cursor:undefined;pages++}while(cursor&&pages<100);
     return {id:"blob",label:"Vercel Blob",usedBytes,limitBytes,percent:ratio(usedBytes,limitBytes),status:cursor?"estimated":"ok",detail:cursor?"นับ 100,000 ไฟล์แรกใน store":"ขนาดไฟล์ล่าสุดใน store · billing ใช้ค่าเฉลี่ยรายเดือน",itemCount};
   }catch{return {id:"blob",label:"Vercel Blob",usedBytes:null,limitBytes,percent:null,status:"unavailable",detail:"อ่าน Blob store ไม่สำเร็จ กรุณาตรวจ BLOB_STORE_ID/OIDC"}}
 }
@@ -62,7 +63,7 @@ async function blobUsage():Promise<UsageMetric>{
 export async function GET(){
   try{
     const session=await getSession();
-    if(!session||session.isDemo||session.email.trim().toLowerCase()!==adminEmail)return NextResponse.json({error:"Not found"},{status:404,headers:{"Cache-Control":"private, no-store"}});
+    if(!isStorageAdmin(session))return NextResponse.json({error:"Not found"},{status:404,headers:{"Cache-Control":"private, no-store"}});
     const metrics=await Promise.all([
       metricTimeout(vercelUsage(),{id:"vercel",label:"Vercel Static Assets",usedBytes:null,limitBytes:numericEnv("VERCEL_STATIC_LIMIT_BYTES",100*1024*1024),percent:null,status:"unavailable",detail:"ตรวจขนาด deployment ใช้เวลานานเกินกำหนด"} as UsageMetric),
       metricTimeout(neonUsage(),{id:"neon",label:"Neon Postgres",usedBytes:null,limitBytes:numericEnv("NEON_STORAGE_LIMIT_BYTES",512*1024*1024),percent:null,status:"unavailable",detail:"ตรวจขนาดฐานข้อมูลใช้เวลานานเกินกำหนด"} as UsageMetric),

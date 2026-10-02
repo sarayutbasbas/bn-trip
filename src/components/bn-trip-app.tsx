@@ -126,9 +126,7 @@ import {
   ChevronUp,
   ClipboardList,
   Clock,
-  Cloud,
   Crown,
-  Database,
   Download,
   FolderOpen,
   FileText,
@@ -531,17 +529,6 @@ export type Confirmation = {
   busyLabel?: string;
   onConfirm: () => void | Promise<void>;
 };
-type StorageMetric = {
-  id: "vercel" | "neon" | "blob";
-  label: string;
-  usedBytes: number | null;
-  limitBytes: number | null;
-  percent: number | null;
-  status: "ok" | "estimated" | "unavailable";
-  detail: string;
-  itemCount?: number;
-};
-type StorageUsage = { metrics: StorageMetric[]; updatedAt: string };
 const DEFAULT_TRIP_COVER = "/travel-postcard-fallback.jpg";
 export type TripCreationPreset = {
   coverImageUrls?: string[];
@@ -7060,15 +7047,11 @@ function ProfileSettingsCard({
   save,
   lang,
   storageAdmin = false,
-  storageOpen = false,
-  toggleStorage,
 }: {
   profile: AccountProfile | null;
   save: (name: string) => Promise<void>;
   lang: Lang;
   storageAdmin?: boolean;
-  storageOpen?: boolean;
-  toggleStorage?: () => void;
 }) {
   const t = (value: string) => (lang === "EN" ? translateUiText(value) : value);
   const [editing, setEditing] = useState(false);
@@ -7112,7 +7095,7 @@ function ProfileSettingsCard({
               <button type="button" className="account-name-cancel" aria-label={t("ยกเลิก")} onClick={cancel} disabled={saving}><X size={18} /></button>
             </> : <>
               <button key="edit" type="button" disabled={!profile} onClick={(event) => { event.preventDefault(); setEditing(true); }} aria-label={t("แก้ไขชื่อที่แสดง")}><Pencil size={22} /></button>
-              {storageAdmin && <button type="button" className={`storage-toggle ${storageOpen ? "active" : ""}`} onClick={toggleStorage} aria-label={t(storageOpen ? "ซ่อนข้อมูลพื้นที่ระบบ" : "เปิดข้อมูลพื้นที่ระบบ")} aria-pressed={storageOpen}><Gem size={22} /></button>}
+              {storageAdmin && <Link className="storage-toggle" href="/settings/system" aria-label={t("ภาพรวมระบบ")} title={t("ภาพรวมระบบ")}><Gem size={22} /></Link>}
             </>}
           </div>
         </form>
@@ -7124,159 +7107,6 @@ function ProfileSettingsCard({
   );
 }
 
-function StorageUsagePanel({ lang }: { lang: Lang }) {
-  const t = (value: string) => (lang === "EN" ? translateUiText(value) : value);
-  const [data, setData] = useState<StorageUsage | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const formatBytes = (value: number | null) => {
-    if (value === null) return "—";
-    if (value === 0) return "0 B";
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    const index = Math.min(
-      Math.floor(Math.log(value) / Math.log(1024)),
-      units.length - 1,
-    );
-    return `${(value / 1024 ** index).toLocaleString("en-US", { maximumFractionDigits: index < 2 ? 0 : 2 })} ${units[index]}`;
-  };
-  async function requestUsage(signal?: AbortSignal) {
-    const response = await fetch("/api/admin/storage-usage", {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-      signal,
-    });
-    const raw = await response.text();
-    let payload: StorageUsage & { error?: string };
-    try {
-      payload = JSON.parse(raw) as StorageUsage & { error?: string };
-    } catch {
-      throw new Error(
-        response.ok
-          ? "เซิร์ฟเวอร์ตอบข้อมูลพื้นที่ไม่ถูกต้อง"
-          : `ตรวจสอบพื้นที่ไม่สำเร็จ (${response.status})`,
-      );
-    }
-    if (!response.ok)
-      throw new Error(
-        payload.error || `ตรวจสอบพื้นที่ไม่สำเร็จ (${response.status})`,
-      );
-    return payload;
-  }
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      setData(await requestUsage());
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "โหลดข้อมูลพื้นที่ไม่สำเร็จ",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    requestUsage(controller.signal)
-      .then(setData)
-      .catch((reason) => {
-        if ((reason as Error).name !== "AbortError")
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : "โหลดข้อมูลพื้นที่ไม่สำเร็จ",
-          );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
-  const icon = (id: StorageMetric["id"]) =>
-    id === "neon" ? <Database size={17} /> : <Cloud size={17} />;
-  return (
-    <SettingsGlass>
-    <section className="card storage-admin-card">
-      <div className="storage-admin-head">
-        <div>
-          <h2><Gem size={22} />{t("พื้นที่ระบบ")}</h2>
-          <p>{t("เฉพาะผู้ดูแลระบบ")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={loading}
-          aria-label={t("ตรวจสอบพื้นที่อีกครั้ง")}
-          title={t("ตรวจสอบพื้นที่อีกครั้ง")}
-        >
-          <RefreshCw size={16} />
-        </button>
-      </div>
-      {loading ? (
-        <FetchSkeleton rows={2} label={t("กำลังตรวจสอบพื้นที่…")} />
-      ) : error ? (
-        <p className="login-error">{error}</p>
-      ) : (
-        <div className="storage-metric-list">
-          {data?.metrics.map((metric) => {
-            const percent =
-              metric.percent === null ? null : Math.max(0, metric.percent);
-            return (
-              <article
-                key={metric.id}
-                className={`storage-metric storage-${metric.status}`}
-              >
-                <div className="storage-metric-title">
-                  <span>{icon(metric.id)}</span>
-                  <div>
-                    <strong>{metric.label}</strong>
-                    <small>
-                      {metric.status === "estimated"
-                        ? t("ข้อมูลโดยประมาณ")
-                        : metric.status === "unavailable"
-                          ? t("ไม่พร้อมใช้งาน")
-                          : metric.itemCount !== undefined
-                            ? `${metric.itemCount.toLocaleString()} ${t("ไฟล์")}`
-                            : "LIVE"}
-                    </small>
-                  </div>
-                  <b>{percent === null ? "—" : `${percent.toFixed(1)}%`}</b>
-                </div>
-                <div className="storage-values">
-                  <strong>{formatBytes(metric.usedBytes)}</strong>
-                  <span>
-                    {t("จาก")} {formatBytes(metric.limitBytes)}
-                  </span>
-                </div>
-                <div
-                  className="storage-progress"
-                  role="progressbar"
-                  aria-label={`${metric.label} ${percent ?? 0}%`}
-                  aria-valuenow={Math.min(100, Math.round(percent ?? 0))}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
-                  <i style={{ width: `${Math.min(100, percent ?? 0)}%` }} />
-                </div>
-                <p>{metric.detail}</p>
-              </article>
-            );
-          })}
-        </div>
-      )}
-      {data && (
-        <small className="storage-updated">
-          {t("อัปเดตล่าสุด")}{" "}
-          {new Date(data.updatedAt).toLocaleString(
-            lang === "EN" ? "en-US" : "th-TH",
-            { dateStyle: "medium", timeStyle: "short" },
-          )}
-        </small>
-      )}
-    </section>
-    </SettingsGlass>
-  );
-}
 
 function SettingsContent({
   dark,
@@ -7521,7 +7351,6 @@ function SettingsScreen(
   const t = (value: string) =>
     props.lang === "EN" ? translateUiText(value) : value;
   const [profile, setProfile] = useState<AccountProfile | null>(null);
-  const [storageOpen, setStorageOpen] = useState(false);
   useEffect(() => {
     let active = true;
     getCurrentAccount()
@@ -7557,12 +7386,7 @@ function SettingsScreen(
           save={saveProfile}
           lang={props.lang}
           storageAdmin={props.storageAdmin}
-          storageOpen={storageOpen}
-          toggleStorage={() => setStorageOpen((value) => !value)}
         />
-        {props.storageAdmin && storageOpen && (
-          <StorageUsagePanel lang={props.lang} />
-        )}
       </div>
       <SettingsContent {...props} />
     </div>

@@ -35,9 +35,10 @@ try {
   browser('click','[aria-label="แก้ไขชื่อที่แสดง"]');browser('fill','.account-name-editor input','Changed test');browser('click','.account-name-save');
   browser('wait','--fn',`!document.querySelector('.account-name-editor input')&&!document.querySelector('.account-name-save')`);
   assert.equal((await api('/api/me')).display_name,'Changed test');
-  browser('click','.storage-toggle');browser('wait','.storage-admin-card');
-  assert(evaluate(`!document.querySelector('.storage-admin-card .mini-kicker')`));
-  assert(evaluate(`getComputedStyle(document.querySelector('.storage-toggle.active')).borderTopWidth==='0px'&&getComputedStyle(document.querySelector('.storage-toggle.active svg')).fill==='none'`));
+  assert(evaluate(`document.querySelector('.storage-toggle').getAttribute('href')==='/settings/system'&&getComputedStyle(document.querySelector('.storage-toggle svg')).fill==='none'`));
+  browser('click','.storage-toggle');browser('wait','.system-providers');
+  assert(evaluate(`!document.querySelector('.bottom-nav')`));
+  browser('click','[aria-label="กลับหน้าตั้งค่า"]');browser('wait','.saved-card-main');
   browser('screenshot','/tmp/settings-profile.png');
   browser('click','.saved-card-main');browser('wait','input[name=lastFour]');
   assert(evaluate(`!document.querySelector('input[name=lastFour]').readOnly`));

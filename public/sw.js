@@ -10,6 +10,8 @@ self.addEventListener("message",event=>{if(event.data?.type==="CLEAR_PRIVATE_DAT
 async function networkFirst(request,cacheName){const cache=await caches.open(cacheName);try{const response=await fetch(request);if(response.ok)await cache.put(request,response.clone());else if(response.status===401||response.status===403||response.status===404)await cache.delete(request);return response}catch{const cached=await cache.match(request);return cached||new Response(JSON.stringify({error:"Offline and no saved data"}),{status:503,headers:{"Content-Type":"application/json"}})}}
 async function privateDocument(request){const cache=await caches.open(PRIVATE_DOCUMENT_CACHE);const cached=await cache.match(request);if(cached)return cached;try{const response=await fetch(request);if(response.status===401||response.status===403||response.status===404)await cache.delete(request);return response}catch{return new Response("Document is not saved offline",{status:503})}}
 self.addEventListener("fetch",event=>{const request=event.request;if(request.method!=="GET")return;const url=new URL(request.url);if(url.origin!==location.origin)return;
+  // Admin pages/data must never be served from an offline account's cache.
+  if(url.pathname.startsWith("/api/admin/")||url.pathname==="/settings/system")return;
   if((url.pathname.includes("/documents/")&&url.pathname.endsWith("/file"))||url.pathname.startsWith("/api/uploads/")){event.respondWith(privateDocument(request));return}
   if(/^\/api\/trips(?:\/|$)/.test(url.pathname)){event.respondWith(networkFirst(request,PRIVATE_DATA_CACHE));return}
   if(request.mode==="navigate"){event.respondWith(networkFirst(request,PRIVATE_DATA_CACHE));return}
