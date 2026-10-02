@@ -4,7 +4,7 @@ import { query } from "@/src/lib/db";
 import { getDemoCards,isDemoTrip } from "@/src/lib/demo-data";
 
 type TripCardRow={
-  id:string;nickname:string;brand:"visa"|"mastercard"|"jcb"|null;last_four:string;is_active:boolean;sort_order:number;
+  id:string;nickname:string;brand:"visa"|"mastercard"|"jcb"|"unionpay"|"amex"|null;last_four:string;is_active:boolean;sort_order:number;
   owner_id:string;owner_name:string;owner_email:string|null;owner_avatar_url:string|null;is_own:boolean;member_role:"owner"|"collaborator";
 };
 

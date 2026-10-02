@@ -3,7 +3,7 @@ import { getSession } from "@/src/lib/auth";
 import { query } from "@/src/lib/db";
 import { getTripRole } from "@/src/lib/trip-access";
 import { DOCUMENT_QUOTA_BYTES } from "@/src/lib/document-storage";
-import { getStorageBackend } from "@/src/lib/storage";
+import { getStorageBackend, uploadFileSize } from "@/src/lib/storage";
 import { ensureDefaultMasterChecklist } from "@/src/lib/checklist-master-defaults";
 
 export async function GET(
@@ -95,6 +95,19 @@ export async function GET(
     (total, item) => total + Number((item as { file_size: number }).file_size),
     0,
   );
+  const documentRows: Record<string, unknown>[] = [...documents.rows];
+  if (tab === "documents") {
+    const plan = await query<{summary_image_url: string | null; created_at: string}>("SELECT summary_image_url,created_at FROM trips WHERE id=$1", [id]);
+    const trip = plan.rows[0];
+    if (trip?.summary_image_url) {
+      documentRows.unshift({
+        id: `trip-plan-${id}`, title: "แพลนเที่ยวรวม", original_filename: "trip-plan.webp",
+        mime_type: "image/webp", file_size: await uploadFileSize(trip.summary_image_url),
+        file_url: trip.summary_image_url, source: "trip-plan", created_at: trip.created_at,
+        uploaded_by_name: null,
+      });
+    }
+  }
   return NextResponse.json({
     ...(tab === "checklist"
       ? {
@@ -103,7 +116,7 @@ export async function GET(
           masterItems: masterItems.rows,
         }
       : {}),
-    ...(tab === "documents" ? { documents: documents.rows } : {}),
+    ...(tab === "documents" ? { documents: documentRows } : {}),
     ...(tab === "history" ? { activities: activities.rows } : {}),
     members: members.rows,
     currentUserId: session.userId,

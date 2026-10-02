@@ -35,7 +35,7 @@ function SearchRow({ buttons }: { buttons: number }) {
   </div>;
 }
 
-function HomeLoading() {
+export function HomeLoading() {
   return <div className="route-skeleton-screen route-skeleton-home">
     <Intro page="home" />
     <Block className="route-skeleton-featured" />

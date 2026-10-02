@@ -36,6 +36,10 @@ try {
   browser("cookies", "set", "bn_trip_session", token);
   browser("set", "viewport", "390", "844");
   browser("open", `${base}/trips/${trip}/expenses`);
+  browser("click", '[aria-label="เพิ่มค่าใช้จ่าย"]');browser("wait", "#expense-paid-by");
+  assert.equal(evaluate('document.querySelector("#expense-paid-by").value'), `member:${owner}`);
+  assert.equal(evaluate('document.querySelector("#expense-paid-by").disabled'), false);
+  browser("open", `${base}/trips/${trip}/expenses`);
   browser("click", ".expense-insight-details > summary");
   const summary = evaluate('document.querySelector(".expense-settlement-summary").textContent');
   assert.ok(summary.includes("ต้องได้รับคืน"));
@@ -102,6 +106,17 @@ try {
   assert.equal((await api(`/api/trips/${trip}/expense-guests/${guest.id}`, "DELETE")).status, 200);
   assert.equal((await (await api(`/api/trips/${trip}/itineraries`)).json())[0].cost_items[0].paidBy, undefined);
   console.log("PASS: guest payer saved and cleared on deletion even when not in the split");
+  const single=randomUUID();
+  await db.query("INSERT INTO trips(id,owner_id,name,destination,start_date,total_days) VALUES($1,$2,'Solo payer','Bangkok','2026-01-01',2)",[single,owner]);
+  await api(`/api/trips/${single}/itineraries`,'POST',{dayNumber:1,timeSlot:'morning',startTime:'08:00',placeName:'Solo',costItems:[]});
+  browser('open',`${base}/trips/${single}/expenses`);browser('click','[aria-label="เพิ่มค่าใช้จ่าย"]');browser('wait','#expense-paid-by');
+  assert.equal(evaluate('document.querySelector("#expense-paid-by").value'),`member:${owner}`);
+  assert.equal(evaluate('document.querySelector("#expense-paid-by").disabled'),true);
+  browser('open',`${base}/trips/${single}?view=stays`);browser('find','role','button','click','--name','เพิ่มที่พัก');browser('wait','#expense-paid-by');
+  assert.equal(evaluate('document.querySelector("#expense-paid-by").value'),`member:${owner}`);
+  assert.equal(evaluate('document.querySelector("#expense-paid-by").disabled'),true);
+  await db.query('DELETE FROM trips WHERE id=$1',[single]);
+  console.log('PASS new payer defaults to owner; solo expense and accommodation payer disabled');
 } finally {
   try { browser("close"); } catch { /* Browser may not have started. */ }
   await db.query("DELETE FROM trips WHERE id=$1 AND owner_id=$2", [trip, owner]);

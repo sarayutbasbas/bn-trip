@@ -164,7 +164,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
             </div>
             <div className="field expense-payer-field">
               <label htmlFor="expense-paid-by">{t("จ่ายโดย")}</label>
-              <select id="expense-paid-by" name="paidBy" required value={payerKey} onChange={event => setPayerKey(event.target.value)}>
+              <select id="expense-paid-by" name="paidBy" disabled={splitMembers.length + expenseGuests.length <= 1} required value={payerKey} onChange={event => setPayerKey(event.target.value)}>
                 <option value="">{t("เลือกผู้จ่าย")}</option>
                 <optgroup label={t("สมาชิกในทริป")}>
                   {splitMembers.map(member => <option key={member.id} value={`member:${member.id}`}>{member.display_name || member.email || "-"}</option>)}

@@ -6,6 +6,7 @@ import { useExpenseGuests, EXPENSE_GUESTS_CHANGED_EVENT } from "./use-expense-gu
 import { ExpensePeopleFields } from "./expense-people-fields";
 import { safeBookingUrl } from "@/src/lib/booking-url";
 import { FetchSkeleton } from "@/src/components/fetch-skeleton";
+import { CollaboratorsSkeleton } from "@/src/components/collaborators-skeleton";
 import { AutoLoadMore } from "@/src/components/auto-load-more";
 import { LoginScreen as RedesignedLoginScreen } from "@/src/components/login-screen";
 
@@ -39,10 +40,11 @@ import { PageIntro } from "@/src/components/page-intro";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
+import { tripDaysUntilLabel } from "@/src/lib/trip-countdown";
 import { TripNoteField } from "@/src/components/trip-note-field";
 import { TripImportSettings } from "@/src/components/trip-import-settings";
 import { BadgeHighlightSkeleton } from "@/src/components/badge-skeleton";
-import { fetchTripDirectoryWindow } from "@/src/lib/client-trip-pagination";
+import { fetchTripDirectoryPage, fetchTripDirectoryWindow } from "@/src/lib/client-trip-pagination";
 import { TripMemberFilter } from "@/src/components/trip-member-filter";
 import { OfflineDocumentUsage } from "@/src/components/offline-document-usage";
 import { parseMemberFilter, type TripFilterMember } from "@/src/lib/trip-member-filter";
@@ -56,6 +58,9 @@ import {
 } from "@/src/components/attachment-preview-overlay";
 import { BlockingSaveOverlay, BottomSheet, useBlockingSubmit } from "@/src/components/bottom-sheet";
 import { InvitationNotifications } from "@/src/components/invitation-notifications";
+import { HomeLoading } from "@/src/components/app-route-loading";
+import { TripNameInput } from "@/src/components/trip-name-input";
+import { useCardReorder } from "@/src/components/use-card-reorder";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import type {
   CountryHighlight,
@@ -81,6 +86,7 @@ import {
   accommodationResourceKey,
   invalidateClientResource,
   invalidateClientResourcesContaining,
+  workspaceResourceKey,
 } from "@/src/lib/client-resource-cache";
 import {
   TRIP_COUNTRIES,
@@ -112,6 +118,7 @@ import {
   CarFront,
   ChartNoAxesColumnIncreasing,
   CheckCircle2,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -128,6 +135,7 @@ import {
   Gem,
   Globe2,
   ImagePlus,
+  ImageIcon,
   Images,
   GripVertical,
   Heart,
@@ -163,6 +171,8 @@ import {
   UserPlus,
   Utensils,
   WalletCards,
+  Wallet,
+  PiggyBank,
   X,
 } from "lucide-react";
 
@@ -265,6 +275,7 @@ type ExpenseGuest = {
   name: string;
 };
 export type Trip = {
+  collaborator_count?: number;
   cover_image_urls?: string[];
   id: string;
   name: string;
@@ -319,7 +330,7 @@ type Collaborator = {
   avatar_url?: string | null;
   access_level: "view" | "admin";
 };
-type CardBrand = "visa" | "mastercard" | "jcb";
+type CardBrand = "visa" | "mastercard" | "jcb" | "unionpay" | "amex";
 export type PaymentCard = {
   id: string;
   nickname: string;
@@ -1815,7 +1826,7 @@ function CardBrandLogo({
   brand?: CardBrand | null;
   className?: string;
 }) {
-  const asset = brand === "visa" ? "visa-wordmark" : brand || "card";
+  const asset = brand === "amex" ? "amex.avif" : `${brand === "visa" ? "visa-wordmark" : brand === "unionpay" ? "union-pay" : brand || "card"}.svg`;
   const label =
     brand === "visa"
       ? "VISA"
@@ -1823,13 +1834,13 @@ function CardBrandLogo({
         ? "Mastercard"
         : brand === "jcb"
           ? "JCB"
-          : "Credit card";
+          : brand === "unionpay" ? "UnionPay" : brand === "amex" ? "American Express" : "Credit card";
   return (
     <span
       className={`card-brand-logo card-brand-${brand || "generic"} ${className}`}
     >
       <Image
-        src={`/card-brands/${asset}.svg`}
+        src={`/card-brands/${asset}`}
         alt={label}
         width={48}
         height={28}
@@ -1924,7 +1935,7 @@ function findPaymentCard(
   );
 }
 
-function EmptyState({
+export function EmptyState({
   title,
   description,
   action,
@@ -2307,11 +2318,6 @@ function tripTemporalStatus(trip: Trip, nowValue: Date | number) {
     ),
   };
 }
-function tripDaysUntilLabel(daysUntil: number) {
-  if (daysUntil === 0) return "วันนี้";
-  if (daysUntil === 1) return "พรุ่งนี้";
-  return `อีก ${daysUntil} วัน`;
-}
 function timeInMinutes(value: string | null) {
   if (!value) return null;
   const [hour, minute] = value.slice(0, 5).split(":").map(Number);
@@ -2424,28 +2430,29 @@ function TripCardFlights({ trip }: { trip: Trip }) {
     const index = flightTypeIndexes.get(flight.journey_type) || 0;
     flightTypeIndexes.set(flight.journey_type, index + 1);
     const baseLabel = flight.journey_type === "outbound"
-      ? "ขาไป"
+      ? "ไป"
       : flight.journey_type === "return"
-        ? "ขากลับ"
+        ? "กลับ"
         : "ระหว่างทริป";
     return {
       key: `${flight.journey_type}-${flight.segment_order}-${flight.airline_code}-${flight.flight_number}`,
       label: (flightTypeCounts.get(flight.journey_type) || 0) > 1
-        ? `${baseLabel} ${index + 1}`
+        ? `${baseLabel}${index + 1}`
         : baseLabel,
-      number: `${flight.airline_code} ${flight.flight_number}`,
-      showIcon: index === 0,
+      number: `${flight.airline_code}${flight.flight_number}`,
       direction: flight.journey_type === "return" ? "return" : "outbound",
+      column: flight.journey_type === "outbound" ? "1" : flight.journey_type === "return" ? "2" : "1 / -1",
+      row: index + 1 + (flight.journey_type !== "outbound" && flight.journey_type !== "return" ? Math.max(flightTypeCounts.get("outbound") || 0, flightTypeCounts.get("return") || 0) : 0),
     };
   });
   return (
     <div className="trip-card-flights">
       {flightLabels.map((flight) => (
-        <span className="trip-card-flight" key={flight.key}>
+        <span className="trip-card-flight" key={flight.key} aria-label={`${t(flight.label)} ${flight.number}`} style={{ gridColumn: flight.column, gridRow: flight.row }}>
           <i aria-hidden="true">
-            {flight.showIcon && <Plane className={`trip-card-flight-plane is-${flight.direction}`} size={12} fill="currentColor" />}
+            <Plane className={`trip-card-flight-plane is-${flight.direction}`} size={12} />
           </i>
-          <span><b>{t(flight.label)} :</b> {flight.number}</span>
+          <span>{t(flight.label)} {flight.number}</span>
         </span>
       ))}
     </div>
@@ -2509,7 +2516,6 @@ function TripCard({
         <SharedTripAvatars
           members={trip.members}
           limit={3}
-          onClick={() => manageCollaborators(trip)}
           actionLabel={t("ผู้ร่วมทริป")}
         />
       </div>
@@ -2561,7 +2567,7 @@ function HomeTripIdeaCard({
       <div className="trip-cover">
         <TripCoverArt record={idea} sizes="(max-width: 600px) 50vw, 380px" priority={priority} />
         {countdown && <TripCountdownBadge label={countdown} />}
-        <SharedTripAvatars members={idea.members} limit={3} onClick={open} actionLabel="ผู้ร่วมวางแผน" />
+        <SharedTripAvatars members={idea.members} limit={3} actionLabel="ผู้ร่วมวางแผน" />
       </div>
       <div className="trip-body">
         <h3>{idea.name}</h3>
@@ -2843,7 +2849,6 @@ function NearbyFlights({
   const [flights, setFlights] = useState<NearbyFlight[]>(
     () => nearbyFlightsCache?.flights || [],
   );
-  const [loading, setLoading] = useState(nearbyFlightsCache === null);
   const [syncConfigured, setSyncConfigured] = useState(
     () => nearbyFlightsCache?.syncConfigured || false,
   );
@@ -2884,10 +2889,7 @@ function NearbyFlights({
       void fetch("/api/flights/nearby", { cache: "no-store" })
         .then((response) => response.json())
         .then(apply)
-        .catch(() => {})
-        .finally(() => {
-          if (active) setLoading(false);
-        });
+        .catch(() => {});
     }
     const refreshStale = () => {
       void fetch("/api/flights/nearby", { method: "POST", cache: "no-store" })
@@ -2927,7 +2929,7 @@ function NearbyFlights({
       setSyncingId(null);
     }
   }
-  if (!loading && !visibleFlights.length) return null;
+  if (!visibleFlights.length) return null;
   return (
     <section className="nearby-flight-section">
       <div className="section-head nearby-flight-heading">
@@ -2941,9 +2943,7 @@ function NearbyFlights({
         </div>
       </div>
       <div className="nearby-flight-list">
-        {loading && !flights.length ? (
-          <article className="nearby-flight-card is-loading">{t("กำลังตรวจเที่ยวบินล่าสุด…")}</article>
-        ) : visibleFlights.map((flight) => (
+        {visibleFlights.map((flight) => (
           <FlightSnapshotCard
             key={flight.id}
             flight={flight}
@@ -3230,7 +3230,7 @@ function Dashboard({
         </>
       )}
       <TravelBadgeProgressCard unlocked={unlockedBadges} total={totalBadges} onClick={viewBadges} />
-      <section className="dashboard-memory-stats" aria-label={t("ความทรงจำของเรา")}>
+      {counts.total > 0 && <section className="dashboard-memory-stats" aria-label={t("ความทรงจำของเรา")}>
         <div>
           <button type="button" onClick={viewAnalytics}>
             <i><Luggage size={18} /></i>
@@ -3245,11 +3245,11 @@ function Dashboard({
             <span><strong>{visitedDestinations}</strong><small>{t("จังหวัดที่เคยไป")}</small></span>
           </button>
         </div>
-      </section>
+      </section>}
       {countryHighlights.length > 0 && (
         <PastCountryHighlights items={countryHighlights} />
       )}
-      <div className="past-section">
+      {counts.past > 0 && <div className="past-section">
         {heading(
           "PAST JOURNEYS",
           "ทริปที่ผ่านมาแล้ว",
@@ -3263,8 +3263,8 @@ function Dashboard({
             {t("เมื่อจบทริปแล้ว เราจะเก็บการเดินทางไว้ตรงนี้ให้อัตโนมัติ")}
           </article>
         )}
-      </div>
-      <section className="dashboard-ideas-section" aria-label={t("ทริปที่เล็งไว้")}>
+      </div>}
+      {plannedIdeas.length > 0 && <section className="dashboard-ideas-section" aria-label={t("ทริปที่เล็งไว้")}>
         <div className="section-head">
           <div>
             <span className="section-kicker">TRIPS ON THE RADAR</span>
@@ -3289,7 +3289,7 @@ function Dashboard({
         ) : (
           <article className="card past-empty">{t("ยังไม่มีทริปที่เล็งไว้")}</article>
         )}
-      </section>
+      </section>}
       {favoriteAccommodations.length > 0 && (
         <section
           className="dashboard-favorite-hotels"
@@ -3354,7 +3354,10 @@ function PastCountryHighlights({ items }: { items: CountryHighlight[] }) {
       <div className="country-highlights-head">
         <div>
           <span className="section-kicker">TRAVEL MEMORIES</span>
-          <h2><MapIcon size={18} />{t("ประเทศที่เคยไป")}</h2>
+          <div className="section-title-row">
+            <h2><MapIcon size={18} />{t("ประเทศที่เคยไป")}</h2>
+            <span className="section-trip-count">{items.length} {lang === "EN" ? (items.length === 1 ? "country" : "countries") : "ประเทศ"}</span>
+          </div>
         </div>
       </div>
       <div className="country-highlights-scroll">
@@ -3431,6 +3434,11 @@ function AnalyticsYearTrend({
     };
   }, []);
   const chronological = [...years].sort((a, b) => a.year - b.year);
+  const yearDataKey = chronological.map(point => `${point.year}:${point.trips}:${point.destinations}`).join("|");
+  useLayoutEffect(() => {
+    const bars = chartRef.current?.querySelector<HTMLDivElement>(".analytics-year-bars");
+    if (bars) bars.scrollLeft = bars.scrollWidth - bars.clientWidth;
+  }, [yearDataKey, barLayout.gap, barLayout.slots]);
   const maxTrips = Math.max(1, ...chronological.map((item) => item.trips));
   return (
     <div ref={chartRef} className="analytics-year-chart">
@@ -3478,11 +3486,13 @@ function TravelAnalyticsDashboard({
   badges,
   refreshRequestRef,
   notify,
+  createTrip,
 }: {
   datasets: TravelAnalyticsCollection;
   badges: TravelBadgeCollection;
   refreshRequestRef: { current: (() => Promise<void>) | null };
   notify: (message: string) => void;
+  createTrip: () => void;
 }) {
   const t = useT();
   const lang = useContext(LanguageContext);
@@ -3575,14 +3585,13 @@ function TravelAnalyticsDashboard({
       <div className="screen analytics-screen analytics-redesign">
         {analyticsHero}
         {scopeFilter}
-        {badgeSection}
-        <article className="card analytics-empty">
-          <ChartNoAxesColumnIncreasing size={28} />
-          <h2>{t("ยังไม่มีทริปที่ผ่านมาให้สรุป")}</h2>
-          <p>
-            {t("เมื่อทริปจบแล้ว สถิติจะปรากฏที่หน้านี้โดยอัตโนมัติ")}
-          </p>
-        </article>
+        <EmptyState
+          icon={ChartNoAxesColumnIncreasing}
+          title="ยังไม่มีทริปที่ผ่านมาให้สรุป"
+          description="เมื่อทริปจบแล้ว สถิติจะปรากฏที่หน้านี้โดยอัตโนมัติ"
+          action="สร้างทริป"
+          onClick={createTrip}
+        />
       </div>
     );
 
@@ -3652,9 +3661,7 @@ function CompactTripCard({
   const temporal = tripTemporalStatus(trip, now);
   const budget = Number(trip.budget_thb || 0);
   const actualSpent = Number(trip.actual_spent_thb || 0);
-  const hasActualSpent = actualSpent > 0;
-  const displayedAmount = hasActualSpent ? actualSpent : budget;
-  const amountState = !hasActualSpent
+  const amountState = Math.round(actualSpent * 100) === Math.round(budget * 100)
     ? "is-budget-placeholder"
     : actualSpent > budget
       ? "is-over-budget"
@@ -3706,9 +3713,13 @@ function CompactTripCard({
         <TripCardFacts trip={trip} />
         <TripCardFlights trip={trip} />
         <div className="compact-trip-meta">
+          <span className="is-budget-placeholder">
+            <PiggyBank size={12} />
+            {t("งบ")} ฿{budget.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
+          </span>
           <span className={amountState}>
-            <WalletCards size={12} />
-            ฿{displayedAmount.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
+            <Wallet size={12} />
+            {t("ใช้ไป")} ฿{actualSpent.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
           </span>
         </div>
       </div>
@@ -3784,7 +3795,7 @@ function TripsDirectory({
   const [now] = useState(() => Date.now());
   const skipInitialFetch = useRef(Boolean(initialData));
   const hasContentRef = useRef(Boolean(initialData));
-  const visibleTripCountRef = useRef(Math.max(20, initialData?.items.length || 0));
+  const visibleTripCountRef = useRef(Math.max(20, initialData?.items.length || Math.min(200, Number(initialFilters.loaded) || 20)));
   const activeFiltersRef = useRef(JSON.stringify([status, tripType, selectedYears, selectedMembers, queryText.trim(), sort]));
   const directoryRequestRef = useRef(0);
   const refreshingDirectoryRef = useRef(false);
@@ -3897,8 +3908,10 @@ function TripsDirectory({
         if (sort === "latest") visibleParams.delete("sort");
         // This list already fetches its own API. Do not start a second server
         // navigation for the same filters and wait for both responses.
-        window.history.replaceState(window.history.state, "", visibleParams.size ? `/trips?${visibleParams}` : "/trips");
         try {
+          if (window.location.pathname === "/trips") {
+            window.history.replaceState(window.history.state, "", visibleParams.size ? `/trips?${visibleParams}` : "/trips");
+          }
           const data = await fetchTripDirectoryWindow<Trip>(params, visibleTripCountRef.current, controller.signal);
           if (controller.signal.aborted || requestId !== directoryRequestRef.current) return;
           const nextItems = applyCachedTripReviewSummaries(
@@ -3917,6 +3930,7 @@ function TripsDirectory({
           setHasMore(Boolean(data.hasMore));
           hasContentRef.current = true;
         } catch (error) {
+          if (controller.signal.aborted || requestId !== directoryRequestRef.current) return;
           if (!controller.signal.aborted && requestId === directoryRequestRef.current) setDirectoryError(error instanceof Error ? error.message : "โหลดทริปไม่สำเร็จ");
           if (
             (error as Error).name !== "AbortError" &&
@@ -3972,9 +3986,7 @@ function TripsDirectory({
     if (selectedMembers.length) params.set("member", selectedMembers.join(","));
     if (queryText.trim()) params.set("q", queryText.trim());
     try {
-      const response = await fetch(`/api/trips?${params}`, { signal: controller.signal, cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || t("โหลดทริปไม่สำเร็จ"));
+      const data = await fetchTripDirectoryPage(params, controller.signal);
       if (controller.signal.aborted || requestId !== directoryRequestRef.current) return;
       const existingIds = new Set(items.map(trip => trip.id));
       const nextItems: Trip[] = (Array.isArray(data.items) ? data.items : []).filter((trip: Trip) => {
@@ -4095,8 +4107,8 @@ function TripsDirectory({
       ) : (
         <EmptyState
           icon={Search}
-          title="ไม่พบทริปที่ตรงกับตัวกรอง"
-          description="ลองเปลี่ยนคำค้นหาหรือตัวกรอง"
+          title={queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length ? "ไม่พบทริปที่ตรงกับตัวกรอง" : "ยังไม่มีทริป"}
+          description={queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length ? "ลองเปลี่ยนคำค้นหาหรือตัวกรอง" : "สร้างทริปใหม่ แล้วเริ่มเติมสถานที่ที่อยากไปกัน"}
           action="สร้างทริป"
           onClick={createTrip}
         />
@@ -4260,6 +4272,7 @@ function TripSectionNav({
 }) {
   const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [planImageOpen, setPlanImageOpen] = useState(false);
   const [confirmDownload, setConfirmDownload] = useState(false);
   const [downloadFile, setDownloadFile] = useState<File | null>(null);
   const [downloadError, setDownloadError] = useState("");
@@ -4318,6 +4331,9 @@ function TripSectionNav({
     { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
     { id: "export", label: "Download", Icon: Download, action: () => setConfirmDownload(true) },
   ];
+  if (trip.summary_image_url) {
+    sections.push({ id: "plan-image", label: "แพลนเที่ยว", Icon: ImageIcon, action: () => setPlanImageOpen(true) });
+  }
   const primary = sections
     .filter(({ availableInTrip }) => availableInTrip !== false)
     .slice(0, 4);
@@ -4356,6 +4372,13 @@ function TripSectionNav({
             </div>
           </section>
         </div>, document.body)}
+      {planImageOpen && trip.summary_image_url && (
+        <AttachmentPreviewOverlay
+          preview={{ url: trip.summary_image_url, title: t("แพลนเที่ยว"), mimeType: "image/jpeg" }}
+          onClose={() => setPlanImageOpen(false)}
+          closeLabel={t("ปิดรูป")}
+        />
+      )}
       {(confirmDownload || downloadFile) && (
         <ConfirmDialog
           key={downloadFile ? "save-plan" : "prepare-plan"}
@@ -4880,7 +4903,7 @@ function TimelineDayShortcuts({
     };
   }, []);
   return (
-    <div ref={railRef} className={`timeline-day-shortcuts${trip.total_days <= 3 ? " is-short" : ""}`} role="group" aria-label={t("เลือกวัน")}>
+    <div ref={railRef} className="timeline-day-shortcuts" role="group" aria-label={t("เลือกวัน")}>
       {Array.from({ length: trip.total_days }, (_, index) => index + 1).map((number) => (
         <button
           type="button"
@@ -6873,11 +6896,10 @@ function CardSheet({
     const form = new FormData(event.currentTarget);
     const nickname = String(form.get("nickname") || "").trim();
     const brand = String(form.get("brand") || "") as CardBrand;
-    const lastFour =
-      card?.last_four || String(form.get("lastFour") || "").trim();
+    const lastFour = String(form.get("lastFour") || "").trim();
     if (
       !nickname ||
-      !["visa", "mastercard", "jcb"].includes(brand) ||
+      !["visa", "mastercard", "jcb", "unionpay", "amex"].includes(brand) ||
       !/^\d{4}$/.test(lastFour)
     ) {
       setError(t("ข้อมูลบัตรไม่ถูกต้อง"));
@@ -6932,7 +6954,7 @@ function CardSheet({
           </div>
           <fieldset className="card-brand-picker">
             <legend>{t("ประเภทบัตร")}</legend>
-            {(["visa", "mastercard", "jcb"] as CardBrand[]).map((brand) => (
+            {(["visa", "mastercard", "jcb", "unionpay", "amex"] as CardBrand[]).map((brand) => (
               <label key={brand}>
                 <input
                   type="radio"
@@ -6946,7 +6968,7 @@ function CardSheet({
                   <b>
                     {brand === "mastercard"
                       ? "Mastercard"
-                      : brand.toUpperCase()}
+                      : brand === "unionpay" ? "UnionPay" : brand.toUpperCase()}
                   </b>
                 </span>
               </label>
@@ -6954,7 +6976,7 @@ function CardSheet({
           </fieldset>
           <div className="field">
             <label>{t("เลข 4 หลักสุดท้าย")}</label>
-            <div className={`card-last-four-input ${card ? "locked" : ""}`}>
+            <div className="card-last-four-input">
               <span>x-</span>
               <input
                 name="lastFour"
@@ -6965,8 +6987,6 @@ function CardSheet({
                 pattern="[0-9]{4}"
                 maxLength={4}
                 defaultValue={card?.last_four || ""}
-                readOnly={Boolean(card)}
-                aria-readonly={Boolean(card)}
                 placeholder="4323"
               />
             </div>
@@ -6974,7 +6994,7 @@ function CardSheet({
           <p className="card-security-note">
             {t(
               card
-                ? "เลข 4 หลักสุดท้ายไม่สามารถแก้ไขได้"
+                ? "แก้ไขเลขท้ายบัตรได้ โดยข้อมูลการชำระเงินเดิมจะไม่เปลี่ยน"
                 : "บันทึกเฉพาะชื่อเรียกและเลข 4 หลักท้าย ไม่เก็บเลขบัตรเต็ม",
             )}
           </p>
@@ -7080,62 +7100,18 @@ function ProfileSettingsCard({
     <article className="card account-settings-card">
       <AccountAvatar profile={profile} size="large" />
       <div className="account-settings-copy">
-        {editing ? (
-          <form onSubmit={submit}>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              minLength={2}
-              maxLength={120}
-              autoFocus
-              required
-            />
-            <button
-              type="button"
-              className="account-name-cancel"
-              onClick={cancel}
-              disabled={saving}
-            >
-              {t("ยกเลิก")}
-            </button>
-            <button className="account-name-save" disabled={saving}>
-              {t(saving ? "กำลังบันทึก…" : "บันทึก")}
-            </button>
-          </form>
-        ) : (
+        <form className="account-name-editor" onSubmit={submit}>
+          {editing ? <input aria-label={t("ชื่อที่แสดง")} value={name} disabled={saving} onChange={event => setName(event.target.value)} minLength={2} maxLength={120} autoFocus required /> : <strong className="account-name-display" title={name}>{name || t("กำลังโหลด…")}</strong>}
           <div className="account-name-row">
-            <strong>{profile?.display_name || t("กำลังโหลด…")}</strong>
-            {profile && (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                aria-label={t("แก้ไขชื่อที่แสดง")}
-              >
-                <Pencil size={26} />
-              </button>
-            )}
-            {storageAdmin && (
-              <button
-                type="button"
-                className={`storage-toggle ${storageOpen ? "active" : ""}`}
-                onClick={toggleStorage}
-                aria-label={t(
-                  storageOpen
-                    ? "ซ่อนข้อมูลพื้นที่ระบบ"
-                    : "เปิดข้อมูลพื้นที่ระบบ",
-                )}
-                title={t(
-                  storageOpen
-                    ? "ซ่อนข้อมูลพื้นที่ระบบ"
-                    : "เปิดข้อมูลพื้นที่ระบบ",
-                )}
-                aria-pressed={storageOpen}
-              >
-                <Gem size={26} />
-              </button>
-            )}
+            {editing ? <>
+              <button className="account-name-save" aria-label={t(saving ? "กำลังบันทึก…" : "บันทึก")} disabled={saving || !name.trim()}><Check size={18} /></button>
+              <button type="button" className="account-name-cancel" aria-label={t("ยกเลิก")} onClick={cancel} disabled={saving}><X size={18} /></button>
+            </> : <>
+              <button key="edit" type="button" disabled={!profile} onClick={(event) => { event.preventDefault(); setEditing(true); }} aria-label={t("แก้ไขชื่อที่แสดง")}><Pencil size={22} /></button>
+              {storageAdmin && <button type="button" className={`storage-toggle ${storageOpen ? "active" : ""}`} onClick={toggleStorage} aria-label={t(storageOpen ? "ซ่อนข้อมูลพื้นที่ระบบ" : "เปิดข้อมูลพื้นที่ระบบ")} aria-pressed={storageOpen}><Gem size={22} /></button>}
+            </>}
           </div>
-        )}
+        </form>
         <small>{profile?.email || ""}</small>
         {error && <p className="login-error">{error}</p>}
       </div>
@@ -7219,8 +7195,7 @@ function StorageUsagePanel({ lang }: { lang: Lang }) {
     <section className="card storage-admin-card">
       <div className="storage-admin-head">
         <div>
-          <span className="mini-kicker">HIDDEN FEATURE</span>
-          <h2>{t("พื้นที่ระบบ")}</h2>
+          <h2><Gem size={22} />{t("พื้นที่ระบบ")}</h2>
           <p>{t("เฉพาะผู้ดูแลระบบ")}</p>
         </div>
         <button
@@ -7330,106 +7305,13 @@ function SettingsContent({
     null,
   );
   const [cardsExpanded, setCardsExpanded] = useState(false);
-  const [sortingCards, setSortingCards] = useState(false);
-  const [cardSortTurns, setCardSortTurns] = useState(0);
-  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
-  const [savingOrder, setSavingOrder] = useState(false);
-  const [draftCards, setDraftCards] = useState(cards);
-  const draftCardsRef = useRef(cards);
-  const orderedCards = draggingCardId || savingOrder ? draftCards : cards;
+  const cardDrag = useCardReorder(cards, reorderCards);
+  const savingOrder = cardDrag.saving;
+  const orderedCards = cardDrag.ordered;
   const visibleCards =
-    sortingCards || cardsExpanded ? orderedCards : orderedCards.slice(0, 2);
-  function moveDraft(cardId: string, targetId: string) {
-    if (cardId === targetId) return;
-    setDraftCards((current) => {
-      const from = current.findIndex((card) => card.id === cardId);
-      const to = current.findIndex((card) => card.id === targetId);
-      if (from < 0 || to < 0 || from === to) return current;
-      const next = [...current];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      draftCardsRef.current = next;
-      return next;
-    });
-  }
-  function beginDrag(
-    event: React.PointerEvent<HTMLButtonElement>,
-    cardId: string,
-  ) {
-    if (savingOrder) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    draftCardsRef.current = cards;
-    setDraftCards(cards);
-    setDraggingCardId(cardId);
-  }
-  function dragCard(
-    event: React.PointerEvent<HTMLButtonElement>,
-    cardId: string,
-  ) {
-    if (draggingCardId !== cardId) return;
-    event.preventDefault();
-    const target = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>("[data-card-id]")?.dataset.cardId;
-    if (target) moveDraft(cardId, target);
-    if (event.clientY < 90) window.scrollBy({ top: -8 });
-    else if (event.clientY > window.innerHeight - 90)
-      window.scrollBy({ top: 8 });
-  }
-  async function finishDrag(
-    event: React.PointerEvent<HTMLButtonElement>,
-    cardId: string,
-  ) {
-    if (draggingCardId !== cardId) return;
-    event.preventDefault();
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    const next = draftCardsRef.current;
-    setDraggingCardId(null);
-    setSavingOrder(true);
-    try {
-      await reorderCards(next);
-    } catch {
-      draftCardsRef.current = cards;
-      setDraftCards(cards);
-    } finally {
-      setSavingOrder(false);
-    }
-  }
-  function cancelDrag(
-    event: React.PointerEvent<HTMLButtonElement>,
-    cardId: string,
-  ) {
-    if (draggingCardId !== cardId) return;
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    draftCardsRef.current = cards;
-    setDraftCards(cards);
-    setDraggingCardId(null);
-  }
-  async function keyboardMove(cardId: string, direction: -1 | 1) {
-    const from = cards.findIndex((card) => card.id === cardId);
-    const to = from + direction;
-    if (from < 0 || to < 0 || to >= cards.length || savingOrder) return;
-    const next = [...cards];
-    [next[from], next[to]] = [next[to], next[from]];
-    draftCardsRef.current = next;
-    setDraftCards(next);
-    setSavingOrder(true);
-    try {
-      await reorderCards(next);
-    } catch {
-      draftCardsRef.current = cards;
-      setDraftCards(cards);
-    } finally {
-      setSavingOrder(false);
-    }
-  }
+    cardsExpanded || cardDrag.selectedId ? orderedCards : orderedCards.slice(0, 4);
   return (
     <div className="screen">
-      <h1 className="page-title">{t("ตั้งค่า")}</h1>
-      <p className="page-sub">{t("ค่าของบัญชีและอุปกรณ์นี้")}</p>
       <div className="settings-list">
         <SettingsGlass>
         <article className="card">
@@ -7487,39 +7369,12 @@ function SettingsContent({
         </a>
         </SettingsGlass>
         <SettingsGlass>
-        <TripImportSettings onImported={() => { tripListCache = null; dashboardSnapshotCache = null; }} />
-        </SettingsGlass>
-        <SettingsGlass>
         <article className="card payment-settings-card">
           <div className="section-head">
             <div>
-              <h2>{t("บัตรและการชำระเงิน")}</h2>
-              <p>
-                {cards.length
-                  ? `${cards.length} ${lang === "EN" ? (cards.length === 1 ? "card" : "cards") : "บัตร"}`
-                  : t("ยังไม่มีบัตรที่บันทึกไว้")}
-              </p>
+              <h2 className="saved-cards-title">{t("บัตรที่บันทึกไว้")} <span>({cards.length} {lang === "EN" ? "cards" : "บัตร"})</span></h2>
             </div>
             <div className="card-section-actions">
-              {cards.length > 1 && (
-                <button
-                  type="button"
-                  className={`card-sort-btn ${sortingCards ? "active" : ""}`}
-                  onClick={() => {
-                    if (!draggingCardId) {
-                      draftCardsRef.current = cards;
-                      setDraftCards(cards);
-                      setSortingCards((value) => !value);
-                      setCardSortTurns((value) => value + 1);
-                    }
-                  }}
-                  aria-label={t(sortingCards ? "เสร็จแล้ว" : "จัดลำดับบัตร")}
-                  title={t(sortingCards ? "เสร็จแล้ว" : "จัดลำดับบัตร")}
-                  aria-pressed={sortingCards}
-                >
-                  <ArrowUpDown size={26} style={{ transform: `rotate(${cardSortTurns * 360}deg)` }} />
-                </button>
-              )}
               <button
                 type="button"
                 className="text-btn card-add-btn"
@@ -7530,70 +7385,41 @@ function SettingsContent({
               </button>
             </div>
           </div>
+          {cards.length > 1 && <small className="saved-card-drag-hint" role="status">{t(cardDrag.message || "กดค้างที่ไอคอน แล้วแตะบัตรปลายทาง")}</small>}
+          {cardDrag.selectedId && <button className="text-btn card-move-cancel" type="button" onClick={cardDrag.cancel}>{t("ยกเลิกการย้าย")}</button>}
           {cards.length > 0 && (
             <div
-              className={`saved-card-list ${sortingCards ? "sorting" : ""} ${draggingCardId ? "is-dragging" : ""}`}
+              className={`saved-card-list ${cards.length > 1 ? "two-columns" : ""} ${cardDrag.selectedId ? "is-selecting-destination" : ""}`}
             >
               {visibleCards.map((card) => (
                 <div
-                  className={`saved-card-row ${draggingCardId === card.id ? "dragging" : ""}`}
+                  className={`saved-card-row ${cardDrag.selectedId === card.id ? "is-move-source" : ""}`}
                   key={card.id}
                   data-card-id={card.id}
                 >
-                  <CardBrandLogo
-                    brand={card.brand}
-                    className="saved-card-icon"
-                  />
                   <button
                     type="button"
                     className="saved-card-main"
-                    onClick={() => !sortingCards && setCardSheet({ card })}
-                    disabled={sortingCards}
-                    aria-label={`${t("แก้ไขบัตร")} ${card.nickname}`}
+                    onClick={() => cardDrag.selectedId ? void cardDrag.place(card.id) : setCardSheet({ card })}
+                    disabled={savingOrder}
+                    aria-label={`${t(cardDrag.selectedId ? "ย้ายมาที่บัตร" : "แก้ไขบัตร")} ${card.nickname}`}
                   >
-                    <strong>{card.nickname}</strong>
+                    <CardBrandLogo brand={card.brand} className="saved-card-icon" />
+                    <span><strong>{card.nickname}</strong>
                     <small>
-                      {card.brand
-                        ? `${card.brand === "mastercard" ? "Mastercard" : card.brand.toUpperCase()} · `
-                        : ""}
                       x-{card.last_four}
-                    </small>
+                    </small></span>
                   </button>
-                  {sortingCards ? (
-                    <button
-                      type="button"
-                      className="saved-card-drag"
-                      disabled={savingOrder}
-                      aria-label={`${t("ลากเพื่อจัดลำดับบัตร")} ${card.nickname}`}
-                      onPointerDown={(event) => beginDrag(event, card.id)}
-                      onPointerMove={(event) => dragCard(event, card.id)}
-                      onPointerUp={(event) => void finishDrag(event, card.id)}
-                      onPointerCancel={(event) => cancelDrag(event, card.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "ArrowUp") {
-                          event.preventDefault();
-                          void keyboardMove(card.id, -1);
-                        } else if (event.key === "ArrowDown") {
-                          event.preventDefault();
-                          void keyboardMove(card.id, 1);
-                        }
-                      }}
-                    >
-                      <GripVertical size={26} />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="saved-card-edit"
-                      onClick={() => setCardSheet({ card })}
-                      aria-label={`${t("แก้ไขบัตร")} ${card.nickname}`}
-                    >
-                      <Pencil size={26} />
-                    </button>
+                  {cards.length > 1 && (
+                    <button type="button" className="saved-card-drag-handle" disabled={savingOrder}
+                      aria-label={`${t("กดค้างเพื่อย้ายบัตร")} ${card.nickname}`} aria-pressed={cardDrag.selectedId === card.id}
+                      title={t("กดค้างเพื่อเลือก แล้วแตะบัตรปลายทาง")}
+                      onPointerDown={event=>cardDrag.pointerDown(event,card.id)}
+                      onClick={event=>{event.preventDefault();if(event.detail===0)cardDrag.select(card.id)}} onContextMenu={event=>event.preventDefault()}><GripVertical size={18}/></button>
                   )}
                 </div>
               ))}
-              {cards.length > 2 && !sortingCards && (
+              {cards.length > 4 && !cardDrag.selectedId && (
                 <button
                   type="button"
                   className="saved-card-expand"
@@ -7611,6 +7437,9 @@ function SettingsContent({
             </div>
           )}
         </article>
+        </SettingsGlass>
+        <SettingsGlass>
+        <TripImportSettings onImported={() => { tripListCache = null; dashboardSnapshotCache = null; }} />
         </SettingsGlass>
         <SettingsGlass>
         <article className="card offline-documents-setting">
@@ -7712,8 +7541,7 @@ function SettingsScreen(
   return (
     <div className="settings-page-wrapper">
       <div className="screen settings-account-intro">
-        <h1 className="page-title">{t("ตั้งค่า")}</h1>
-        <p className="page-sub">{t("ค่าของบัญชีและอุปกรณ์นี้")}</p>
+        <PageIntro title={t("ตั้งค่า")} subtitle={t("ค่าของบัญชีและอุปกรณ์นี้")} />
         <ProfileSettingsCard
           profile={profile}
           save={saveProfile}
@@ -7805,6 +7633,7 @@ export function TripCoverPicker({ value, onChange }: { value: CoverDraft[]; onCh
   const input = useRef<HTMLInputElement>(null);
   const editing = useRef<number | null>(null);
   const [previews, setPreviews] = useState<string[]>([]);
+  const [viewing, setViewing] = useState<string | null>(null);
   useEffect(() => {
     const urls = value.map((entry) => typeof entry === "string" ? entry : URL.createObjectURL(entry));
     setPreviews(urls);
@@ -7818,20 +7647,24 @@ export function TripCoverPicker({ value, onChange }: { value: CoverDraft[]; onCh
     <div className="trip-cover-picker-label"><strong>รูปปกทริป</strong><small>{value.length}/4 รูป · รูปแรกเป็นรูปหลัก</small></div>
     <div className="trip-cover-picker-thumbnails">
       {value.map((_, index) => <div className="trip-cover-picker-item" key={index}>
-        <button type="button" className="trip-cover-picker-image" onClick={() => choose(index)} aria-label={`เปลี่ยนรูปปกที่ ${index + 1}`}>
+        <div className="trip-cover-picker-frame">
+        <button type="button" className="trip-cover-picker-image" onClick={() => setViewing(previews[index] || null)} aria-label={`ดูรูปปกที่ ${index + 1}`}>
           {previews[index] && <Image src={previews[index]} alt={`รูปปกที่ ${index + 1}`} fill sizes="100px" unoptimized />}
           <span>{index + 1}</span>
         </button>
         <button className="trip-cover-picker-delete" type="button" aria-label={`ลบรูปปกที่ ${index + 1}`} onClick={() => onChange(value.filter((_, position) => position !== index))}><X size={15} /></button>
+          <button className="trip-cover-picker-replace" type="button" aria-label={`เปลี่ยนรูปปกที่ ${index + 1}`} onClick={() => choose(index)}><Pencil size={13} /></button>
+        </div>
         {index > 0 && <button className="trip-cover-picker-first" type="button" onClick={() => onChange([value[index], ...value.filter((_, position) => position !== index)])}>ใช้เป็นรูปแรก</button>}
       </div>)}
       {value.length < 4 && <button type="button" className="trip-cover-picker-add" onClick={() => choose(null)}><Plus size={24} /><span>เพิ่มรูป</span></button>}
     </div>
-    <div hidden><CoverImagePicker fileInputRef={input} onChange={(file) => {
+    {viewing && <AttachmentPreviewOverlay preview={{ url: viewing, title: "รูปปกทริป", mimeType: "image/jpeg" }} onClose={() => setViewing(null)} closeLabel="ปิดรูป" />}
+    <CoverImagePicker headless fileInputRef={input} onChange={(file) => {
       if (!file) return;
       if (editing.current === null) { if (value.length < 4) onChange([...value, file]); }
       else onChange(value.map((entry, index) => index === editing.current ? file : entry));
-    }} /></div>
+    }} />
   </div>;
 }
 
@@ -7843,17 +7676,23 @@ export function CoverImagePicker({
   variant = "cover",
   removable = false,
   fileInputRef,
+  headless = false,
+  cropRequest,
 }: {
   existingUrl?: string | null;
   onChange: (file: File | null) => void;
-  variant?: "cover" | "square";
+  variant?: "cover" | "square" | "portrait";
   removable?: boolean;
   fileInputRef?: React.RefObject<HTMLInputElement | null>;
+  headless?: boolean;
+  cropRequest?: { source: CoverDraft } | null;
 }) {
   const t = useT();
   const square = variant === "square";
-  const outputWidth = square ? 640 : 1600;
-  const outputHeight = square ? 640 : 900;
+  const portrait = variant === "portrait";
+  const cover = variant === "cover";
+  const outputWidth = square ? 640 : portrait ? 1440 : 1600;
+  const outputHeight = square ? 640 : portrait ? 2560 : 900;
   const ownInputRef = useRef<HTMLInputElement>(null);
   const inputRef = fileInputRef || ownInputRef;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -7874,6 +7713,43 @@ export function CoverImagePicker({
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [error, setError] = useState("");
+  const [loadingExisting, setLoadingExisting] = useState(false);
+  useEffect(() => {
+    if (!cropRequest) return;
+    const controller = new AbortController();
+    let disposed = false;
+    let loadedUrl = "";
+    setLoadingExisting(true);
+    setError("");
+    void (async () => {
+      try {
+        let file: File;
+        if (typeof cropRequest.source === "string") {
+          const response = await fetch(cropRequest.source, { signal: controller.signal });
+          if (!response.ok) throw new Error("image unavailable");
+          const blob = await response.blob();
+          file = new File([blob], "trip-cover.jpg", { type: blob.type });
+        } else file = cropRequest.source;
+        if (disposed) return;
+        loadedUrl = URL.createObjectURL(file);
+        const image = new window.Image();
+        image.src = loadedUrl;
+        await image.decode();
+        if (disposed) { URL.revokeObjectURL(loadedUrl); return; }
+        objectUrls.current.push(loadedUrl);
+        setSource({ file, image, url: loadedUrl });
+        setZoom(1);
+        setOffset({ x: 0, y: 0 });
+        setCropping(true);
+      } catch {
+        if (loadedUrl) URL.revokeObjectURL(loadedUrl);
+        if (!disposed) setError("โหลดรูปเดิมไม่สำเร็จ กรุณากดจัดรูปอีกครั้ง");
+      } finally {
+        if (!disposed) setLoadingExisting(false);
+      }
+    })();
+    return () => { disposed = true; controller.abort(); };
+  }, [cropRequest]);
   useEffect(
     () => () => {
       objectUrls.current.forEach((url) => URL.revokeObjectURL(url));
@@ -7930,8 +7806,8 @@ export function CoverImagePicker({
       setError("รองรับเฉพาะ JPG, PNG และ WebP");
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      setError("รูปต้องมีขนาดไม่เกิน 8 MB");
+    if (file.size > 20 * 1024 * 1024) {
+      setError("รูปต้นฉบับต้องมีขนาดไม่เกิน 20 MB");
       return;
     }
     const url = URL.createObjectURL(file);
@@ -8027,16 +7903,25 @@ export function CoverImagePicker({
     let croppedFile: File;
     try {
       croppedFile = await optimizedCanvasFile(canvas, source.file.name, {
-        quality: square ? 0.78 : 0.86,
-        minQuality: square ? 0.66 : 0.74,
+        quality: square ? 0.78 : portrait ? 0.92 : 0.86,
+        minQuality: square ? 0.66 : portrait ? 0.84 : 0.74,
         targetBytes: square ? 180 * 1024 : 900 * 1024,
-        suffix: square ? "timeline" : "cover",
+        suffix: square ? "timeline" : portrait ? "plan" : "cover",
       });
     } catch {
       setError("ไม่สามารถ Crop รูปได้");
       return;
     }
     const url = URL.createObjectURL(croppedFile);
+    source.image.onload = null;
+    source.image.onerror = null;
+    URL.revokeObjectURL(source.url);
+    source.image.src = "";
+    objectUrls.current = objectUrls.current.filter((entry) => entry !== source.url);
+    if (preview.startsWith("blob:")) {
+      URL.revokeObjectURL(preview);
+      objectUrls.current = objectUrls.current.filter((entry) => entry !== preview);
+    }
     objectUrls.current.push(url);
     setPreview(url);
     setCropping(false);
@@ -8044,6 +7929,13 @@ export function CoverImagePicker({
     onChange(croppedFile);
   }
   function cancelCrop() {
+    if (source) {
+      source.image.onload = null;
+      source.image.onerror = null;
+      URL.revokeObjectURL(source.url);
+      source.image.src = "";
+      objectUrls.current = objectUrls.current.filter((entry) => entry !== source.url);
+    }
     pointers.current.clear();
     dragStart.current = null;
     pinchStart.current = null;
@@ -8068,24 +7960,24 @@ export function CoverImagePicker({
       className="crop-editor"
       role="dialog"
       aria-modal="true"
-      aria-label={t(square ? "ครอบรูปสถานที่" : "ครอบรูปหน้าปก")}
+      aria-label={t(portrait ? "ครอบรูปแพลนรวม" : square ? "ครอบรูปสถานที่" : "ครอบรูปหน้าปก")}
     >
       <header>
         <button type="button" onClick={cancelCrop} aria-label={t("ยกเลิก")}>
           <X size={20} />
         </button>
         <div>
-          <strong>{t(square ? "ครอบรูปสถานที่" : "ครอบรูปหน้าปก")}</strong>
+          <strong>{t(portrait ? "ครอบรูปแพลนรวม" : square ? "ครอบรูปสถานที่" : "ครอบรูปหน้าปก")}</strong>
           <small>{t("ลากด้วยหนึ่งนิ้ว · จีบเข้า–ออกด้วยสองนิ้ว")}</small>
         </div>
         <span />
       </header>
-      <main className={!square ? "trip-crop-main" : undefined}>
-        {!square && <div className="trip-crop-guide-controls">
+      <main className={cover ? "trip-crop-main" : undefined}>
+        {cover && <div className="trip-crop-guide-controls">
           <button type="button" aria-pressed={showCoverGuide} onClick={() => setShowCoverGuide((value) => !value)}>{showCoverGuide ? "ซ่อนตัวอย่างปกมือถือ" : "แสดงตัวอย่างปกมือถือ"}</button>
           <small>ข้อมูลตัวอย่างไม่ติดในรูปที่บันทึก · ลากและจีบเพื่อจัดรูป</small>
         </div>}
-        <div className={`fixed-crop-frame ${square ? "is-square" : ""}${!square && showCoverGuide ? " has-mobile-cover-guide" : ""}`}>
+        <div className={`fixed-crop-frame ${square ? "is-square" : portrait ? "is-portrait" : ""}${cover && showCoverGuide ? " has-mobile-cover-guide" : ""}`}>
           <canvas
             ref={canvasRef}
             onPointerDown={startMove}
@@ -8093,7 +7985,7 @@ export function CoverImagePicker({
             onPointerUp={endMove}
             onPointerCancel={endMove}
           />
-          {!square && showCoverGuide ? <div className="trip-crop-guide" aria-hidden="true">
+          {cover && showCoverGuide ? <div className="trip-crop-guide" aria-hidden="true">
             <div className="trip-crop-guide-nav"><i><ChevronLeft size={21} /></i><i><Pencil size={20} /></i></div>
             <div className="trip-crop-guide-copy">
               <TripCountdownBadge label="อีก 105 วัน" />
@@ -8109,10 +8001,11 @@ export function CoverImagePicker({
           </div> : <><span className="crop-gesture-hint">
             {t("ลากเพื่อขยับ · จีบเพื่อซูม")}
           </span>
-          <span className="crop-ratio">{square ? "1 : 1" : "16 : 9"}</span></>}
+          <span className="crop-ratio">{square ? "1 : 1" : portrait ? "9 : 16" : "16 : 9"}</span></>}
         </div>
       </main>
       <footer>
+        {error && <p className="cover-error" role="alert">{error}</p>}
         <button type="button" className="crop-apply" onClick={applyCrop}>
           <CheckCircle2 size={18} />
           {t("ยืนยันและกลับไปบันทึก")}
@@ -8121,10 +8014,13 @@ export function CoverImagePicker({
     </div>
   ) : null;
   return (
-    <div className={`cover-picker ${square ? "square-picker" : ""}`}>
+    <div className={`cover-picker ${square ? "square-picker" : portrait ? "portrait-picker" : ""}`}>
+      {loadingExisting && <p role="status">กำลังโหลดรูปเพื่อจัดตำแหน่ง…</p>}
       {!cropping && (
         <div
           className={`upload-field cover-upload ${preview ? "selected" : ""}`}
+          hidden={headless}
+          style={headless ? { display: "none" } : undefined}
         >
           <button
             type="button"
@@ -8135,13 +8031,13 @@ export function CoverImagePicker({
             aria-label={
               preview
                 ? t("เปิดรูปเต็มจอ")
-                : t(square ? "เพิ่มรูปสถานที่" : "เพิ่มรูปหน้าปก")
+                : t(portrait ? "เพิ่มรูปแพลนรวม" : square ? "เพิ่มรูปสถานที่" : "เพิ่มรูปหน้าปก")
             }
           >
             {preview && (
               <Image
                 src={preview}
-                alt={t(square ? "รูปสถานที่ที่เลือก" : "รูปหน้าปกที่เลือก")}
+                alt={t(portrait ? "รูปแพลนรวมที่เลือก" : square ? "รูปสถานที่ที่เลือก" : "รูปหน้าปกที่เลือก")}
                 fill
                 sizes="36vw"
                 unoptimized
@@ -8163,13 +8059,15 @@ export function CoverImagePicker({
                   {t("เลือกรูปแล้ว")}
                 </>
               ) : (
-                t(square ? "เพิ่มรูปสถานที่" : "เพิ่มรูปหน้าปก")
+                t(portrait ? "เพิ่มรูปแพลนรวม" : square ? "เพิ่มรูปสถานที่" : "เพิ่มรูปหน้าปก")
               )}
             </strong>
             <small>
               {t(
                 preview
                   ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะด้านนี้เพื่อเลือกและครอบรูปใหม่"
+                  : portrait
+                    ? "เลือกภาพ แล้วจัดตำแหน่งในกรอบแนวตั้ง 9:16"
                   : square
                     ? "เลือกภาพ แล้วจัดตำแหน่งในกรอบสี่เหลี่ยมจัตุรัส"
                     : "เลือกภาพ แล้วจัดตำแหน่งในกรอบแนวนอน 16:9",
@@ -8189,7 +8087,7 @@ export function CoverImagePicker({
           type="button"
           className="cover-picker-remove"
           onClick={removeImage}
-          aria-label={t("ลบรูปสถานที่")}
+          aria-label={t(portrait ? "ลบรูปแพลนรวม" : "ลบรูปสถานที่")}
         >
           <Trash2 size={16} />
         </button>
@@ -8199,14 +8097,14 @@ export function CoverImagePicker({
         <AttachmentPreviewOverlay
           preview={{
             url: preview,
-            title: t(square ? "รูปสถานที่" : "รูปหน้าปก"),
+            title: t(portrait ? "รูปแพลนรวม" : square ? "รูปสถานที่" : "รูปหน้าปก"),
             mimeType: "image/jpeg",
           }}
           onClose={() => setPreviewOpen(false)}
           closeLabel={t("ปิดรูป")}
         />
       )}
-      {error && <p className="cover-error">{error}</p>}
+      {error && !cropping && <p className="cover-error" role="alert">{error}</p>}
     </div>
   );
 }
@@ -8718,7 +8616,7 @@ function CollaboratorsSheet({
         {error && <p className="login-error">{t(error)}</p>}
         <div className="collaborator-list">
           {loading ? (
-            <FetchSkeleton label={t("กำลังโหลด…")} />
+            <CollaboratorsSkeleton count={trip.collaborator_count ?? (trip.members || []).filter(member => member.role !== "owner").length} label={t("กำลังโหลด…")} />
           ) : items.length ? (
             items.map((item) => (
               <div
@@ -8869,7 +8767,7 @@ function CostSheet({
   const existingSplitMemberIds = (existing?.splitMemberIds || []).filter(
     (id) => allSplitMemberIds.includes(id),
   );
-  const [payerKey, setPayerKey] = useState(existing?.paidBy ? `${existing.paidBy.type}:${existing.paidBy.id}` : "");
+  const [payerKey, setPayerKey] = useState(existing?.paidBy ? `${existing.paidBy.type}:${existing.paidBy.id}` : `member:${splitMembers.find(member=>member.role === "owner")?.id || splitMembers[0]?.id || ""}`);
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>(
     existing && Array.isArray(existing.splitMemberIds)
       ? existingSplitMemberIds
@@ -9498,7 +9396,6 @@ export function TripDestinationPicker({
               setFocused(true);
             }}
             onBlur={() => {
-              commitQuery();
               window.setTimeout(() => setFocused(false), 120);
             }}
             onChange={(event) => setQuery(event.target.value)}
@@ -9518,14 +9415,14 @@ export function TripDestinationPicker({
         {focused && (
           <div id="trip-destination-options" className="trip-destination-options" role="listbox">
             {options.map((option) => (
-              <button type="button" role="option" aria-selected="false" key={option.id} onPointerDown={(event) => { event.preventDefault(); add(option); }} onClick={() => add(option)}>
+              <button type="button" role="option" aria-selected="false" key={option.id} onPointerDown={(event) => event.preventDefault()} onClick={() => add(option)}>
                 <MapPin size={14} />
                 <span><strong>{lang === "EN" ? option.nameEn : option.nameTh}</strong><small>{lang === "EN" ? option.nameTh : option.nameEn}</small></span>
                 <Plus size={14} />
               </button>
             ))}
             {canAddCustom ? (
-              <button type="button" role="option" aria-selected="false" className="trip-destination-custom-option" onPointerDown={(event) => { event.preventDefault(); commitQuery(); }} onClick={commitQuery}>
+              <button type="button" role="option" aria-selected="false" className="trip-destination-custom-option" onPointerDown={(event) => event.preventDefault()} onClick={commitQuery}>
                 <Plus size={14} />
                 <span><strong>เพิ่ม “{query.trim()}”</strong><small>บันทึกเป็นเมืองใหม่ในประเทศที่เลือก</small></span>
               </button>
@@ -9592,7 +9489,6 @@ function ModalForm({
   const [coverDrafts, setCoverDrafts] = useState<CoverDraft[]>(() => modal.type === "trip" && (modal.trip || modal.preset) ? tripCovers({cover_image_url:modal.trip?.cover_image_url || modal.preset?.coverImageUrl,cover_image_urls:modal.trip?.cover_image_urls || modal.preset?.coverImageUrls}).filter(url=>url!==DEFAULT_TRIP_COVER) : []);
   const [coversChanged,setCoversChanged] = useState(false);
   const [summaryImageFile, setSummaryImageFile] = useState<File | null>(null);
-  const [summaryImagePreview, setSummaryImagePreview] = useState(modal.type==="trip"?modal.trip?.summary_image_url||"":"");
   const [summaryImageRemoved, setSummaryImageRemoved] = useState(false);
   const [timelineImageFile, setTimelineImageFile] = useState<File | null>(null);
   const [timelineImageRemoved, setTimelineImageRemoved] = useState(false);
@@ -9601,6 +9497,8 @@ function ModalForm({
   >(undefined);
   const [locationAddressEdited, setLocationAddressEdited] = useState(false);
   const [timelineDocuments, setTimelineDocuments] = useState<TimelineDocument[]>([]);
+  const [documentTitleDrafts, setDocumentTitleDrafts] = useState<Record<string,string>>({});
+  const renamedDocuments = timelineDocuments.filter(document => documentTitleDrafts[document.id] !== undefined && documentTitleDrafts[document.id].trim() !== document.title);
   const [pendingTimelineDocuments, setPendingTimelineDocuments] = useState<PendingTimelineDocument[]>([]);
   const [documentTitle, setDocumentTitle] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
@@ -9608,7 +9506,6 @@ function ModalForm({
   const [documentDeletingId, setDocumentDeletingId] = useState<string | null>(null);
   const [persistedNewPlaceId, setPersistedNewPlaceId] = useState<string | null>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
-  const summaryImageInputRef = useRef<HTMLInputElement>(null);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [confirmDisableFlights, setConfirmDisableFlights] = useState(false);
   const [fileRemovalConfirmation,setFileRemovalConfirmation]=useState<Confirmation|null>(null);
@@ -9633,7 +9530,6 @@ function ModalForm({
       .finally(()=>{if(active)setDocumentsLoading(false)});
     return()=>{active=false};
   },[modal,trip]);
-  useEffect(()=>()=>{if(summaryImagePreview.startsWith("blob:"))URL.revokeObjectURL(summaryImagePreview)},[summaryImagePreview]);
   const initialCountry =
     modal.type === "trip"
       ? countryByCode(modal.trip?.country_code) ||
@@ -9841,22 +9737,9 @@ function ModalForm({
   const amount = (f: FormData, name: string) =>
     Number(String(f.get(name) || "0").replace(/,/g, ""));
   function selectSummaryImage(file:File|null){
-    if(summaryImagePreview.startsWith("blob:"))URL.revokeObjectURL(summaryImagePreview);
     setSummaryImageFile(file);
-    setSummaryImageRemoved(false);
-    setSummaryImagePreview(file?URL.createObjectURL(file):(modal.type==="trip"?modal.trip?.summary_image_url||"":""));
+    setSummaryImageRemoved(file === null);
     checkForChanges();
-  }
-  function removeSummaryImage(){
-    if(summaryImagePreview.startsWith("blob:"))URL.revokeObjectURL(summaryImagePreview);
-    setSummaryImageFile(null);
-    setSummaryImagePreview("");
-    setSummaryImageRemoved(true);
-    if(summaryImageInputRef.current)summaryImageInputRef.current.value="";
-    checkForChanges();
-  }
-  function askRemoveSummaryImage(){
-    setFileRemovalConfirmation({title:"ลบรูป Plan รวม?",description:"รูปจะถูกนำออกเมื่อกดบันทึกการแก้ไข",confirmLabel:"ลบรูป",onConfirm:removeSummaryImage});
   }
   function closeMediaPreview(){
     setMediaPreview(current=>{if(current?.temporary)URL.revokeObjectURL(current.url);return null});
@@ -9918,7 +9801,7 @@ function ModalForm({
         const coverImageUrl = coverImageUrls[0];
         let summaryImageUrl=summaryImageRemoved?null:modal.trip?.summary_image_url||null;
         if(summaryImageFile){
-          const upload=new FormData();upload.set("file",summaryImageFile);
+          const upload=new FormData();upload.set("file",summaryImageFile);upload.set("purpose","trip-plan");
           const response=await fetch("/api/uploads",{method:"POST",body:upload});
           const result=await response.json();
           if(!response.ok)throw new Error(result.error||"อัปโหลดรูป Plan ไม่สำเร็จ");
@@ -9943,6 +9826,7 @@ function ModalForm({
         });
       }
       if (modal.type === "place") {
+        if(renamedDocuments.some(document=>!documentTitleDrafts[document.id].trim()))throw new Error("กรุณาตั้งชื่อเอกสาร");
         let imageUrl=timelineImageRemoved?null:modal.item?.image_url||null;
         if(timelineImageFile){
           const upload=new FormData();upload.set("file",timelineImageFile);
@@ -9977,6 +9861,17 @@ function ModalForm({
           }) as Itinerary:null;
         const itineraryId=saved?.id||persistedNewPlaceId||modal.item?.id;
         if(!modal.item&&saved?.id)setPersistedNewPlaceId(saved.id);
+        if(trip && renamedDocuments.length){
+          for(const document of renamedDocuments){
+            const title=documentTitleDrafts[document.id].trim();
+            const response=await fetch(`/api/trips/${trip.id}/documents/${document.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({title})});
+            const body=await response.json();
+            if(!response.ok)throw new Error(body.error||"แก้ชื่อเอกสารไม่สำเร็จ");
+            setTimelineDocuments(current=>current.map(item=>item.id===document.id?{...item,title}:item));
+          }
+          invalidateClientResourcesContaining(`trip:${trip.id}:`);
+          await onDocumentsChanged();
+        }
         if(trip&&itineraryId&&stagedTimelineDocuments.length){
           for(const document of stagedTimelineDocuments){
             await uploadTimelineDocument(trip.id,itineraryId,document);
@@ -10024,7 +9919,7 @@ function ModalForm({
         backdropClassName="trip-modal-backdrop"
         backdropRef={modalBackdropRef}
         submitLabel={t(saving ? "กำลังบันทึก…" : "บันทึก")}
-        submitDisabled={saving || (!hasChanges && !coversChanged && !summaryImageFile && !summaryImageRemoved && !timelineImageFile && !timelineImageRemoved && !documentFile && pendingTimelineDocuments.length===0)}
+        submitDisabled={saving || (!hasChanges && !coversChanged && !summaryImageFile && !summaryImageRemoved && !timelineImageFile && !timelineImageRemoved && !documentFile && pendingTimelineDocuments.length===0 && renamedDocuments.length===0)}
         onDelete={canDeleteCurrent && ((modal.type === "place" && modal.item) || (modal.type === "trip" && modal.trip)) ? () => setPendingDelete(true) : undefined}
         deleteDisabled={saving}
         deleteLabel={t(modal.type === "trip" ? "ลบทริป" : "ลบรายการ")}
@@ -10035,7 +9930,7 @@ function ModalForm({
               <TripCoverPicker value={coverDrafts} onChange={(value) => { setCoverDrafts(value); setCoversChanged(true); }} />
               <div className="field">
                 <label>{t("ชื่อทริป")}</label>
-                <input name="name" required defaultValue={modal.trip?.name || modal.preset?.destination} />
+                <TripNameInput defaultValue={modal.trip?.name || modal.preset?.destination} />
               </div>
               <CountryPicker
                 value={countryCode}
@@ -10055,6 +9950,7 @@ function ModalForm({
                 }}
               />
               <TripNoteField defaultValue={modal.trip?.note || modal.preset?.note || ""} />
+              <div className="form-row trip-photos-flight-row">
               <div className="field">
                 <label>{t("ลิงก์โฟลเดอร์ Google Photos")}</label>
                 <input
@@ -10068,11 +9964,14 @@ function ModalForm({
                 />
               </div>
               <div className="field">
+                <label>{t("เที่ยวบิน")}</label>
                 <label className="trip-flight-checkbox">
                   <input name="hasFlights" type="checkbox" value="true" defaultChecked={Boolean(modal.trip?.has_flights)} />
                   <span className="split-checkmark" aria-hidden="true" />
+                  <Plane size={18} aria-hidden="true" />
                   <strong>{t("เดินทางแบบมีเที่ยวบิน")}</strong>
                 </label>
+              </div>
               </div>
               <div className="form-row flight-datetime-row">
                 <div className="field">
@@ -10154,10 +10053,14 @@ function ModalForm({
               <section className="trip-plan-image-editor">
                 <div className="trip-plan-image-head">
                   <div><strong>{t("รูป Plan รวม")}</strong><small>{t("ไม่บังคับ · เพิ่มได้หนึ่งรูป และเปลี่ยนหรือลบได้ภายหลัง")}</small></div>
-                  {summaryImagePreview&&<button type="button" onClick={askRemoveSummaryImage} aria-label={t("ลบรูป Plan")}><Trash2 size={16}/></button>}
                 </div>
-                {summaryImagePreview&&<button type="button" className="trip-plan-image-preview" aria-label={t("เปิดรูป Plan เต็มจอ")} onClick={()=>setMediaPreview({url:summaryImagePreview,title:t("รูป Plan รวม"),mimeType:summaryImageFile?.type||"image/jpeg",temporary:false})} style={{backgroundImage:`url("${summaryImagePreview}")`}}/>}
-                <DocumentFilePicker fileName={summaryImageFile?.name||""} inputRef={summaryImageInputRef} onFileChange={selectSummaryImage} accept="image/jpeg,image/png,image/webp" idleLabel={summaryImagePreview?t("เลือกรูปใหม่เพื่อแทนที่"):t("เลือกรูป Plan")} idleNote={t("รองรับ JPG, PNG และ WebP · เพิ่มได้หนึ่งรูป")} selectedNote={t("พร้อมอัปโหลดเมื่อกดบันทึก")}/>
+                <CoverImagePicker
+                  key={`summary-image-${modal.trip?.id || "new"}`}
+                  existingUrl={modal.trip?.summary_image_url}
+                  variant="portrait"
+                  removable
+                  onChange={selectSummaryImage}
+                />
               </section>
             </>
           )}
@@ -10305,7 +10208,7 @@ function ModalForm({
                 <div className="timeline-document-heading"><div><strong>{t("เอกสารแนบ")}</strong><small>{t("เพิ่มรูปหรือ PDF พร้อมตั้งชื่อไฟล์")}</small></div></div>
                 {documentsLoading?<FetchSkeleton rows={2} label={t("กำลังโหลดเอกสาร…")} />:null}
                 {(timelineDocuments.length>0||pendingTimelineDocuments.length>0)&&<div className="timeline-document-list">
-                  {timelineDocuments.map(document=><div className="timeline-document-row" key={document.id}><TimelineDocumentThumbnail url={`/api/trips/${trip?.id}/documents/${document.id}/file`} title={document.title} mimeType={document.mime_type} onClick={()=>openStoredDocument(document)}/><button type="button" className="timeline-document-open" onClick={()=>openStoredDocument(document)}><strong>{document.title}</strong></button>{canDeleteCurrent?<button type="button" disabled={documentDeletingId===document.id} onClick={()=>askRemoveExistingDocument(document)} aria-label={t("ลบเอกสาร")}><Trash2 size={15}/></button>:null}</div>)}
+                  {timelineDocuments.map(document=><div className="timeline-document-row" key={document.id}><TimelineDocumentThumbnail url={`/api/trips/${trip?.id}/documents/${document.id}/file`} title={document.title} mimeType={document.mime_type} onClick={()=>openStoredDocument(document)}/><label className="timeline-document-name"><span className="sr-only">{t("ชื่อไฟล์")}</span><input aria-label={`${t("ชื่อไฟล์")} ${document.original_filename}`} value={documentTitleDrafts[document.id]??document.title} onChange={event=>setDocumentTitleDrafts(current=>({...current,[document.id]:event.target.value}))} readOnly={!canDeleteCurrent} maxLength={180} required /></label>{canDeleteCurrent?<button type="button" disabled={documentDeletingId===document.id} onClick={()=>askRemoveExistingDocument(document)} aria-label={t("ลบเอกสาร")}><Trash2 size={15}/></button>:null}</div>)}
                   {pendingTimelineDocuments.map(document=><div className="timeline-document-row is-pending" key={document.id}><PendingTimelineDocumentThumbnail document={document} onClick={()=>openPendingDocument(document)}/><button type="button" className="timeline-document-open" onClick={()=>openPendingDocument(document)}><strong>{document.title}</strong><small>{t("พร้อมอัปโหลดเมื่อกดบันทึก")}</small></button><button type="button" onClick={()=>askRemovePendingDocument(document)} aria-label={t("นำออกจากลิสต์")}><Trash2 size={15}/></button></div>)}
                 </div>}
                 <div className="field"><label>{t("ชื่อไฟล์")}</label><input value={documentTitle} onChange={event=>setDocumentTitle(event.target.value)} maxLength={180} placeholder={t("เช่น ใบจองโรงแรม")}/></div>
@@ -10915,6 +10818,7 @@ export function BNTripApp({
         return next;
       });
       setTripRevision((value) => value + 1);
+      invalidateClientResource(workspaceResourceKey(saved.id, "documents"));
       if (!modal.trip) itineraryCache.set(saved.id, []);
       // Clear prefetched route data so badges reflect added/removed trip cities.
       router.refresh();
@@ -11125,32 +11029,12 @@ export function BNTripApp({
       flash("เพิ่มบัตรแล้ว");
       return;
     }
-    const oldMethod = cardPaymentLabel(card);
     const saved: PaymentCard = await request(`/api/cards/${card.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ nickname, brand }),
+      body: JSON.stringify({ nickname, brand, lastFour }),
     });
-    const newMethod = cardPaymentLabel(saved);
     setCards((old) => old.map((item) => (item.id === saved.id ? saved : item)));
-    if (oldMethod !== newMethod) {
-      const remap = (rows: Itinerary[]) =>
-        rows.map((item) => ({
-          ...item,
-          cost_items: (item.cost_items || []).map((cost) =>
-            cost.paymentMethod === oldMethod
-              ? { ...cost, paymentMethod: newMethod }
-              : cost,
-          ),
-        }));
-      setItineraries((old) => {
-        const next = remap(old);
-        if (selected) itineraryCache.set(selected.id, next);
-        return next;
-      });
-      for (const [tripId, rows] of itineraryCache.entries())
-        itineraryCache.set(tripId, remap(rows));
-    }
     flash("แก้ไขบัตรแล้ว");
   }
   async function removeCard(card: PaymentCard) {
@@ -11242,8 +11126,10 @@ export function BNTripApp({
       }
       action(...args);
     };
-  const content = loading || (page === "dashboard" && refreshingDashboard) ? (
-    <FetchSkeleton rows={4} />
+  // Directory routes own their request/error UI; unrelated page loading must
+  // never prevent their component (and its recovery effect) from mounting.
+  const content = (loading && page !== "trips" && page !== "album") || (page === "dashboard" && refreshingDashboard) ? (
+    page === "dashboard" ? <HomeLoading /> : <FetchSkeleton rows={4} />
   ) : page === "dashboard" ? (
     <Dashboard
       trips={trips}
@@ -11268,7 +11154,7 @@ export function BNTripApp({
       notify={flash}
     />
   ) : page === "analytics" && initialAnalytics && initialBadges ? (
-    <TravelAnalyticsDashboard datasets={initialAnalytics} badges={initialBadges} refreshRequestRef={analyticsRefreshRef} notify={flash} />
+    <TravelAnalyticsDashboard datasets={initialAnalytics} badges={initialBadges} refreshRequestRef={analyticsRefreshRef} notify={flash} createTrip={protect(() => setModal({ type: "trip" }))} />
   ) : page === "album" ? (
     <TripsDirectory
       initialFilters={{

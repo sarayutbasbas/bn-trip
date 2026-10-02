@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Pool } from "pg";
 import { SignJWT } from "jose";
+import sharp from "sharp";
 const db=new Pool({connectionString:"postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip"});
 const id=randomUUID(),email=`covers-${id}@example.invalid`,base="http://localhost:8001";
 const env=JSON.parse(execFileSync("docker",["inspect","bn-trip-app-1"],{encoding:"utf8"}))[0].Config.Env;
@@ -12,12 +13,40 @@ const token=await new SignJWT({email,displayName:"Cover test",demo:false}).setPr
 const api=(path,method="GET",body)=>fetch(base+path,{method,headers:{cookie:`bn_trip_session=${token}`,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
 const browser=(...args)=>execFileSync("npx",["--yes","agent-browser","--session","multi-cover",...args],{encoding:"utf8",timeout:45000});
 const evaluate=code=>JSON.parse(browser("eval",code));
+function testExistingCover() {
+  browser('click','[aria-label="ดูรูปปกที่ 1"]');browser('wait','.attachment-preview-overlay');
+  browser('click','.attachment-preview-overlay button[aria-label="ปิดรูป"]');
+  assert(evaluate(`!document.querySelector('[aria-label="จัดรูปปกที่ 1"]')`));
+  assert(evaluate(`(()=>{const b=document.querySelector('.trip-cover-picker-replace'),r=b.getBoundingClientRect(),p=b.parentElement.getBoundingClientRect();return b.textContent===''&&!!b.querySelector('svg')&&r.width===28&&Math.abs(p.right-r.right-4)<1&&Math.abs(p.bottom-r.bottom-4)<1})()`));
+  browser('click','[aria-label="เปลี่ยนรูปปกที่ 1"]');
+}
 const covers=["/travel-postcard-fallback.jpg?fixture=1","/routerao-icon-512.png","/routerao-logo-transparent-512.png","/bn-trip-icon-orange-512.png"];
+const uploadedFiles=[];
 const input={name:"Multi cover fixture",countryCode:"JP",locationIds:["JP:kyoto"],outboundDate:"2027-01-01",outboundTime:"08:00",returnDate:"2027-01-03",returnTime:"18:00",budgetThb:0,coverImageUrls:covers};
 try {
   await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Cover test')",[id,email]);
   const created=await api("/api/trips","POST",input);assert.equal(created.status,201,await created.clone().text());
   const trip=await created.json();assert.deepEqual(trip.cover_image_urls,covers);assert.equal(trip.cover_image_url,covers[0]);
+  const imageBlob=await (await fetch(base+'/travel-postcard-fallback.jpg')).blob();
+  const uploaded=[];
+  const planBytes=await sharp(Buffer.from(await imageBlob.arrayBuffer())).resize(1440,2560,{fit:'cover'}).webp({quality:92}).toBuffer();
+  const planForm=new FormData();planForm.set('file',new File([planBytes],'plan.webp',{type:'image/webp'}));planForm.set('purpose','trip-plan');
+  const planResponse=await fetch(base+'/api/uploads',{method:'POST',headers:{cookie:`bn_trip_session=${token}`},body:planForm});
+  assert.equal(planResponse.status,201);const planUpload=await planResponse.json();uploadedFiles.push(planUpload.url.split('/').pop());
+  const savedPlan=Buffer.from(await (await api(planUpload.url)).arrayBuffer());
+  const planMeta=await sharp(savedPlan).metadata();assert.equal(planMeta.width,1440);assert.equal(planMeta.height,2560);assert(savedPlan.length<=1200*1024);
+  console.log(`PASS plan upload: ${planMeta.width}x${planMeta.height}, ${Math.round(savedPlan.length/1024)} KB`);
+  for(let index=0;index<4;index++) {
+    const form=new FormData();form.set('file',new File([imageBlob],`cover-${index+1}.jpg`,{type:'image/jpeg'}));
+    const response=await fetch(base+'/api/uploads',{method:'POST',headers:{cookie:`bn_trip_session=${token}`},body:form});
+    assert.equal(response.status,201);const result=await response.json();uploaded.push(result.url);uploadedFiles.push(result.url.split('/').pop());
+    assert.equal((await api(result.url)).status,200);
+  }
+  const savedUploads=await (await api(`/api/trips/${trip.id}`,'PATCH',{...input,coverImageUrls:uploaded})).json();
+  assert.deepEqual(savedUploads.cover_image_urls,uploaded);
+  assert.deepEqual((await (await api(`/api/trips/${trip.id}`)).json()).cover_image_urls,uploaded);
+  await api(`/api/trips/${trip.id}`,'PATCH',input);
+  console.log('PASS: four real image uploads, save, reload, and image retrieval');
   assert.deepEqual((await (await api(`/api/trips/${trip.id}`)).json()).cover_image_urls,covers);
   assert.equal((await api(`/api/trips/${trip.id}`,"PATCH",{...input,coverImageUrls:[...covers,covers[0]]})).status,400);
   const reordered=[...covers].reverse();
@@ -39,13 +68,53 @@ try {
   assert.deepEqual(evaluate("document.querySelector('.trip-cover-copy').getBoundingClientRect().toJSON()"),title);
   assert(evaluate("document.querySelector('.trip-cover-carousel').scrollLeft > innerWidth"));
   browser("screenshot","/tmp/multi-cover-timeline.png");
+  browser('click','.trip-menu-more');browser('wait','.trip-menu-sheet');
+  assert(evaluate(`!document.querySelector('.trip-menu-plan-image')`));
+  browser('click','.trip-menu-sheet header button');
+  assert.equal((await api(`/api/trips/${trip.id}`,'PATCH',{...input,summaryImageUrl:planUpload.url})).status,200);
+  const documentsWorkspace=await (await api(`/api/trips/${trip.id}/workspace?tab=documents`)).json();
+  const planDocuments=documentsWorkspace.documents.filter(item=>item.source==='trip-plan');
+  assert.equal(planDocuments.length,1);assert.equal(planDocuments[0].file_size,savedPlan.length);assert.equal(planDocuments[0].file_url,planUpload.url);
+  assert.equal(documentsWorkspace.documentUsageBytes,0);
+  browser('open',`${base}/trips/${trip.id}?workspace=documents`);
+  browser('wait','button[aria-label="ดูไฟล์ แพลนเที่ยวรวม"]');
+  browser('click','button[aria-label="ดูไฟล์ แพลนเที่ยวรวม"]');browser('wait','.attachment-preview-overlay');
+  browser('click','.attachment-preview-overlay button[aria-label="ปิดตัวอย่างเอกสาร"]');
+  console.log('PASS summary plan appears in documents with original file size, preview, and no duplicate quota usage');
+  browser('open',`${base}/trips/${trip.id}`);browser('wait','.trip-menu-more');
+  browser('click','.trip-menu-more');browser('wait','.trip-menu-plan-image');
+  browser('screenshot','/tmp/plan-image-menu.png');
+  browser('click','.trip-menu-plan-image');browser('wait','.attachment-preview-overlay');
+  assert(evaluate(`document.querySelector('.attachment-preview-overlay').getAttribute('aria-label')==='แพลนเที่ยว'`));
+  browser('click','.attachment-preview-overlay button[aria-label="ปิดรูป"]');
+  assert(evaluate(`!document.querySelector('.attachment-preview-overlay')`));
   browser("click",".trip-cover-actions button");browser("wait",".trip-cover-picker");
+  assert(evaluate(`!!document.querySelector('.trip-plan-image-editor .cover-picker')`));
+  evaluate(`(async()=>{const blob=await fetch('/travel-postcard-fallback.jpg').then(r=>r.blob());const input=document.querySelector('.trip-plan-image-editor input[type=file]');const transfer=new DataTransfer();transfer.items.add(new File([blob],'plan.jpg',{type:'image/jpeg'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
+  browser('wait','.fixed-crop-frame.is-portrait');
+  assert(evaluate(`(()=>{const c=document.querySelector('.crop-editor canvas'),r=c.getBoundingClientRect();return c.width===1440&&c.height===2560&&Math.abs(r.width/r.height-9/16)<0.01})()`));
+  browser('screenshot','/tmp/plan-portrait-crop.png');
+  browser('click','.crop-apply');
+  browser('wait','.trip-plan-image-editor .cover-picker-remove');
+  assert(evaluate(`!document.querySelector('.trip-plan-image-editor .cover-error')`));
+  assert(evaluate(`(()=>{const p=document.querySelector('.trip-plan-image-editor .cover-picker').getBoundingClientRect(),b=document.querySelector('.trip-plan-image-editor .cover-picker-remove').getBoundingClientRect();return b.left>=p.left&&b.right<=p.right&&b.top>=p.top&&b.bottom<=p.bottom&&Math.abs((b.top+b.height/2)-(p.top+p.height/2))<2})()`));
+  evaluate(`document.querySelector('.trip-plan-image-editor').scrollIntoView({block:'center'});true`);
+  browser('screenshot','/tmp/plan-image-delete-position.png');
+  browser('click','.trip-plan-image-editor .upload-preview');browser('wait','.attachment-preview-overlay');
+  browser('click','.attachment-preview-overlay button[aria-label="ปิดรูป"]');
+  browser('click','.trip-plan-image-editor .cover-picker-remove');
+  assert(evaluate(`!document.querySelector('.trip-plan-image-editor .upload-preview img')`));
+  testExistingCover();
   assert.equal(evaluate("document.querySelectorAll('.trip-cover-picker-item').length"),4);
   assert.equal(evaluate("Boolean(document.querySelector('.trip-cover-picker-add'))"),false);
   browser("click",'.trip-cover-picker-delete[aria-label="ลบรูปปกที่ 4"]');
   assert.equal(evaluate("document.querySelectorAll('.trip-cover-picker-item').length"),3);
   assert(evaluate("Boolean(document.querySelector('.trip-cover-picker-add'))"));
+  browser('click','.trip-cover-picker-add');
   // Supply a file to the single hidden input, just as the native chooser does.
+  evaluate(`(()=>{const input=document.querySelector('.trip-cover-picker input[type=file]');const transfer=new DataTransfer();transfer.items.add(new File(['invalid'],'unsupported.gif',{type:'image/gif'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
+  browser("wait",'.trip-cover-picker .cover-error');
+  assert(evaluate("document.querySelector('.trip-cover-picker .cover-error').getBoundingClientRect().height>0"));
   evaluate(`(async()=>{const blob=await fetch('/travel-postcard-fallback.jpg').then(r=>r.blob());const input=document.querySelector('.trip-cover-picker input[type=file]');const transfer=new DataTransfer();transfer.items.add(new File([blob],'cover.jpg',{type:'image/jpeg'}));input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
   browser("wait",".trip-crop-guide");browser("click",".crop-apply");
   assert.equal(evaluate("document.querySelectorAll('.trip-cover-picker-item').length"),4);
@@ -78,6 +147,7 @@ try {
   }
   browser("open",`${base}/trip-ideas`);browser("wait",".trip-idea-card");
   browser("click",".trip-idea-card");browser("wait",".trip-cover-picker");
+  testExistingCover();
   assert.equal(evaluate("document.querySelectorAll('.trip-cover-picker-item').length"),3);
   assert(evaluate("Boolean(document.querySelector('.trip-cover-picker-add'))"));
   browser("screenshot","/tmp/multi-cover-idea.png");
@@ -94,4 +164,5 @@ try {
   await db.query("DELETE FROM trips WHERE owner_id=$1",[id]);
   await db.query("DELETE FROM trip_ideas WHERE user_id=$1",[id]);
   await db.query("DELETE FROM users WHERE id=$1",[id]);await db.end();
+  if(uploadedFiles.length) execFileSync('docker',['exec','bn-trip-app-1','node','-e',`const fs=require('node:fs');const path=require('node:path');for(const name of process.argv.slice(1)){if(!/^[a-f0-9-]+\\.webp$/.test(name))throw new Error('Invalid fixture filename');fs.unlinkSync(path.join(process.env.UPLOAD_DIR||'/tmp/bn-trip-uploads',name));}`,...uploadedFiles]);
 }

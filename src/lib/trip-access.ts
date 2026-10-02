@@ -150,4 +150,5 @@ export const tripMembersSql=(alias="trips")=>`(
       LEFT JOIN users member ON member.id=collaborator.user_id
       WHERE collaborator.trip_id=${alias}.id AND collaborator.user_id IS NOT NULL
     ) shared_member
-  ) AS members`;
+  ) AS members,
+  (SELECT count(*)::int FROM trip_collaborators sheet_member WHERE sheet_member.trip_id=${alias}.id) AS collaborator_count`;

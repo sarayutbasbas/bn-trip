@@ -1,6 +1,6 @@
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { del, get, put } from "@vercel/blob";
+import { del, get, head, put } from "@vercel/blob";
 
 export type StorageBackend = "local" | "blob";
 
@@ -88,4 +88,13 @@ export async function deleteUpload(filename:string,directBlobUrl?:string|null){
     return;
   }
   try{await unlink(path.join(uploadDir,filename))}catch{}
+}
+
+export async function uploadFileSize(url: string): Promise<number | null> {
+  const filename = uploadFilenameFromUrl(url);
+  if (!filename) return null;
+  try {
+    if (getStorageBackend() === "blob") return (await head(blobPath(filename))).size;
+    return (await stat(path.join(uploadDir, filename))).size;
+  } catch { return null; }
 }

@@ -6,7 +6,7 @@ import { getDemoCards } from "@/src/lib/demo-data";
 
 const cardSchema=z.object({
   nickname:z.string().trim().min(1).max(40),
-  brand:z.enum(["visa","mastercard","jcb"]),
+  brand:z.enum(["visa","mastercard","jcb","unionpay","amex"]),
   lastFour:z.string().regex(/^\d{4}$/),
 }).strict();
 const reorderSchema=z.object({orderedIds:z.array(z.string().uuid()).max(100)}).strict();

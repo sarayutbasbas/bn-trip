@@ -1,8 +1,10 @@
 "use client";
+import { TripNameInput } from "@/src/components/trip-name-input";
 import Image from "next/image";
 import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
 import { TripCoverArt } from "./trip-cover-gallery";
 import { FetchSkeleton } from "@/src/components/fetch-skeleton";
+import { CollaboratorsSkeleton } from "@/src/components/collaborators-skeleton";
 
 import { useEffect,useMemo,useState,type FormEvent,type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
@@ -13,7 +15,7 @@ import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas"
 import { getCurrentAccount } from "@/src/lib/client-account";
 import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
 import { TRIP_DESTINATION_OPTIONS,type TripDestinationOption } from "@/src/lib/travel-badges";
-import { ConfirmDialog,CountryFlagImage,CountryPicker,TripCoverPicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
+import { ConfirmDialog,EmptyState,CountryFlagImage,CountryPicker,TripCoverPicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
 import { PageIntro } from "@/src/components/page-intro";
 import { BottomSheet } from "@/src/components/bottom-sheet";
 import { InvitationNotifications,type InvitationNotification } from "@/src/components/invitation-notifications";
@@ -103,7 +105,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   >
     <div className="form-grid trip-idea-form-grid">
     <TripCoverPicker value={covers} onChange={value=>{setCovers(value);setCoversChanged(true)}}/>
-    <label className="trip-idea-field"><span>ชื่อทริป</span><input required maxLength={160} value={name} onChange={event=>setName(event.target.value)} placeholder="เช่น Fukuoka Food Trip"/></label>
+    <label className="trip-idea-field"><span>ชื่อทริป</span><TripNameInput value={name} onChange={setName} placeholder="เช่น Fukuoka Food Trip"/></label>
     <CountryPicker value={countryCode} onChange={nextCountryCode=>{setCountryCode(nextCountryCode);setLocations([])}} note="เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง"/>
     <TripDestinationPicker countryCode={countryCode} selected={locations} onChange={setLocations}/>
     <fieldset className="trip-idea-kind-picker"><legend>วางไว้ในลิสต์ไหน</legend><button type="button" className={kind==="planned"?"active":""} onClick={()=>{setKind("planned");setTargetMonth(targetMonth||1);setTargetYear(targetYear||defaultYear)}}><CalendarRange size={17}/><span>ทริปที่เล็งไว้<small>มีเดือนและปีคร่าว ๆ</small></span></button><button type="button" className={kind==="someday"?"active":""} onClick={()=>setKind("someday")}><Compass size={17}/><span>ลิสต์สักวันหนึ่ง<small>ยังไม่รู้ว่าจะไปเมื่อไร</small></span></button></fieldset>
@@ -121,7 +123,7 @@ function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:Trip
   const suggestions=recent.filter(value=>!items.some(item=>item.email===value));
   return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)close()}}><section className="modal collaborators-sheet"><div className="modal-head"><div><h2>ผู้ร่วมวางแผน</h2><p>{canManage?"แชร์รายการนี้ให้เพื่อนช่วยดูและแก้ไขข้อมูลร่วมกัน":"รายชื่อผู้ที่วางแผนรายการนี้ร่วมกัน"}</p></div><button type="button" className="icon-btn" onClick={close} aria-label="ปิด"><X size={18}/></button></div>
     {canManage?<form className="collaborator-form" onSubmit={add}><div className="field"><label>อีเมลผู้ร่วมวางแผน</label><input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="friend@gmail.com" value={email} onChange={event=>setEmail(event.target.value)} required/></div><button className="primary-btn" disabled={saving}><UserPlus size={16}/>{saving?"กำลังเพิ่ม…":"เพิ่มผู้ร่วมวางแผน"}</button>{suggestions.length?<div className="recent-collaborators"><small>เลือกจากคนที่เพิ่มล่าสุด</small><div>{suggestions.map(value=><button type="button" key={value} onClick={()=>setEmail(value)}>{value}</button>)}</div></div>:null}</form>:null}
-    {error?<p className="login-error">{error}</p>:null}<div className="collaborator-list">{loading?<FetchSkeleton label="กำลังโหลดผู้ร่วมวางแผน" />:items.length?items.map(item=><div className={`collaborator-row idea-collaborator-row ${canManage?"":"is-readonly"}`} key={item.id}><span className="collaborator-avatar" style={item.avatar_url?{backgroundImage:`url("${item.avatar_url}")`}:undefined}>{!item.avatar_url&&(item.display_name||item.email).charAt(0).toUpperCase()}</span><div className="collaborator-copy"><strong>{item.display_name||item.email}</strong><small>{item.display_name?item.email:item.joined?"เข้าร่วมแล้ว":"แชร์ด้วยอีเมลแล้ว"}</small></div>{canManage?<button type="button" className="delete-record-btn" onClick={()=>confirm({title:`ลบผู้ร่วมวางแผน “${item.email}”?`,description:"บุคคลนี้จะไม่สามารถเปิดหรือแก้ไขรายการนี้ได้อีก",confirmLabel:"ลบผู้ร่วมวางแผน",onConfirm:()=>remove(item)})} aria-label="ลบผู้ร่วมวางแผน"><Trash2 size={17}/></button>:<span className="collaborator-access-badge is-view">ร่วมวางแผน</span>}</div>):<p className="collaborator-empty">ยังไม่มีผู้ร่วมวางแผน</p>}</div>
+    {error?<p className="login-error">{error}</p>:null}<div className="collaborator-list">{loading?<CollaboratorsSkeleton count={idea.collaborator_count ?? idea.members.filter(member=>member.role!=="owner").length} label="กำลังโหลดผู้ร่วมวางแผน" />:items.length?items.map(item=><div className={`collaborator-row idea-collaborator-row ${canManage?"":"is-readonly"}`} key={item.id}><span className="collaborator-avatar" style={item.avatar_url?{backgroundImage:`url("${item.avatar_url}")`}:undefined}>{!item.avatar_url&&(item.display_name||item.email).charAt(0).toUpperCase()}</span><div className="collaborator-copy"><strong>{item.display_name||item.email}</strong><small>{item.display_name?item.email:item.joined?"เข้าร่วมแล้ว":"แชร์ด้วยอีเมลแล้ว"}</small></div>{canManage?<button type="button" className="delete-record-btn" onClick={()=>confirm({title:`ลบผู้ร่วมวางแผน “${item.email}”?`,description:"บุคคลนี้จะไม่สามารถเปิดหรือแก้ไขรายการนี้ได้อีก",confirmLabel:"ลบผู้ร่วมวางแผน",onConfirm:()=>remove(item)})} aria-label="ลบผู้ร่วมวางแผน"><Trash2 size={17}/></button>:<span className="collaborator-access-badge is-view">ร่วมวางแผน</span>}</div>):<p className="collaborator-empty">ยังไม่มีผู้ร่วมวางแผน</p>}</div>
   </section></div>;
 }
 
@@ -233,7 +235,7 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo,currentUserId}:{i
           {refreshing?<FetchSkeleton rows={4} label="กำลังโหลดทริปที่เล็งไว้" />:filteredIdeas.length?<div className="trip-idea-groups">
             {plannedIdeas.length?<section className="trip-ideas-group" aria-label="ทริปที่เล็งไว้"><div className="trip-ideas-grid">{plannedIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} convert={()=>convertToTrip(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
             {somedayIdeas.length?<section className="trip-ideas-group" aria-label="ลิสต์สักวันหนึ่ง">{kindFilter==="all"?<div className="trip-ideas-divider"><span/><h2>ลิสต์สักวันหนึ่ง</h2><span/></div>:null}<div className="trip-ideas-grid">{somedayIdeas.map(idea=><IdeaCard key={idea.id} idea={idea} edit={()=>openForm(idea)} share={()=>setSharing(idea)}/>)}</div></section>:null}
-          </div>:<div className="trip-ideas-empty"><Search size={25}/><strong>{hasActiveTripFilters?"ไม่พบทริปที่ตรงกับตัวกรอง":query?"ไม่พบทริปที่ค้นหา":kindFilter!=="all"?"ยังไม่มีทริปในหมวดนี้":"ยังไม่มีทริปที่เล็งไว้"}</strong><span>{hasActiveTripFilters?"ลองเปลี่ยนประเภททริปหรือปีที่เลือก":query?"ลองค้นหาด้วยชื่อเมืองหรือประเทศอื่น":kindFilter!=="all"?"ลองเลือกหมวดอื่น หรือเพิ่มทริปใหม่":"เพิ่มสถานที่ที่อยากไปเก็บไว้ก่อนได้"}</span></div>}
+          </div>:<EmptyState icon={Search} title={hasActiveTripFilters?"ไม่พบทริปที่ตรงกับตัวกรอง":query?"ไม่พบทริปที่ค้นหา":kindFilter!=="all"?"ยังไม่มีทริปในหมวดนี้":"ยังไม่มีทริปที่เล็งไว้"} description={hasActiveTripFilters?"ลองเปลี่ยนประเภททริปหรือปีที่เลือก":query?"ลองค้นหาด้วยชื่อเมืองหรือประเทศอื่น":kindFilter!=="all"?"ลองเลือกหมวดอื่น หรือเพิ่มทริปใหม่":"เพิ่มสถานที่ที่อยากไปเก็บไว้ก่อนได้"} action="สร้างทริปที่เล็งไว้" onClick={()=>openForm(null)}/>}
         </section>
       </div>
     </main>

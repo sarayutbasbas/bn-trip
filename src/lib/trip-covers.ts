@@ -21,8 +21,8 @@ export async function uploadTripCovers(covers: CoverDraft[]): Promise<string[]> 
     if (typeof cover === "string") { urls.push(cover); continue; }
     const body = new FormData(); body.set("file", cover);
     const response = await fetch("/api/uploads", { method: "POST", body });
-    const result = await response.json();
-    if (!response.ok || typeof result.url !== "string" || !result.url) throw new Error(result.error || "อัปโหลดรูปไม่สำเร็จ");
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || typeof result.url !== "string" || !result.url) throw new Error(`รูปที่ ${urls.length + 1}: ${result.error || (response.status === 413 ? "ไฟล์รูปใหญ่เกินไป กรุณาลดขนาดรูปแล้วลองอีกครั้ง" : "อัปโหลดรูปไม่สำเร็จ กรุณาลองอีกครั้ง")}`);
     urls.push(result.url);
   }
   return urls;

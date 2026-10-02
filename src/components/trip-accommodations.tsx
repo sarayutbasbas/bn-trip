@@ -48,7 +48,7 @@ type Member = {
 type Card = {
   id: string;
   nickname: string;
-  brand?: "visa" | "mastercard" | "jcb" | null;
+  brand?: "visa" | "mastercard" | "jcb" | "unionpay" | "amex" | null;
   last_four: string;
   owner_name?: string;
   owner_email?: string | null;
@@ -476,7 +476,8 @@ export function TripAccommodations({
   );
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>(allMemberIds);
   const [splitGuestIds, setSplitGuestIds] = useState<string[]>([]);
-  const [payerKey, setPayerKey] = useState("");
+  const defaultPayerKey = members.length ? `member:${members.find(member=>member.role === "owner")?.id || members[0].id}` : "";
+  const [payerKey, setPayerKey] = useState(defaultPayerKey);
   const { guests: expenseGuests, setGuests: setExpenseGuests } = useExpenseGuests(tripId);
   const [guestName, setGuestName] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
@@ -692,7 +693,7 @@ export function TripAccommodations({
     if (imageInputRef.current) imageInputRef.current.value = "";
     setSplitMemberIds(allMemberIds);
     setSplitGuestIds(expenseGuests.map(guest => guest.id));
-    setPayerKey("");
+    setPayerKey(defaultPayerKey);
     setGuestName("");
     setSplitPickerOpen(false);
     setEditing("new");
@@ -746,7 +747,7 @@ export function TripAccommodations({
     );
     setSplitMemberIds(validIds.length || item.split_guest_ids?.length ? validIds : allMemberIds);
     setSplitGuestIds(item.split_guest_ids || []);
-    setPayerKey(item.paid_by ? `${item.paid_by.type}:${item.paid_by.id}` : "");
+    setPayerKey(item.paid_by ? `${item.paid_by.type}:${item.paid_by.id}` : defaultPayerKey);
     setGuestName("");
     setSplitPickerOpen(false);
     setEditing(item);

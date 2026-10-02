@@ -9,8 +9,10 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
+import { DocumentFilePicker } from "@/src/components/document-file-picker";
 import { BlockingSaveOverlay, useBlockingSubmit } from "@/src/components/bottom-sheet";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
@@ -43,7 +45,6 @@ import {
   ChevronRight,
   Circle,
   Download,
-  Eye,
   FileText,
   ListChecks,
   MoreHorizontal,
@@ -93,7 +94,9 @@ type DocumentItem = {
   title: string;
   original_filename: string;
   mime_type: string;
-  file_size: number;
+  file_size: number | null;
+  file_url?: string;
+  source?: "trip-plan";
   created_at: string;
   uploaded_by_name: string | null;
 };
@@ -796,7 +799,7 @@ export function TripWorkspace({
     }
   }
   function fileUrl(item: DocumentItem) {
-    return `/api/trips/${tripId}/documents/${item.id}/file`;
+    return item.file_url || `/api/trips/${tripId}/documents/${item.id}/file`;
   }
   async function saveOffline(item: DocumentItem) {
     setBusy(item.id);
@@ -1422,34 +1425,25 @@ export function TripWorkspace({
           <div className="document-list">
             {filteredDocuments.map((item) => (
               <article key={item.id}>
-                <span className="document-type-icon">
-                  <FileText size={20} />
-                </span>
+                <button type="button" className="document-thumbnail" onClick={() => openDocument(item)} aria-label={label(`ดูไฟล์ ${item.title}`)} title={label("ดูไฟล์")}>
+                  {item.mime_type.startsWith("image/") ? <Image src={fileUrl(item)} alt={item.title} width={64} height={64} unoptimized /> : <FileText size={28} />}
+                </button>
                 <div className="document-list-copy">
                   <strong>{item.title}</strong>
                   <small>
-                    {(Number(item.file_size) / 1024 / 1024).toFixed(1)} MB ·{" "}
+                    {item.file_size === null ? label("ไม่ทราบขนาดไฟล์") : item.file_size < 1024 * 1024 ? `${(item.file_size / 1024).toFixed(1)} KB` : `${(item.file_size / 1024 / 1024).toFixed(2)} MB`} ·{" "}
                     {item.original_filename}
                   </small>
                   <small className="document-meta">
-                    {label("เพิ่มโดย")} {item.uploaded_by_name || label("สมาชิกทริป")}
+                    {item.source === "trip-plan" ? label("จากรูปแพลนรวม · แก้ไขได้ที่แก้ไขทริป · ไม่นับรวมโควตาเอกสาร") : <>{label("เพิ่มโดย")} {item.uploaded_by_name || label("สมาชิกทริป")}</>}
                   </small>
-                  <small className="document-meta document-created-at">
+                  {item.source !== "trip-plan" && <small className="document-meta document-created-at">
                     {new Date(item.created_at).toLocaleString(undefined, {
                       dateStyle: "medium",
                       timeStyle: "short",
                     })}
-                  </small>
+                  </small>}
                 </div>
-                <button
-                  type="button"
-                  className="document-view-button"
-                  onClick={() => openDocument(item)}
-                  aria-label={label(`ดูไฟล์ ${item.title}`)}
-                  title={label("ดูไฟล์")}
-                >
-                  <Eye size={16} />
-                </button>
                 <button
                   type="button"
                   className={
@@ -1468,7 +1462,7 @@ export function TripWorkspace({
                 >
                   <Download size={16} />
                 </button>
-                {(data.role === "owner" || data.role === "admin") && (
+                {item.source !== "trip-plan" && (data.role === "owner" || data.role === "admin") && (
                   <button
                     type="button"
                     className="document-edit-button"
@@ -1922,38 +1916,7 @@ export function TripWorkspace({
                 <X size={18} />
               </button>
             </div>
-            <label
-              className={`document-file-picker ${editingDocumentFileName ? "selected" : ""}`}
-            >
-              <input
-                ref={editDocumentFileRef}
-                name="file"
-                type="file"
-                accept="application/pdf,image/jpeg,image/png,image/webp"
-                onChange={(event) =>
-                  setEditingDocumentFileName(
-                    event.target.files?.[0]?.name || "",
-                  )
-                }
-              />
-              <span className="document-file-picker-icon">
-                {editingDocumentFileName ? (
-                  <Check size={22} />
-                ) : (
-                  <Upload size={22} />
-                )}
-              </span>
-              <span>
-                <strong>
-                  {editingDocumentFileName || label("เลือกไฟล์ใหม่")}
-                </strong>
-                <small>
-                  {editingDocumentFileName
-                    ? label("เลือกไฟล์ใหม่แล้ว")
-                    : `${label("ไฟล์ปัจจุบัน")}: ${editingDocument.original_filename}`}
-                </small>
-              </span>
-            </label>
+            <DocumentFilePicker key={editingDocument.id} fileName={editingDocumentFileName} inputRef={editDocumentFileRef} onFileChange={file=>setEditingDocumentFileName(file?.name||"")} existingFile={{url:fileUrl(editingDocument),name:editingDocument.original_filename,mimeType:editingDocument.mime_type}} />
             <div className="field">
               <label htmlFor="document-edit-name">{label("ชื่อไฟล์")}</label>
               <input
@@ -2033,31 +1996,7 @@ export function TripWorkspace({
                 <X size={18} />
               </button>
             </div>
-            <label
-              className={`document-file-picker ${documentFileName ? "selected" : ""}`}
-            >
-              <input
-                ref={fileRef}
-                name="file"
-                type="file"
-                accept="application/pdf,image/jpeg,image/png,image/webp"
-                onChange={(event) =>
-                  setDocumentFileName(event.target.files?.[0]?.name || "")
-                }
-                required
-              />
-              <span className="document-file-picker-icon">
-                {documentFileName ? <Check size={22} /> : <Upload size={22} />}
-              </span>
-              <span>
-                <strong>
-                  {documentFileName || label("เลือกรูปหรือไฟล์")}
-                </strong>
-                <small>
-                  {label("รองรับ JPG, PNG, WebP และ PDF")}
-                </small>
-              </span>
-            </label>
+            <DocumentFilePicker fileName={documentFileName} inputRef={fileRef} onFileChange={file=>setDocumentFileName(file?.name||"")} required />
             <div className="field">
               <label htmlFor="document-title-input">{label("ชื่อไฟล์")}</label>
               <input
