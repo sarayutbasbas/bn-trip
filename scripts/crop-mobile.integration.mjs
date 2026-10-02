@@ -21,6 +21,7 @@ try {
   assert.equal(evaluate("document.querySelector('.trip-crop-guide-copy strong').textContent"),'ทดสอบชื่อทริปยาวสองบรรทัด เพื่อทดสอบการแสดงรูป');
   assert.equal(evaluate("document.querySelector('.trip-crop-guide-copy .trip-countdown-badge').textContent"),'อีก 105 วัน');
   assert.equal(evaluate("document.querySelectorAll('.trip-crop-guide-dots span').length"),4);
+  assert.equal(evaluate("document.querySelectorAll('.trip-crop-guide-actions i').length"),2);
   for(const [width,height] of [[320,568],[390,844],[430,932]]) {
     browser('set','viewport',String(width),String(height));
     const data=evaluate(`(()=>{const canvas=document.querySelector('.fixed-crop-frame canvas'),frame=canvas.getBoundingClientRect(),button=document.querySelector('.crop-apply').getBoundingClientRect();return {width:frame.width,height:frame.height,buttonBottom:button.bottom,fit:getComputedStyle(canvas).objectFit,pointer:getComputedStyle(document.querySelector('.trip-crop-guide')).pointerEvents}})()`);

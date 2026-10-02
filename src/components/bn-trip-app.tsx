@@ -4143,6 +4143,7 @@ function TripHeader({
   editTrip?: () => void;
 }) {
   const t = useT();
+  const [planImageOpen, setPlanImageOpen] = useState(false);
   const now = useMinuteClock();
   const ended = tripHasEnded(trip, now);
   const temporal = tripTemporalStatus(trip, now);
@@ -4159,11 +4160,14 @@ function TripHeader({
           <ChevronLeft size={21} />
         </button>
       )}
-      {editTrip && (
+      {(editTrip || trip.summary_image_url) && (
         <div className="trip-cover-actions">
-          <button type="button" onClick={editTrip} aria-label={t("แก้ไข")} title={t("แก้ไข")}>
+          {trip.summary_image_url && <button type="button" onClick={() => setPlanImageOpen(true)} aria-label={t("แพลนเที่ยว")} title={t("แพลนเที่ยว")}>
+            <ImageIcon size={20} />
+          </button>}
+          {editTrip && <button type="button" onClick={editTrip} aria-label={t("แก้ไข")} title={t("แก้ไข")}>
             <Pencil size={20} />
-          </button>
+          </button>}
         </div>
       )}
       <div
@@ -4201,6 +4205,13 @@ function TripHeader({
           variant="header"
           showEmpty
           onClick={openReviews}
+        />
+      )}
+      {planImageOpen && trip.summary_image_url && (
+        <AttachmentPreviewOverlay
+          preview={{ url: trip.summary_image_url, title: t("แพลนเที่ยว"), mimeType: "image/jpeg" }}
+          onClose={() => setPlanImageOpen(false)}
+          closeLabel={t("ปิดรูป")}
         />
       )}
     </div>
@@ -4275,7 +4286,6 @@ function TripSectionNav({
 }) {
   const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [planImageOpen, setPlanImageOpen] = useState(false);
   const [confirmDownload, setConfirmDownload] = useState(false);
   const [downloadFile, setDownloadFile] = useState<File | null>(null);
   const [downloadError, setDownloadError] = useState("");
@@ -4334,9 +4344,6 @@ function TripSectionNav({
     { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
     { id: "export", label: "Download", Icon: Download, action: () => setConfirmDownload(true) },
   ];
-  if (trip.summary_image_url) {
-    sections.push({ id: "plan-image", label: "แพลนเที่ยว", Icon: ImageIcon, action: () => setPlanImageOpen(true) });
-  }
   const primary = sections
     .filter(({ availableInTrip }) => availableInTrip !== false)
     .slice(0, 4);
@@ -4375,13 +4382,6 @@ function TripSectionNav({
             </div>
           </section>
         </div>, document.body)}
-      {planImageOpen && trip.summary_image_url && (
-        <AttachmentPreviewOverlay
-          preview={{ url: trip.summary_image_url, title: t("แพลนเที่ยว"), mimeType: "image/jpeg" }}
-          onClose={() => setPlanImageOpen(false)}
-          closeLabel={t("ปิดรูป")}
-        />
-      )}
       {(confirmDownload || downloadFile) && (
         <ConfirmDialog
           key={downloadFile ? "save-plan" : "prepare-plan"}
@@ -7996,7 +7996,7 @@ export function CoverImagePicker({
             onPointerCancel={endMove}
           />
           {cover && showCoverGuide ? <div className="trip-crop-guide" aria-hidden="true">
-            <div className="trip-crop-guide-nav"><i><ChevronLeft size={21} /></i><i><Pencil size={20} /></i></div>
+            <div className="trip-crop-guide-nav"><i><ChevronLeft size={21} /></i><div className="trip-crop-guide-actions"><i><ImageIcon size={20} /></i><i><Pencil size={20} /></i></div></div>
             <div className="trip-crop-guide-copy">
               <TripCountdownBadge label="อีก 105 วัน" />
               <strong>ทดสอบชื่อทริปยาวสองบรรทัด เพื่อทดสอบการแสดงรูป</strong>
