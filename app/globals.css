@@ -14246,6 +14246,7 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-card-brand.card-brand-jcb { color: #16734f; }
 .accommodation-sheet .trip-location-suggestions { z-index: 45; }
 .accommodation-sheet .trip-location-field { width: 100%; }
+.accommodation-sheet .trip-location-field:focus-within { z-index: 50; }
 .accommodation-booking-row {
   align-items: end;
 }
