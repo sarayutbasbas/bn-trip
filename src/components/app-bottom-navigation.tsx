@@ -20,7 +20,7 @@ const NAV_VISIBLE_PATHS = new Set([
   "/", "/trips", "/settings", "/analytics", "/trip-ideas",
 ]);
 
-type NavIconName = "home" | "trip" | "wishlist" | "stats" | "profile";
+type NavIconName = "home" | "trip" | "radar" | "stats" | "profile";
 
 function NavIcon({ name, filled, ...props }: SVGProps<SVGSVGElement> & {
   name: NavIconName;
@@ -44,10 +44,11 @@ function NavIcon({ name, filled, ...props }: SVGProps<SVGSVGElement> & {
           </>
         )
       ) : null}
-      {name === "wishlist" ? filled ? (
-        <path fill="currentColor" stroke="none" d="M12 21.2 10.55 19.9C5.4 15.28 2 12.2 2 8.42 2 5.34 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09A6.02 6.02 0 0 1 16.5 3C19.58 3 22 5.34 22 8.42c0 3.78-3.4 6.86-8.55 11.49z" />
-      ) : (
-        <path {...common} d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+      {name === "radar" ? (
+        <>
+          <path {...common} fill={filled ? "currentColor" : "none"} d="m3.3 12.4 9.6-9 4.1 4.1-9.6 9z" />
+          <path {...common} d="m10.1 14.1 3.2 6.1M15.5 13.4l2.3 2.3 2.8-2.8-2.3-2.3M5.5 21h13" />
+        </>
       ) : null}
       {name === "stats" ? filled ? (
         <>
@@ -108,7 +109,7 @@ export function AppBottomNavigation() {
   const items = useMemo(() => [
     { label: "หน้าแรก", href: "/", icon: "home" as const, active: pathname === "/" },
     { label: "ทริป", href: "/trips", icon: "trip" as const, active: pathname === "/trips" },
-    { label: "เล็งไว้", href: "/trip-ideas", icon: "wishlist" as const, active: pathname === "/trip-ideas" },
+    { label: "เล็งไว้", href: "/trip-ideas", icon: "radar" as const, active: pathname === "/trip-ideas" },
     { label: "สถิติ", href: "/analytics", icon: "stats" as const, active: pathname === "/analytics" || pathname === "/badges" },
     { label: "ฉัน", href: "/settings", icon: "profile" as const, active: pathname.startsWith("/settings") },
   ], [pathname]);

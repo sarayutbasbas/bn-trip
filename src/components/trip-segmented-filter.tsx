@@ -5,7 +5,7 @@ export type TripFilterOption<Value extends string> = {
   label: string;
   Icon: LucideIcon;
   count: number;
-  tone: "all" | "upcoming" | "past" | "domestic" | "international";
+  tone: "all" | "upcoming" | "past" | "favorite" | "domestic" | "international";
 };
 
 export function TripSegmentedFilter<Value extends string>({

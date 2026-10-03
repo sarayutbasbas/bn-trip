@@ -9,6 +9,7 @@ export type TripIdea = {
   id:string;owner_id:string;name:string;destination:string;country_code:string|null;
   trip_destinations:TripDestinationSelection[];kind:TripIdeaKind;target_month:number|null;target_year:number|null;
   note:string;cover_image_url:string;cover_image_urls?:string[];access_role:"owner"|"collaborator";members:TripIdeaMember[];collaborator_count?:number;created_at:string;updated_at:string;
+  is_favorite?:boolean;
 };
 
 type DatabaseTripIdea = Omit<TripIdea,"created_at"|"updated_at">&{
@@ -39,6 +40,7 @@ const demoIdeas:TripIdea[]=[
 
 const ideaSelect=`SELECT idea.id,idea.user_id AS owner_id,idea.name,idea.destination,idea.country_code,idea.trip_destinations,
   idea.kind,idea.target_month,idea.target_year,idea.note,idea.cover_image_url,idea.cover_image_urls,idea.created_at,idea.updated_at,
+  EXISTS(SELECT 1 FROM user_favorite_trip_ideas favorite_idea WHERE favorite_idea.trip_idea_id=idea.id AND favorite_idea.user_id=$1) AS is_favorite,
   CASE WHEN idea.user_id=$1 THEN 'owner' ELSE 'collaborator' END AS access_role,
   (SELECT count(*)::int FROM trip_idea_collaborators sheet_member WHERE sheet_member.trip_idea_id=idea.id) AS collaborator_count,
   (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',member.id,'email',member.email,'display_name',member.display_name,'avatar_url',member.avatar_url,'role',member.role) ORDER BY member.sort_order,member.created_at),'[]'::jsonb)

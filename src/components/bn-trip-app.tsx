@@ -41,6 +41,7 @@ import { PageIntro } from "@/src/components/page-intro";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
+import { TripFavoriteButton } from "@/src/components/trip-favorite-button";
 import { tripDaysUntilLabel } from "@/src/lib/trip-countdown";
 import { tripWeekdayLabel } from "@/src/lib/trip-weekday";
 import { TripNoteField } from "@/src/components/trip-note-field";
@@ -216,7 +217,7 @@ type Screen =
   | "settings";
 type WorkspaceTab = "checklist" | "documents";
 type Lang = "TH" | "EN";
-type TripStatus = "all" | "ongoing" | "upcoming" | "past";
+type TripStatus = "all" | "ongoing" | "upcoming" | "past" | "favorite";
 type TripType = "all" | "domestic" | "international";
 type TripFilters = {
   member?: string;
@@ -275,6 +276,7 @@ type ExpenseGuest = {
   name: string;
 };
 export type Trip = {
+  is_favorite?: boolean;
   collaborator_count?: number;
   cover_image_urls?: string[];
   id: string;
@@ -3659,12 +3661,16 @@ function CompactTripCard({
   now,
   selectTrip,
   manageCollaborators,
+  toggleFavorite,
+  favoriteBusy = false,
   priority = false,
 }: {
   trip: Trip;
   now: number;
   selectTrip: (trip: Trip) => void;
   manageCollaborators: (trip: Trip) => void;
+  toggleFavorite: (trip: Trip) => void;
+  favoriteBusy?: boolean;
   priority?: boolean;
 }) {
   const t = useT();
@@ -3701,6 +3707,7 @@ function CompactTripCard({
       )}
       <div className="compact-trip-cover">
         <TripCoverArt record={trip} sizes="(max-width: 600px) 42vw, 180px" priority={priority} />
+        <TripFavoriteButton favorite={Boolean(trip.is_favorite)} onToggle={() => toggleFavorite(trip)} disabled={favoriteBusy} />
         {ongoing ? <span className="compact-trip-status">
           <Navigation size={12} />
           <span>{status}</span>
@@ -3764,7 +3771,7 @@ function TripsDirectory({
   const t = useT();
   const router = useRouter();
   const validStatus = (value: string): TripStatus =>
-    ["upcoming", "past"].includes(value)
+    ["upcoming", "past", "favorite"].includes(value)
       ? (value as TripStatus)
       : "all";
   const validType = (value: string): TripType =>
@@ -3788,7 +3795,9 @@ function TripsDirectory({
     applyCachedTripReviewSummaries(initialData?.items || []),
   );
   const [years, setYears] = useState<number[]>(initialData?.years || []);
-  const [statusCounts,setStatusCounts]=useState<Record<TripStatus,number>>(()=>initialData?.statusCounts||{all:initialData?.total||0,ongoing:0,upcoming:0,past:0});
+  const [statusCounts,setStatusCounts]=useState<Record<TripStatus,number>>(()=>initialData?.statusCounts||{all:initialData?.total||0,ongoing:0,upcoming:0,past:0,favorite:0});
+  const [favoriteBusyId,setFavoriteBusyId]=useState<string|null>(null);
+  const [favoriteError,setFavoriteError]=useState("");
   const [hasMore, setHasMore] = useState(Boolean(initialData?.hasMore));
   const [filtersOpen,setFiltersOpen]=useState(false);
   const [draftTripType,setDraftTripType]=useState<TripType>(()=>validType(initialFilters.type));
@@ -3936,7 +3945,7 @@ function TripsDirectory({
           visibleTripCountRef.current = Math.max(20, nextItems.length);
           setYears(Array.isArray(data.years) ? data.years : []);
           setFilterMembers(data.filterMembers || []);
-          if(data.statusCounts)setStatusCounts({all:Number(data.statusCounts.all||0),ongoing:Number(data.statusCounts.ongoing||0),upcoming:Number(data.statusCounts.upcoming||0),past:Number(data.statusCounts.past||0)});
+          if(data.statusCounts)setStatusCounts({all:Number(data.statusCounts.all||0),ongoing:Number(data.statusCounts.ongoing||0),upcoming:Number(data.statusCounts.upcoming||0),past:Number(data.statusCounts.past||0),favorite:Number(data.statusCounts.favorite||0)});
           setHasMore(Boolean(data.hasMore));
           hasContentRef.current = true;
         } catch (error) {
@@ -4017,10 +4026,39 @@ function TripsDirectory({
       }
     }
   }
+  async function toggleFavorite(trip: Trip) {
+    if (favoriteBusyId) return;
+    const favorite = !trip.is_favorite;
+    setFavoriteBusyId(trip.id);
+    setFavoriteError("");
+    setItems((current) => current.map((item) => item.id === trip.id ? { ...item, is_favorite: favorite } : item));
+    try {
+      const response = await fetch(`/api/trips/${trip.id}/favorite`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ favorite }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "บันทึกรายการโปรดไม่สำเร็จ");
+      if (tripListCache) tripListCache = tripListCache.map((item) => item.id === trip.id ? { ...item, is_favorite: favorite } : item);
+      if (dashboardSnapshotCache) dashboardSnapshotCache = {
+        ...dashboardSnapshotCache,
+        trips: dashboardSnapshotCache.trips.map((item) => item.id === trip.id ? { ...item, is_favorite: favorite } : item),
+      };
+      setStatusCounts((current) => ({ ...current, favorite: Math.max(0, current.favorite + (favorite ? 1 : -1)) }));
+      if (status === "favorite" && !favorite) setRefreshToken((value) => value + 1);
+    } catch (error) {
+      setItems((current) => current.map((item) => item.id === trip.id ? { ...item, is_favorite: Boolean(trip.is_favorite) } : item));
+      setFavoriteError(error instanceof Error ? error.message : "บันทึกรายการโปรดไม่สำเร็จ");
+    } finally {
+      setFavoriteBusyId(null);
+    }
+  }
   const statuses: TripFilterOption<TripStatus>[] = [
     {value:"all",label:t("ทั้งหมด"),Icon:Luggage,count:statusCounts.all,tone:"all"},
     {value:"upcoming",label:t("กำลังจะไป"),Icon:Plane,count:statusCounts.upcoming,tone:"upcoming"},
     {value:"past",label:t("ที่ผ่านมา"),Icon:CheckCircle2,count:statusCounts.past,tone:"past"},
+    {value:"favorite",label:t("ติดดาว"),Icon:Heart,count:statusCounts.favorite,tone:"favorite"},
   ];
   const tripTypes:Array<{value:TripType;label:string;Icon:typeof Luggage}>=[
     {value:"all",label:"ทั้งหมด",Icon:Luggage},
@@ -4089,6 +4127,7 @@ function TripsDirectory({
         </BottomSheet>
       )}
       <TripSegmentedFilter value={status} options={statuses} onChange={setStatus} ariaLabel={t("กรองทริปตามสถานะ")} tripLabel={t("ทริป")}/>
+      {favoriteError ? <p className="trip-favorite-error" role="alert">{favoriteError}</p> : null}
       {directoryLoading ? (
         <div className="compact-trip-grid compact-trip-list-skeleton" role="status" aria-label={t("กำลังโหลดทริป…")}>
           {Array.from({length:4},(_,index)=><span className="compact-trip-skeleton-card" key={index}><i/><b><em/><em/><em/></b></span>)}
@@ -4105,7 +4144,7 @@ function TripsDirectory({
                     <span />
                   </div>
                 ) : null}
-                <CompactTripCard trip={trip} now={now} priority={index<3} selectTrip={openTrip} manageCollaborators={manageCollaborators}/>
+                <CompactTripCard trip={trip} now={now} priority={index<3} selectTrip={openTrip} manageCollaborators={manageCollaborators} toggleFavorite={toggleFavorite} favoriteBusy={favoriteBusyId === trip.id}/>
               </Fragment>
             ))}
           </div>
@@ -4117,8 +4156,8 @@ function TripsDirectory({
       ) : (
         <EmptyState
           icon={Search}
-          title={queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length ? "ไม่พบทริปที่ตรงกับตัวกรอง" : "ยังไม่มีทริป"}
-          description={queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length ? "ลองเปลี่ยนคำค้นหาหรือตัวกรอง" : "สร้างทริปใหม่ แล้วเริ่มเติมสถานที่ที่อยากไปกัน"}
+          title={status === "favorite" && !queryText && tripType === "all" && !selectedYears.length && !selectedMembers.length ? "ยังไม่มีทริปที่ติดดาว" : queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length ? "ไม่พบทริปที่ตรงกับตัวกรอง" : "ยังไม่มีทริป"}
+          description={status === "favorite" && !queryText && tripType === "all" && !selectedYears.length && !selectedMembers.length ? "กดหัวใจบนการ์ดทริปเพื่อเก็บไว้ที่นี่" : queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length ? "ลองเปลี่ยนคำค้นหาหรือตัวกรอง" : "สร้างทริปใหม่ แล้วเริ่มเติมสถานที่ที่อยากไปกัน"}
           action="สร้างทริป"
           onClick={createTrip}
         />

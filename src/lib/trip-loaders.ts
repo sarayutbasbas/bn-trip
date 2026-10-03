@@ -16,6 +16,7 @@ import {
   getTripRole,
   tripAccessSql,
   tripActualExpenseSql,
+  tripFavoriteSql,
   tripFlightSummariesSql,
   tripIncompleteSetupSql,
   tripMembersSql,
@@ -71,7 +72,7 @@ export type TripDirectoryPayload = {
   total: number;
   years: number[];
   hasMore: boolean;
-  statusCounts: { all: number; ongoing: number; upcoming: number; past: number };
+  statusCounts: { all: number; ongoing: number; upcoming: number; past: number; favorite: number };
 };
 
 export type TravelAnalyticsPayload = {
@@ -506,11 +507,12 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
   const actualExpense = tripActualExpenseSql("t");
   const incomplete = tripIncompleteSetupSql("t");
   const flightSummaries = tripFlightSummariesSql("t");
+  const favorite = tripFavoriteSql("t");
   const destinationAccess = tripAccessSql("destination_trip");
   const [ongoing, upcoming, past, favoriteAccommodations, counts, countries, destinations, tripIdeas] = await Promise.all([
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC`, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 8`, [session.userId]),
+    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
+    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC`, [session.userId]),
+    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 8`, [session.userId]),
     query<FavoriteAccommodation>(`SELECT
         accommodation.id,
         accommodation.trip_id,
@@ -629,6 +631,7 @@ export async function loadTripDirectory(
   const actualExpense = tripActualExpenseSql("t");
   const incomplete = tripIncompleteSetupSql("t");
   const flightSummaries = tripFlightSummariesSql("t");
+  const favorite = tripFavoriteSql("t");
   const status = params.get("status") || "all";
   const tripType = params.get("type") || "all";
   const selectedYears = [...new Set(params.getAll("year").flatMap((value) => value.split(",")).map(Number).filter((year) => Number.isInteger(year) && year >= 2000 && year <= 2200))].slice(0, 50);
@@ -642,6 +645,8 @@ export async function loadTripDirectory(
     where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
   if (status === "past")
     where.push("COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
+  if (status === "favorite")
+    where.push("EXISTS(SELECT 1 FROM user_favorite_trips favorite_trip WHERE favorite_trip.trip_id=t.id AND favorite_trip.user_id=$1)");
   if (tripType === "domestic") where.push("t.country_code='TH'");
   if (tripType === "international")
     where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
@@ -673,10 +678,11 @@ export async function loadTripDirectory(
   const clause = where.join(" AND ");
   const [filterPeople, items, total, years, statusCounts] = await Promise.all([
     query<TripFilterMember>(tripFilterMembersSql, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, 0]),
+    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, 0]),
     query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`, values),
     query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`, [session.userId]),
     query(`SELECT count(*)::int AS total,
+      count(*) FILTER (WHERE EXISTS(SELECT 1 FROM user_favorite_trips favorite_trip WHERE favorite_trip.trip_id=t.id AND favorite_trip.user_id=$1))::int AS favorite,
       count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,
       count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,
       count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past
@@ -695,6 +701,7 @@ export async function loadTripDirectory(
       ongoing: Number(counts.ongoing || 0),
       upcoming: Number(counts.upcoming || 0),
       past: Number(counts.past || 0),
+      favorite: Number(counts.favorite || 0),
     },
   });
 }

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/lib/auth";
 import { query, transaction } from "@/src/lib/db";
 import { getDemoTrip } from "@/src/lib/demo-data";
-import { getTripRole,tripFlightSummariesSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
+import { getTripRole,tripFavoriteSql,tripFlightSummariesSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode,formatTripDestination } from "@/src/lib/countries";
@@ -20,7 +20,7 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
   const {id}=await params;
   if(session.isDemo){const trip=getDemoTrip(id);return trip?NextResponse.json(trip):NextResponse.json({error:"Not found"},{status:404})}
   await ensureLatestDatabaseSchema();
-  const result=await query(`SELECT t.*,${tripRoleSql("t")},${tripMembersSql("t")},${tripReviewSummarySql("t")},${tripFlightSummariesSql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,[session.userId,id]);
+  const result=await query(`SELECT t.*,${tripRoleSql("t")},${tripMembersSql("t")},${tripReviewSummarySql("t")},${tripFlightSummariesSql("t")},${tripFavoriteSql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,[session.userId,id]);
   return result.rows[0]?NextResponse.json(result.rows[0]):NextResponse.json({error:"Not found"},{status:404});
 }
 

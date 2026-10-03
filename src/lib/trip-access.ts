@@ -51,6 +51,7 @@ export async function tripExpenseGuestIdsBelongToTrip(tripId:string,guestIds:str
 }
 
 export const tripAccessSql=(alias="trips")=>`(${alias}.owner_id=$1 OR EXISTS (SELECT 1 FROM trip_collaborators access_member WHERE access_member.trip_id=${alias}.id AND access_member.user_id=$1))`;
+export const tripFavoriteSql=(alias="trips")=>`EXISTS(SELECT 1 FROM user_favorite_trips favorite_trip WHERE favorite_trip.trip_id=${alias}.id AND favorite_trip.user_id=$1) AS is_favorite`;
 export const tripRoleSql=(alias="trips")=>`CASE WHEN ${alias}.owner_id=$1 THEN 'owner' ELSE COALESCE((SELECT access_member.access_level FROM trip_collaborators access_member WHERE access_member.trip_id=${alias}.id AND access_member.user_id=$1 LIMIT 1),'view') END AS access_role`;
 export const tripReviewSummarySql=(alias="trips")=>`COALESCE((SELECT round(avg(review.rating),1) FROM trip_reviews review
     WHERE review.trip_id=${alias}.id AND ${submittedReviewSql(alias)} AND (review.user_id=${alias}.owner_id OR EXISTS (

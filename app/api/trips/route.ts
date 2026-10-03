@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/src/lib/auth";
 import { query,transaction } from "@/src/lib/db";
-import { tripAccessSql,tripActualExpenseSql,tripFlightSummariesSql,tripIncompleteSetupSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
+import { tripAccessSql,tripActualExpenseSql,tripFavoriteSql,tripFlightSummariesSql,tripIncompleteSetupSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { getDemoTrips } from "@/src/lib/demo-data";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode,formatTripDestination } from "@/src/lib/countries";
@@ -26,7 +26,7 @@ export async function GET(request:Request) {
   const mode=params.get("mode");
   if(mode==="dashboard")return NextResponse.json(await loadDashboard(session));
   await ensureLatestDatabaseSchema();
-  const access=tripAccessSql("t");const role=tripRoleSql("t");const members=tripMembersSql("t");const reviews=tripReviewSummarySql("t");const actualExpense=tripActualExpenseSql("t");const incomplete=tripIncompleteSetupSql("t");const flightSummaries=tripFlightSummariesSql("t");
+  const access=tripAccessSql("t");const role=tripRoleSql("t");const members=tripMembersSql("t");const reviews=tripReviewSummarySql("t");const actualExpense=tripActualExpenseSql("t");const incomplete=tripIncompleteSetupSql("t");const flightSummaries=tripFlightSummariesSql("t");const favorite=tripFavoriteSql("t");
   if(mode==="list"){
     const status=params.get("status")||"all";
     const tripType=params.get("type")||"all";
@@ -41,6 +41,7 @@ export async function GET(request:Request) {
     if(status==="ongoing")where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
     if(status==="upcoming")where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
     if(status==="past")where.push("COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
+    if(status==="favorite")where.push("EXISTS(SELECT 1 FROM user_favorite_trips favorite_trip WHERE favorite_trip.trip_id=t.id AND favorite_trip.user_id=$1)");
     if(tripType==="domestic")where.push("t.country_code='TH'");
     if(tripType==="international")where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
     if(filterYears.length){values.push(filterYears);where.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${values.length}::int[])`)}
@@ -57,10 +58,11 @@ export async function GET(request:Request) {
     const clause=where.join(" AND ");
     const [filterPeople,items,total,years,statusCounts]=await Promise.all([
       query<TripFilterMember>(tripFilterMembersSql,[session.userId]),
-      query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,limit,offset]),
+      query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,limit,offset]),
       query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`,values),
       query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`,[session.userId]),
       query(`SELECT count(*)::int AS total,
+        count(*) FILTER (WHERE EXISTS(SELECT 1 FROM user_favorite_trips favorite_trip WHERE favorite_trip.trip_id=t.id AND favorite_trip.user_id=$1))::int AS favorite,
         count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,
         count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,
         count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past
@@ -68,9 +70,9 @@ export async function GET(request:Request) {
     ]);
     const count=Number(total.rows[0]?.count||0);
     const counts=statusCounts.rows[0]||{};
-    return NextResponse.json({filterMembers:filterPeople.rows.filter(member=>member.id!==session.userId),items:items.rows,total:count,years:years.rows.map(row=>row.year),hasMore:offset+items.rows.length<count,statusCounts:{all:Number(counts.total||0),ongoing:Number(counts.ongoing||0),upcoming:Number(counts.upcoming||0),past:Number(counts.past||0)}});
+    return NextResponse.json({filterMembers:filterPeople.rows.filter(member=>member.id!==session.userId),items:items.rows,total:count,years:years.rows.map(row=>row.year),hasMore:offset+items.rows.length<count,statusCounts:{all:Number(counts.total||0),ongoing:Number(counts.ongoing||0),upcoming:Number(counts.upcoming||0),past:Number(counts.past||0),favorite:Number(counts.favorite||0)}});
   }
-  const result = await query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete} FROM trips t WHERE ${access} ORDER BY t.start_date DESC`,[session.userId]); return NextResponse.json(result.rows);
+  const result = await query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${favorite} FROM trips t WHERE ${access} ORDER BY t.start_date DESC`,[session.userId]); return NextResponse.json(result.rows);
 }
 
 export async function POST(request:Request) {
@@ -102,6 +104,11 @@ export async function POST(request:Request) {
       await client.query("UPDATE trips SET cover_image_url=$2,cover_image_urls=$3 WHERE id=$1",[created.id,coverImageUrls[0],coverImageUrls]);
       created.cover_image_url=coverImageUrls[0];created.cover_image_urls=coverImageUrls;
       if(input.sourceIdeaId){
+        await client.query(`INSERT INTO user_favorite_trips(user_id,trip_id,favorited_at)
+          SELECT favorite.user_id,$1,favorite.favorited_at
+          FROM user_favorite_trip_ideas favorite
+          WHERE favorite.trip_idea_id=$2
+          ON CONFLICT(user_id,trip_id) DO NOTHING`,[created.id,input.sourceIdeaId]);
         await client.query(`INSERT INTO trip_collaborators(trip_id,email,user_id,invited_by,access_level)
           SELECT $1,source.email,source.user_id,$2,'admin'
           FROM (
