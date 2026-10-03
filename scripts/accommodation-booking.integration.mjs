@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { Pool } from "pg";
 import { SignJWT } from "jose";
+import sharp from "sharp";
 
 const base = "http://localhost:8001";
 const db = new Pool({ connectionString: "postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip" });
@@ -15,6 +16,7 @@ const token = await new SignJWT({ email, displayName: "Payer A", demo: false }).
 const api = (path, method = "GET", body) => fetch(base + path, { method, headers: { cookie: `bn_trip_session=${token}`, "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
 const browser = (...args) => execFileSync("npx", ["--yes", "agent-browser", "--session", "accommodation-integration", ...args], { encoding: "utf8", timeout: 45000 });
 const evaluate = code => JSON.parse(browser("eval", code));
+let croppedUploadFilename = "";
 
 try {
   await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Payer A'),($3,$4,'Payer B')", [owner,email,member,`accommodation-${member}@example.invalid`]);
@@ -44,6 +46,26 @@ try {
   browser("set","viewport","390","844");
   browser("open",`${base}/trips/${trip}?view=stays&accommodation=${hotel.id}`);
   browser("wait","#accommodation-booking-url");
+  async function chooseAccommodationImage() {
+    evaluate(`(async () => { const blob = await fetch('/travel-postcard-fallback.jpg').then(response => response.blob()); const input = document.querySelector('.accommodation-cover-picker input[type=file]'); const transfer = new DataTransfer(); transfer.items.add(new File([blob], 'hotel.jpg', { type: 'image/jpeg' })); input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    browser("wait", ".crop-editor[aria-label='ครอบรูปที่พัก'] canvas");
+    browser("wait", "--fn", "document.querySelector('.crop-editor canvas')?.width === 640");
+    assert(evaluate(`(() => { const canvas = document.querySelector('.crop-editor canvas'); const frame = document.querySelector('.fixed-crop-frame'); return canvas.width === 640 && canvas.height === 640 && Math.abs(frame.getBoundingClientRect().width / frame.getBoundingClientRect().height - 1) < 0.01; })()`));
+  }
+  await chooseAccommodationImage();
+  for (const width of [320, 390]) {
+    browser("set", "viewport", String(width), "844");
+    assert(evaluate(`(() => { const frame = document.querySelector('.fixed-crop-frame').getBoundingClientRect(); const confirm = document.querySelector('.crop-editor .crop-apply').getBoundingClientRect(); return frame.left >= 0 && frame.right <= innerWidth && confirm.bottom <= innerHeight; })()`));
+  }
+  browser("set", "viewport", "390", "844");
+  browser("click", ".crop-editor button[aria-label='ยกเลิก']");
+  assert(evaluate(`!document.querySelector('.crop-editor') && !document.querySelector('.accommodation-cover-picker img')`));
+  await chooseAccommodationImage();
+  browser("click", ".crop-editor .crop-apply");
+  browser("wait", ".accommodation-cover-picker.has-image img");
+  browser("wait", "--fn", "document.querySelector('.accommodation-cover-picker img')?.naturalWidth === 640");
+  assert(evaluate(`!document.querySelector('.crop-editor') && document.querySelector('.accommodation-cover-picker img').naturalWidth === 640`));
+  console.log("PASS: accommodation image crop is 1:1, cancel preserves previous image, and cropped preview is 640px square");
   assert.equal(evaluate('document.querySelector("#accommodation-booking-url").value'),input.bookingUrl);
   assert.equal(evaluate('document.querySelector("#expense-paid-by").value'),`member:${owner}`);
   for (const width of [320,390,768]) {
@@ -64,6 +86,13 @@ try {
   assert.equal(linked[0].paidBy.id,member);
   const saved=await (await api(`/api/trips/${trip}/accommodations`)).json();
   assert.equal(saved[0].paid_by.id,member);
+  assert(saved[0].image_url);
+  croppedUploadFilename = saved[0].image_url.split("/").pop();
+  const croppedBytes = Buffer.from(await (await api(saved[0].image_url)).arrayBuffer());
+  const croppedMeta = await sharp(croppedBytes).metadata();
+  assert.equal(croppedMeta.width, 640);
+  assert.equal(croppedMeta.height, 640);
+  assert(croppedBytes.length < 1.2 * 1024 * 1024);
   console.log("PASS: shared 50/50 fields and guest dropdown fit 320/390/768px; browser save updates linked payer");
   await db.query("INSERT INTO user_favorite_accommodations(user_id,accommodation_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[owner,hotel.id]);
   browser("open",base);
@@ -104,5 +133,6 @@ try {
   try { browser("close"); } catch {}
   await db.query("DELETE FROM trips WHERE id=$1",[trip]);
   await db.query("DELETE FROM users WHERE id=ANY($1::uuid[])",[[owner,member]]);
+  if (/^[a-f0-9-]+\.(jpg|png|webp)$/.test(croppedUploadFilename)) execFileSync("docker", ["exec", "bn-trip-app-1", "rm", "--", `/app/uploads/${croppedUploadFilename}`]);
   await db.end();
 }

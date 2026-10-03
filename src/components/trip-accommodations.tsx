@@ -25,7 +25,8 @@ import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionEmpty } from "@/src/components/trip-section-empty";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
-import { compressImageFile } from "@/src/lib/client-image-compression";
+import { compressImageFile, MAX_SOURCE_IMAGE_BYTES } from "@/src/lib/client-image-compression";
+import { SquareImageCropper } from "@/src/components/square-image-cropper";
 import {
   accommodationResourceKey,
   invalidateClientResource,
@@ -465,6 +466,7 @@ export function TripAccommodations({
   );
   const [paymentSource, setPaymentSource] = useState("cash");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageToCrop, setImageToCrop] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [imageRemoved, setImageRemoved] = useState(false);
@@ -655,19 +657,31 @@ export function TripAccommodations({
     [imagePreview],
   );
   function selectAccommodationImage(file: File | null) {
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("รองรับเฉพาะ JPG, PNG และ WebP");
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+      setError("รูปต้นฉบับต้องมีขนาดไม่เกิน 20 MB");
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
+    setError("");
+    setImageToCrop(file);
+  }
+  function applyAccommodationCrop(file: File) {
     setImageFile(file);
     setImageRemoved(false);
-    setImagePreview(
-      file
-        ? URL.createObjectURL(file)
-        : editing && editing !== "new"
-          ? editing.image_url || ""
-          : "",
-    );
+    setImagePreview(URL.createObjectURL(file));
     setImagePreviewOpen(false);
+    setImageToCrop(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
   }
   function removeAccommodationImage() {
     setImageFile(null);
+    setImageToCrop(null);
     setImagePreview("");
     setImagePreviewOpen(false);
     setImageRemoved(true);
@@ -687,6 +701,7 @@ export function TripAccommodations({
     setBookingPlatform("agoda");
     setPaymentSource("cash");
     setImageFile(null);
+    setImageToCrop(null);
     setImagePreview("");
     setImageRemoved(false);
     setImageRemovalPending(false);
@@ -737,6 +752,7 @@ export function TripAccommodations({
     setBookingPlatform(item.booking_platform || "");
     setPaymentSource(item.credit_card_id || "cash");
     setImageFile(null);
+    setImageToCrop(null);
     setImagePreview(item.image_url || "");
     setImagePreviewOpen(false);
     setImageRemoved(false);
@@ -1057,7 +1073,7 @@ export function TripAccommodations({
           <div className="form-grid">
                 <section className="accommodation-image-field">
                   <div><strong>รูปที่พัก</strong><small>ไม่บังคับ · หากไม่เพิ่มจะแสดงรูปเริ่มต้น</small></div>
-                  <div className={`cover-picker accommodation-cover-picker ${imagePreview ? "has-image" : ""}`}>
+                  <div className={`cover-picker square-picker accommodation-cover-picker ${imagePreview ? "has-image" : ""}`}>
                     <div className={`upload-field cover-upload ${imagePreview ? "selected" : ""}`}>
                       <button
                         type="button"
@@ -1074,7 +1090,7 @@ export function TripAccommodations({
                         aria-label={imagePreview ? "เลือกรูปที่พักใหม่" : "เลือกไฟล์รูปที่พัก"}
                       >
                         <strong>{imagePreview ? <><CheckCircle2 size={15} />เลือกรูปแล้ว</> : "เพิ่มรูปที่พัก"}</strong>
-                        <small>{imagePreview ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะด้านนี้เพื่อเลือกรูปใหม่" : "เลือกภาพสำหรับใช้เป็นรูปที่พัก · รองรับ JPG, PNG และ WebP"}</small>
+                        <small>{imagePreview ? "พร้อมอัปโหลดเมื่อกดบันทึก · แตะด้านนี้เพื่อเลือกและครอบรูปใหม่" : "เลือกภาพ แล้วจัดตำแหน่งในกรอบสี่เหลี่ยมจัตุรัส · JPG, PNG, WebP"}</small>
                       </button>
                       <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectAccommodationImage(event.target.files?.[0] || null)} />
                     </div>
@@ -1376,6 +1392,7 @@ export function TripAccommodations({
           closeLabel="ปิดรูปที่พัก"
         />
       )}
+      {imageToCrop && <SquareImageCropper file={imageToCrop} onApply={applyAccommodationCrop} onClose={() => { setImageToCrop(null); if (imageInputRef.current) imageInputRef.current.value = ""; }} />}
     </section>
   );
 }
