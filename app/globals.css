@@ -3355,6 +3355,14 @@ button:disabled {
   gap: 8px;
 }
 .trip-directory-search { margin: 0; }
+.trip-sort-options { display:grid;gap:8px;padding:2px 0 12px; }
+.modal-backdrop > .modal.bottom-sheet.trip-sort-sheet { height:auto;max-height:85dvh; }
+.trip-sort-options button { display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:12px;border:1px solid var(--line-strong);border-radius:14px;background:var(--surface-2);color:var(--ink);text-align:left; }
+.trip-sort-options strong { display:block;font-size:14px;line-height:1.6; }
+.trip-sort-options small { display:block;font-size:11px;line-height:1.6;color:var(--muted); }
+.trip-sort-options button > svg { flex-shrink:0;visibility:hidden; }
+.trip-sort-options button.active { border-color:var(--orange);background:var(--brand-soft); }
+.trip-sort-options button.active > svg { visibility:visible;color:var(--orange); }
 .trip-directory-filter-toggle {
   position: relative;
   width: 44px;

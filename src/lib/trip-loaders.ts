@@ -672,7 +672,9 @@ export async function loadTripDirectory(
   appendTripSearch(statusCountWhere, statusCountValues, search);
   appendTripMemberFilter(statusCountWhere, statusCountValues, parseMemberFilter(params.getAll("member").join(","), session.userId));
   const order =
-    sort === "oldest"
+    sort === "newest" ? "t.start_date DESC,t.id DESC"
+    : sort === "rating" ? "review_average DESC NULLS LAST,review_count DESC,t.start_date DESC,t.id DESC"
+    : sort === "oldest"
       ? "t.start_date ASC,t.id ASC"
       : sort === "name"
         ? "t.name ASC,t.id ASC"

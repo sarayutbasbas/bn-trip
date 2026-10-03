@@ -42,6 +42,8 @@ import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
 import { TripFavoriteButton } from "@/src/components/trip-favorite-button";
+import { ArrowDownUp } from "lucide-react";
+import { TRIP_SORT_OPTIONS, normalizeTripSort } from "@/src/lib/trip-sort";
 import { tripDaysUntilLabel } from "@/src/lib/trip-countdown";
 import { tripWeekdayLabel } from "@/src/lib/trip-weekday";
 import { TripNoteField } from "@/src/components/trip-note-field";
@@ -3801,7 +3803,8 @@ function TripsDirectory({
   const [draftMembers, setDraftMembers] = useState(selectedMembers);
   const [filterMembers, setFilterMembers] = useState<TripFilterMember[]>(initialData?.filterMembers || []);
   const [queryText, setQueryText] = useState(initialFilters.q || "");
-  const sort = "latest";
+  const [sort, setSort] = useState(() => normalizeTripSort(initialFilters.sort));
+  const [sortOpen, setSortOpen] = useState(false);
   const [items, setItems] = useState<Trip[]>(() =>
     applyCachedTripReviewSummaries(initialData?.items || []),
   );
@@ -3833,7 +3836,7 @@ function TripsDirectory({
   useEffect(() => () => loadMoreControllerRef.current?.abort(), []);
   const lastRestoreRefreshRef = useRef(0);
   const restoredFocusRef = useRef(false);
-  useEffect(()=>{if(!filtersOpen)return;const root=document.documentElement;root.classList.add("confirm-open");return()=>root.classList.remove("confirm-open")},[filtersOpen]);
+  useEffect(()=>{if(!filtersOpen&&!sortOpen)return;const root=document.documentElement;root.classList.add("confirm-open");return()=>root.classList.remove("confirm-open")},[filtersOpen,sortOpen]);
   const focusTripId = /^[0-9a-f-]{36}$/i.test(initialFilters.focus)
     ? initialFilters.focus
     : "";
@@ -4079,7 +4082,7 @@ function TripsDirectory({
     {value:"international",label:"ต่างประเทศ",Icon:Globe2},
   ];
   const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0||selectedMembers.length>0;
-  const firstPastTripIndex = status === "all"
+  const firstPastTripIndex = status === "all" && sort === "latest"
     ? items.findIndex((trip) => tripTemporalStatus(trip, now).past)
     : -1;
   return (
@@ -4107,8 +4110,16 @@ function TripsDirectory({
             )}
           </label>
           <button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setDraftMembers([...selectedMembers]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label={t("กำลังใช้ตัวกรอง")}/>:null}</button>
+          <button className={`trip-directory-filter-toggle ${sortOpen || sort !== "latest" ? "active" : ""}`} type="button" onClick={() => setSortOpen(true)} aria-expanded={sortOpen} aria-label={t("เรียงลำดับทริป")} title={t("เรียงลำดับทริป")}><ArrowDownUp size={21}/>{sort !== "latest" && <i className="notification-dot trip-directory-filter-dot" aria-label={t("กำลังใช้การเรียงลำดับ")}/>}</button>
           <button className="trip-directory-add-button" type="button" onClick={createTrip} aria-label={t("สร้างทริปใหม่")} title={t("สร้างทริปใหม่")}><Plus size={21}/></button>
       </div>
+      {sortOpen && <BottomSheet className="trip-sort-sheet" title={t("เรียงลำดับทริป")} subtitle={t("เลือกแล้วแสดงผลทันที โดยใช้ตัวกรองเดิมของคุณ")} onClose={() => setSortOpen(false)}>
+        <div className="trip-sort-options" role="group" aria-label={t("วิธีเรียงลำดับทริป")}>
+          {TRIP_SORT_OPTIONS.map(option => <button type="button" key={option.value} className={sort === option.value ? "active" : ""} aria-pressed={sort === option.value} onClick={() => { setSort(option.value); setSortOpen(false); }}>
+            <span><strong>{t(option.label)}</strong><small>{t(option.description)}</small></span><CheckCircle2 size={20} aria-hidden="true"/>
+          </button>)}
+        </div>
+      </BottomSheet>}
       {filtersOpen&&(
         <BottomSheet
           title={t("เลือกตัวกรองทริป")}
