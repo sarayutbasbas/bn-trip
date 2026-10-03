@@ -9,7 +9,7 @@ import { clearFirstItineraryTransport } from "@/src/lib/itinerary-order";
 import { syncAccommodationCostsFromItineraries } from "@/src/lib/accommodation-linked-records";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { linkedExpenseIds } from "@/src/lib/linked-expense";
-import { deleteUpload,uploadFilenameFromUrl } from "@/src/lib/storage";
+import { recordImages, scheduleUnusedImageCleanup } from "@/src/lib/unused-images";
 
 const schema=z.object({
   dayNumber:z.number().int().min(1),
@@ -82,7 +82,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
         ORDER BY candidate.updated_at DESC,candidate.id LIMIT 1
       ) address_accommodation ON true
       WHERE i.id=$1`,[id]);await logTripActivity({tripId:existing.trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"update",summary:`แก้ไขแผน “${x.placeName}”`,before:current.rows[0],after:saved.rows[0]});
-    if(hasImageUrl&&existing.image_url&&existing.image_url!==saved.rows[0]?.image_url){const filename=uploadFilenameFromUrl(existing.image_url);if(filename)await deleteUpload(filename).catch(error=>console.error("Delete replaced itinerary image failed",{filename,error}));}
+    if(hasImageUrl) scheduleUnusedImageCleanup(recordImages(existing),recordImages(saved.rows[0]));
     return NextResponse.json({...saved.rows[0],linked_cost_item_ids});
   }catch{return NextResponse.json({error:"ข้อมูลรายการไม่ถูกต้อง"},{status:400});}
 }
@@ -95,5 +95,5 @@ export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){
   const {id}=await params;
   const trip=await query<{trip_id:string;day_number:number}>("SELECT trip_id,day_number FROM itineraries WHERE id=$1",[id]);const role=trip.rows[0]?await getTripRole(trip.rows[0].trip_id,session.userId):null;if(role!=="owner"&&role!=="admin")return NextResponse.json({error:"สิทธิ์ View ไม่มีสิทธิลบรายการ"},{status:403});
   const result=await query<{image_url:string|null;place_name:string}&Record<string,unknown>>("DELETE FROM itineraries WHERE id=$1 RETURNING *",[id]);
-  if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await clearFirstItineraryTransport(trip.rows[0].trip_id,[trip.rows[0].day_number]);await syncAccommodationCostsFromItineraries(trip.rows[0].trip_id);await logTripActivity({tripId:trip.rows[0].trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"delete",summary:`ลบแผน “${result.rows[0].place_name}”`,before:result.rows[0]});const filename=uploadFilenameFromUrl(result.rows[0].image_url);if(filename)await deleteUpload(filename).catch(error=>console.error("Delete itinerary image failed",{filename,error}));return NextResponse.json({ok:true});
+  if(!result.rows[0])return NextResponse.json({error:"Not found"},{status:404});await clearFirstItineraryTransport(trip.rows[0].trip_id,[trip.rows[0].day_number]);await syncAccommodationCostsFromItineraries(trip.rows[0].trip_id);await logTripActivity({tripId:trip.rows[0].trip_id,actorUserId:session.userId,entityType:"itinerary",entityId:id,action:"delete",summary:`ลบแผน “${result.rows[0].place_name}”`,before:result.rows[0]});scheduleUnusedImageCleanup(recordImages(result.rows[0]));return NextResponse.json({ok:true});
 }

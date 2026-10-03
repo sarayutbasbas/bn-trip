@@ -3,15 +3,17 @@ import { Pool, type PoolClient, type QueryResultRow } from "pg";
 const globalForDb = globalThis as unknown as { bnTripPool?: Pool };
 
 const isServerless = Boolean(process.env.VERCEL);
-const configuredMax = Number(process.env.DATABASE_POOL_MAX ?? (isServerless ? 1 : 10));
+const configuredMax = Number(process.env.DATABASE_POOL_MAX ?? (isServerless ? 4 : 10));
 
 export const pool = globalForDb.bnTripPool ?? new Pool({
   connectionString: process.env.DATABASE_URL ?? "postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip",
   max: Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 1,
   allowExitOnIdle: isServerless,
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 30_000,
 });
 
-if (process.env.NODE_ENV !== "production") globalForDb.bnTripPool = pool;
+globalForDb.bnTripPool = pool;
 
 export async function query<T extends QueryResultRow>(text: string, values: unknown[] = []) {
   return pool.query<T>(text, values);

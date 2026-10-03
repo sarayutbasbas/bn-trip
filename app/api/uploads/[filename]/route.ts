@@ -15,7 +15,7 @@ export async function GET(request:Request,{params}:{params:Promise<{filename:str
     const result=await readUpload(filename,width?undefined:request.headers.get("if-none-match")??undefined);
     if(!result)return NextResponse.json({error:"Not found"},{status:404});
     const headers:Record<string,string>={
-      "Cache-Control":width?"private, max-age=31536000, immutable":"private, no-cache",
+      "Cache-Control":"private, max-age=31536000, immutable",
       "Content-Type":width?"image/webp":result.contentType??mime[filename.split(".").pop()!],
       "X-Content-Type-Options":"nosniff",
     };

@@ -21,15 +21,25 @@ try{
   browser('set','viewport','390','844');browser('open',`${base}/trips/${trips[0].id}`);browser('wait','.trip-cover-actions');
   for(const width of [320,390,430]){
     browser('set','viewport',String(width),'844');
-    assert(evaluate(`(()=>{const plan=document.querySelector('.trip-cover-actions [aria-label="แพลนเที่ยว"]'),edit=document.querySelector('.trip-cover-actions [aria-label="แก้ไข"]'),back=document.querySelector('.trip-cover-back');const p=plan.getBoundingClientRect(),e=edit.getBoundingClientRect(),b=back.getBoundingClientRect();return p.width===b.width&&p.height===b.height&&p.top===e.top&&p.right<=e.left&&e.right<=innerWidth})()`));
+    assert(evaluate(`(()=>{const fav=document.querySelector('.trip-cover-favorite'),edit=document.querySelector('.trip-cover-actions [aria-label="แก้ไข"]'),back=document.querySelector('.trip-cover-back');const p=fav.getBoundingClientRect(),e=edit.getBoundingClientRect(),b=back.getBoundingClientRect();return p.width===b.width&&p.height===b.height&&p.top===e.top&&p.right<=e.left&&e.right<=innerWidth&&getComputedStyle(fav).backgroundColor===getComputedStyle(edit).backgroundColor&&!document.querySelector('.trip-cover-actions [aria-label="แพลนเที่ยว"]')})()`));
   }
-  browser('click','.trip-cover-actions [aria-label="แพลนเที่ยว"]');browser('wait','.attachment-preview-overlay');
+  browser('click','.trip-menu-more');browser('wait','.trip-menu-sheet');
+  browser('click','.trip-menu-sheet .trip-menu-plan-image');browser('wait','.attachment-preview-overlay');
   assert(evaluate(`document.querySelector('.attachment-preview-overlay img').getAttribute('src').includes('travel-postcard-background')`));
   browser('click','.attachment-preview-overlay [aria-label="ปิดรูป"]');
   assert(evaluate(`!document.querySelector('.attachment-preview-overlay')`));
-  browser('click','.trip-menu-more');browser('wait','.trip-menu-sheet');
-  assert(evaluate(`!document.querySelector('.trip-menu-sheet').textContent.includes('แพลนเที่ยว')`));
+  if(process.env.CROP_BROWSER==='1'){
+    browser('set','viewport','390','844');
+    browser('click','.trip-cover-actions [aria-label="แก้ไข"]');browser('wait','.trip-cover-picker');
+    browser('upload','.trip-cover-picker input[type="file"]',`${process.cwd()}/public/travel-postcard-background.jpg`);
+    browser('wait','.trip-crop-guide');
+    assert(evaluate(`(()=>{const icons=[...document.querySelectorAll('.trip-crop-guide-actions i')],back=document.querySelector('.trip-crop-guide-nav>i');return icons.length===3&&icons.every(i=>i.getBoundingClientRect().width===back.getBoundingClientRect().width)&&!document.querySelector('.trip-crop-guide-actions .lucide-image')})()`));
+    browser('screenshot','/tmp/bn-trip-crop-refreshed.png');
+    console.log('PASS crop mock has matching glass favorite/invite/edit and no plan image action');
+  }
   browser('open',`${base}/trips/${trips[1].id}`);browser('wait','.trip-cover-actions');
   assert(evaluate(`!document.querySelector('.trip-cover-actions [aria-label="แพลนเที่ยว"]')`));
-  console.log('PASS cover plan conditional button, mobile alignment, viewer open/close, removed from All menu');
+  browser('click','.trip-menu-more');browser('wait','.trip-menu-sheet');
+  assert(evaluate(`!document.querySelector('.trip-menu-sheet .trip-menu-plan-image')`));
+  console.log('PASS matching glass/size at 320/390/430px, plan moved to All menu, viewer open/close, absent without image');
 }finally{try{browser('close')}catch{}await db.query('DELETE FROM users WHERE id=$1',[id]);await db.end()}

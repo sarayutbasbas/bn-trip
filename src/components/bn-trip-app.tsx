@@ -4217,7 +4217,6 @@ function TripHeader({
   editTrip?: () => void;
 }) {
   const t = useT();
-  const [planImageOpen, setPlanImageOpen] = useState(false);
   const now = useMinuteClock();
   const ended = tripHasEnded(trip, now);
   const temporal = tripTemporalStatus(trip, now);
@@ -4234,11 +4233,8 @@ function TripHeader({
           <ChevronLeft size={21} />
         </button>
       )}
-      {(toggleFavorite || editTrip || trip.summary_image_url || ((trip.access_role === "owner" || trip.access_role === "admin") && manageMembers)) && (
+      {(toggleFavorite || editTrip || ((trip.access_role === "owner" || trip.access_role === "admin") && manageMembers)) && (
         <div className="trip-cover-actions">
-          {trip.summary_image_url && <button type="button" onClick={() => setPlanImageOpen(true)} aria-label={t("แพลนเที่ยว")} title={t("แพลนเที่ยว")}>
-            <ImageIcon size={20} />
-          </button>}
           {toggleFavorite && <button type="button" className={`trip-cover-favorite${trip.is_favorite ? " is-favorite" : ""}`} disabled={favoriteBusy} onClick={toggleFavorite} aria-pressed={Boolean(trip.is_favorite)} aria-label={trip.is_favorite ? "นำออกจากทริปที่ติดดาว" : "ติดดาวทริปนี้"}><Heart size={16} fill={trip.is_favorite ? "currentColor" : "none"} /></button>}
           {(trip.access_role === "owner" || trip.access_role === "admin") && manageMembers && <button type="button" onClick={manageMembers} aria-label={t("เชิญเพื่อนร่วมทริป")} title={t("เชิญเพื่อนร่วมทริป")}>
             <UserPlus size={20} />
@@ -4283,13 +4279,6 @@ function TripHeader({
           variant="header"
           showEmpty
           onClick={openReviews}
-        />
-      )}
-      {planImageOpen && trip.summary_image_url && (
-        <AttachmentPreviewOverlay
-          preview={{ url: trip.summary_image_url, title: t("แพลนเที่ยว"), mimeType: "image/jpeg" }}
-          onClose={() => setPlanImageOpen(false)}
-          closeLabel={t("ปิดรูป")}
         />
       )}
     </div>
@@ -4364,6 +4353,7 @@ function TripSectionNav({
 }) {
   const t = useT();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [planImageOpen, setPlanImageOpen] = useState(false);
   const [confirmDownload, setConfirmDownload] = useState(false);
   const [downloadFile, setDownloadFile] = useState<File | null>(null);
   const [downloadError, setDownloadError] = useState("");
@@ -4421,6 +4411,7 @@ function TripSectionNav({
     { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", availableInTrip: trip.country_code !== "TH", hasNotification: completion.insuranceIncomplete, active: active === "insurance", action: () => select("insurance") },
     { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
     { id: "export", label: "Download", Icon: Download, action: () => setConfirmDownload(true) },
+    ...(trip.summary_image_url ? [{ id: "plan-image", label: "แพลนเที่ยว", Icon: ImageIcon, action: () => setPlanImageOpen(true) }] : []),
   ];
   const primary = sections
     .filter(({ availableInTrip }) => availableInTrip !== false)
@@ -4460,6 +4451,13 @@ function TripSectionNav({
             </div>
           </section>
         </div>, document.body)}
+      {planImageOpen && trip.summary_image_url && (
+        <AttachmentPreviewOverlay
+          preview={{ url: trip.summary_image_url, title: t("แพลนเที่ยว"), mimeType: "image/jpeg" }}
+          onClose={() => setPlanImageOpen(false)}
+          closeLabel={t("ปิดรูป")}
+        />
+      )}
       {(confirmDownload || downloadFile) && (
         <ConfirmDialog
           key={downloadFile ? "save-plan" : "prepare-plan"}
@@ -7921,7 +7919,7 @@ export function CoverImagePicker({
             onPointerCancel={endMove}
           />
           {cover && showCoverGuide ? <div className="trip-crop-guide" aria-hidden="true">
-            <div className="trip-crop-guide-nav"><i><ChevronLeft size={21} /></i><div className="trip-crop-guide-actions"><i><ImageIcon size={20} /></i><i className="trip-crop-guide-favorite"><Heart size={16} fill="currentColor" /></i><i><UserPlus size={20} /></i><i><Pencil size={20} /></i></div></div>
+            <div className="trip-crop-guide-nav"><i><ChevronLeft size={21} /></i><div className="trip-crop-guide-actions"><i className="trip-crop-guide-favorite"><Heart size={20} fill="currentColor" /></i><i><UserPlus size={20} /></i><i><Pencil size={20} /></i></div></div>
             <div className="trip-crop-guide-copy">
               <TripCountdownBadge label="อีก 105 วัน" />
               <strong>ทดสอบชื่อทริปยาวสองบรรทัด เพื่อทดสอบการแสดงรูป</strong>

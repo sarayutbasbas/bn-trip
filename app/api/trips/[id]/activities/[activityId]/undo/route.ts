@@ -3,7 +3,7 @@ import { getSession } from "@/src/lib/auth";
 import { transaction } from "@/src/lib/db";
 import { getTripRole } from "@/src/lib/trip-access";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
-import { deleteUpload } from "@/src/lib/storage";
+import { deleteUpload, uploadFilenameFromUrl, uploadFileSize } from "@/src/lib/storage";
 
 type Activity={id:string;trip_id:string;entity_type:string;entity_id:string|null;action:string;before_data:Record<string,unknown>|null;after_data:Record<string,unknown>|null;created_at:string;undone_at:string|null};
 
@@ -12,6 +12,22 @@ export async function POST(_:Request,{params}:{params:Promise<{id:string;activit
   await ensureLatestDatabaseSchema();const {id,activityId}=await params;const role=await getTripRole(id,session.userId);if(role!=="owner"&&role!=="admin")return NextResponse.json({error:"สิทธิ์ Admin หรือเจ้าของทริปเท่านั้นที่ย้อนคืนประวัติได้"},{status:403});
   try{const deletedFile=await transaction(async client=>{let fileToDelete:{filename:string;blobUrl:string|null}|null=null;const found=await client.query<Activity>(`SELECT * FROM trip_activity_logs activity WHERE id=$1 AND trip_id=$2 AND created_at>=now()-interval '180 days'
       AND (SELECT COUNT(*) FROM trip_activity_logs newer WHERE newer.trip_id=activity.trip_id AND newer.created_at>activity.created_at)<500 FOR UPDATE`,[activityId,id]);const activity=found.rows[0];if(!activity||activity.undone_at)throw new Error("undo_unavailable");const before=activity.before_data;const after=activity.after_data;const entityId=activity.entity_id;
+    // Replaced uploads are permanently removed. Undo text/data without resurrecting
+    // a URL to a deleted image; retain the current image on updates instead.
+    if(before && entityId){
+      for(const key of ["image_url","cover_image_url"]){
+        const url=before[key];
+        if(typeof url!=="string"||!uploadFilenameFromUrl(url)||await uploadFileSize(url)!==null)continue;
+        before[key]=null;
+        if(activity.action==="update"&&activity.entity_type==="itinerary"&&key==="image_url"){
+          const current=await client.query("SELECT image_url FROM itineraries WHERE id=$1 AND trip_id=$2",[entityId,id]);
+          before[key]=current.rows[0]?.image_url??null;
+        }else if(activity.action==="update"&&activity.entity_type==="trip"&&key==="cover_image_url"){
+          const current=await client.query("SELECT cover_image_url FROM trips WHERE id=$1",[id]);
+          before[key]=current.rows[0]?.cover_image_url??null;
+        }
+      }
+    }
     if(activity.entity_type==="itinerary"&&entityId){
       if(activity.action==="create")await client.query("DELETE FROM itineraries WHERE id=$1 AND trip_id=$2",[entityId,id]);
       else if(activity.action==="update"&&before)await client.query(`UPDATE itineraries SET day_number=$1,time_slot=$2,start_time=$3,place_name=$4,address=$5,image_url=$6,transport_mode=$7,transport_note=$8,cost_items=$9::jsonb,sort_order=$10,image_added_at=CASE WHEN $6::text IS NULL THEN NULL ELSE COALESCE($13::timestamptz,image_added_at,now()) END,updated_at=now() WHERE id=$11 AND trip_id=$12`,[before.day_number,before.time_slot,before.start_time,before.place_name,before.address,before.image_url,before.transport_mode,before.transport_note,JSON.stringify(before.cost_items||[]),before.sort_order,entityId,id,before.image_added_at||null]);

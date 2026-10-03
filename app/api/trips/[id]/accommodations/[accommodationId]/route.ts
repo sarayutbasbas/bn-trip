@@ -6,6 +6,7 @@ import { query, transaction } from "@/src/lib/db";
 import { getTripRole, tripCardIdsAreMembers, tripMemberIdsAreMembers, tripExpenseGuestIdsBelongToTrip } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
 import { accommodationSchema } from "@/src/lib/accommodation-validation";
+import { recordImages, scheduleUnusedImageCleanup } from "@/src/lib/unused-images";
 import { removeAccommodationLinkedRecords, syncAccommodationLinkedRecords } from "@/src/lib/accommodation-linked-records";
 
 const selectAccommodation = `SELECT accommodation.*,
@@ -52,6 +53,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     });
     const result = await query(`${selectAccommodation} WHERE accommodation.id=$1 AND accommodation.trip_id=$2`, [accommodationId, id, session.userId]);
     await logTripActivity({ tripId: id, actorUserId: session.userId, entityType: "accommodation", entityId: accommodationId, action: "update", summary: `แก้ไขที่พัก “${input.name}”`, before: before.rows[0], after: result.rows[0] });
+    scheduleUnusedImageCleanup(recordImages(before.rows[0]),recordImages(result.rows[0]));
     return NextResponse.json(result.rows[0]);
   } catch (error) {
     console.error("update accommodation failed", error);
@@ -75,5 +77,6 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     await client.query("DELETE FROM trip_accommodations WHERE id=$1 AND trip_id=$2", [accommodationId, id]);
   });
   await logTripActivity({ tripId: id, actorUserId: session.userId, entityType: "accommodation", entityId: accommodationId, action: "delete", summary: `ลบที่พัก “${before.rows[0].name}”`, before: before.rows[0] });
+  scheduleUnusedImageCleanup(recordImages(before.rows[0]));
   return NextResponse.json({ ok: true });
 }

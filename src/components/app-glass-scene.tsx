@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { LiquidGlassScene } from "simple-liquid-glass/backdrop";
 import { AppBottomNavigation } from "@/src/components/app-bottom-navigation";
 import { IosNavigationMotion } from "@/src/components/ios-navigation-motion";
 
@@ -97,9 +96,9 @@ export function AppGlassScene({
   }, []);
 
   return (
-    <LiquidGlassScene className="app-glass-scene" maxCacheBytes={48 * 1024 * 1024}>
+    <div className="app-glass-scene">
       <div className="app-glass-scene-content"><IosNavigationMotion>{children}</IosNavigationMotion></div>
       <AppBottomNavigation />
-    </LiquidGlassScene>
+    </div>
   );
 }
