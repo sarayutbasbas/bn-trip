@@ -42,6 +42,7 @@ import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
 import { tripDaysUntilLabel } from "@/src/lib/trip-countdown";
+import { tripWeekdayLabel } from "@/src/lib/trip-weekday";
 import { TripNoteField } from "@/src/components/trip-note-field";
 import { TripImportSettings } from "@/src/components/trip-import-settings";
 import { BadgeHighlightSkeleton } from "@/src/components/badge-skeleton";
@@ -2086,14 +2087,17 @@ function addDays(dateValue: string, days: number) {
     .toISOString()
     .slice(0, 10);
 }
-function tripDayLabel(dateValue: string, day: number) {
+function tripDayLabel(dateValue: string, day: number, withWeekday = false) {
   const value = addDays(dateValue, day - 1);
-  return value
+  const label = value
     ? new Date(`${value}T00:00:00`).toLocaleDateString(
         activeLang === "EN" ? "en-GB" : "th-TH",
         { day: "numeric", month: "short", year: "2-digit" },
       )
     : "";
+  return label && withWeekday
+    ? `${tripWeekdayLabel(dateValue, day, activeLang)} ${label}`
+    : label;
 }
 function displayTripDay(
   trip: Pick<Trip, "has_day_zero"> | null | undefined,
@@ -4931,7 +4935,7 @@ function TimelineDayShortcuts({
             if (window.scrollY > dayStart) window.scrollTo(0, Math.max(0, dayStart));
           }}
         >
-          <small>{t("วัน")}</small>
+          <small>{tripWeekdayLabel(localDate(trip.outbound_departure_at, trip.start_date), number, activeLang)}</small>
           <strong>{displayTripDay(trip, number)}</strong>
         </button>
       ))}
@@ -5249,7 +5253,7 @@ function TripHub({
               trip={trip}
               day={day}
               setDay={setDay}
-              dateLabel={tripDayLabel(baseDate, day)}
+              dateLabel={tripDayLabel(baseDate, day, true)}
               itemCount={(itinerariesByDay.get(day) || EMPTY_ITINERARIES).length}
               dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
               swapDay={trip.access_role === "view" ? undefined : swapDay}
@@ -5687,7 +5691,7 @@ function TimelineScreen({
           trip={trip}
           day={day}
           setDay={setDay}
-          dateLabel={tripDayLabel(baseDate, day)}
+          dateLabel={tripDayLabel(baseDate, day, true)}
           itemCount={(itinerariesByDay.get(day) || EMPTY_ITINERARIES).length}
           dayCounts={new Map([...itinerariesByDay].map(([number, entries]) => [number, entries.filter((entry) => !entry.accommodation_id).length]))}
           swapDay={trip.access_role === "view" ? undefined : swapDay}
