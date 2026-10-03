@@ -9,6 +9,7 @@ const base = "http://localhost:8001";
 const db = new Pool({ connectionString: "postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip" });
 const owner = randomUUID(), member = randomUUID(), stranger = randomUUID();
 const trip = randomUUID(), idea = randomUUID();
+const homeTrips = Array.from({ length: 7 }, () => randomUUID());
 const people = [owner, member, stranger].map((id) => ({ id, email: `favorite-${id}@example.invalid` }));
 const env = JSON.parse(execFileSync("docker", ["inspect", "bn-trip-app-1"], { encoding: "utf8" }))[0].Config.Env;
 const secret = env.find((value) => value.startsWith("AUTH_SECRET="))?.slice(12) || "dev-only-change-me-before-production";
@@ -50,8 +51,32 @@ try {
   assert.equal((await (await api(member, `/api/trips/${trip}`)).json()).is_favorite, true);
   assert.equal((await (await api(member, `/api/trip-ideas/${idea}`)).json()).is_favorite, true);
   assert.equal((await (await api(owner, "/api/trips?mode=list&status=favorite")).json()).statusCounts.favorite, 0);
+  for (const id of homeTrips) {
+    await db.query("INSERT INTO trips(id,owner_id,name,destination,start_date,total_days,country_code) VALUES($1,$2,'Old favorite fixture','Kyoto','2001-01-01',3,'JP')", [id, owner]);
+    await db.query("INSERT INTO user_favorite_trips(user_id,trip_id) VALUES($1,$2)", [owner, id]);
+  }
+  const dashboard = await (await api(owner, "/api/trips?mode=dashboard")).json();
+  assert.equal(dashboard.favoriteTrips.length, 6);
+  assert.equal(dashboard.favoriteTrips[0].favorite_total, 7);
+  assert(dashboard.favoriteTrips.every((item) => homeTrips.includes(item.id)));
+  if (process.env.FAVORITES_BROWSER === "1") {
+    const browser = (...args) => execFileSync("npx", ["--yes", "agent-browser", "--session", "favorite-home", ...args], { encoding: "utf8" });
+    try {
+      browser("set", "viewport", "390", "844");
+      browser("cookies", "set", "bn_trip_session", tokens.get(owner), "--url", base);
+      browser("open", base);
+      browser("wait", 'section[aria-label="ทริปที่ชื่นชอบ"]');
+      browser("scrollintoview", 'section[aria-label="ทริปที่ชื่นชอบ"]');
+      browser("screenshot", "/tmp/bn-trip-home-favorites.png");
+      const result = browser("eval", `(() => { const section = document.querySelector('section[aria-label="ทริปที่ชื่นชอบ"]'); if(section.querySelectorAll('.trip-card').length !== 6) throw new Error('Expected six cards'); if(section.querySelector('.trip-favorite-button')) throw new Error('Home must not have favorite controls'); section.querySelector('.section-view-all').click(); return true; })()`);
+      browser("wait", "--url", "**/trips?status=favorite");
+      console.log("PASS: mobile Home shows six cards without favorite controls and links to the favorite filter", result.trim());
+    } finally { browser("close"); }
+  }
   console.log("PASS: trip and idea favorites are private, persist, filter, and can be removed");
+  console.log("PASS: Home returns six favorite trips with the full count, including old trips");
 } finally {
+  await db.query("DELETE FROM trips WHERE id=ANY($1::uuid[])", [homeTrips]);
   await db.query("DELETE FROM trip_ideas WHERE id=$1", [idea]);
   await db.query("DELETE FROM trips WHERE id=$1", [trip]);
   await db.query("DELETE FROM users WHERE id=ANY($1::uuid[])", [people.map((person) => person.id)]);

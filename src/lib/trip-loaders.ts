@@ -37,6 +37,7 @@ export type DashboardPayload = {
   ongoing: unknown[];
   upcoming: unknown[];
   past: unknown[];
+  favoriteTrips: unknown[];
   favoriteAccommodations: FavoriteAccommodation[];
   tripIdeas: TripIdea[];
   counts: { total: number; ongoing: number; upcoming: number; past: number; countries?: number; destinations?: number; travel_days?: number; badges_unlocked?: number; badges_total?: number };
@@ -491,6 +492,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
     return {
       ...dashboard,
       favoriteAccommodations: [],
+      favoriteTrips: [],
       tripIdeas: tripIdeas.filter((idea) => idea.kind === "planned"),
       counts: {
         ...dashboard.counts,
@@ -509,7 +511,8 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
   const flightSummaries = tripFlightSummariesSql("t");
   const favorite = tripFavoriteSql("t");
   const destinationAccess = tripAccessSql("destination_trip");
-  const [ongoing, upcoming, past, favoriteAccommodations, counts, countries, destinations, tripIdeas] = await Promise.all([
+  const [favoriteTrips, ongoing, upcoming, past, favoriteAccommodations, counts, countries, destinations, tripIdeas] = await Promise.all([
+    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite},count(*) OVER()::int AS favorite_total FROM trips t JOIN user_favorite_trips f ON f.trip_id=t.id AND f.user_id=$1 WHERE ${access} ORDER BY f.favorited_at DESC,t.id LIMIT 6`, [session.userId]),
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC`, [session.userId]),
     query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 8`, [session.userId]),
@@ -591,6 +594,7 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
     ongoing: ongoing.rows,
     upcoming: upcoming.rows,
     past: past.rows,
+    favoriteTrips: favoriteTrips.rows,
     favoriteAccommodations: favoriteAccommodations.rows,
     tripIdeas: tripIdeas.filter((idea) => idea.kind === "planned"),
     counts: {

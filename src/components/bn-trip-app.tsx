@@ -276,6 +276,7 @@ type ExpenseGuest = {
   name: string;
 };
 export type Trip = {
+  favorite_total?: number;
   is_favorite?: boolean;
   collaborator_count?: number;
   cover_image_urls?: string[];
@@ -1335,6 +1336,7 @@ function useT() {
 let tripListCache: Trip[] | null = null;
 type DashboardSnapshot = {
   trips: Trip[];
+  favoriteTrips: Trip[];
   favoriteAccommodations: FavoriteAccommodation[];
   tripIdeas: TripIdea[];
   counts: DashboardCounts;
@@ -1348,6 +1350,7 @@ function forgetTripFromDashboardCache(tripId: string) {
     dashboardSnapshotCache = {
       ...dashboardSnapshotCache,
       trips,
+      favoriteTrips: dashboardSnapshotCache.favoriteTrips.filter((trip) => trip.id !== tripId),
       favoriteAccommodations: dashboardSnapshotCache.favoriteAccommodations.filter((hotel) => hotel.trip_id !== tripId),
       counts: {
         ...dashboardSnapshotCache.counts,
@@ -1403,6 +1406,7 @@ async function fetchFreshDashboardSnapshot(): Promise<DashboardSnapshot> {
   ];
   const snapshot: DashboardSnapshot = {
     trips,
+    favoriteTrips: data.favoriteTrips || [],
     favoriteAccommodations: data.favoriteAccommodations || [],
     tripIdeas: data.tripIdeas || [],
     counts: data.counts || {
@@ -3008,6 +3012,7 @@ function TravelBadgeProgressCard({
 
 function Dashboard({
   trips,
+  favoriteTrips,
   favoriteAccommodations,
   tripIdeas,
   counts,
@@ -3021,10 +3026,10 @@ function Dashboard({
   viewAnalytics,
   viewBadges,
   viewTripIdeas,
-  removeFavoriteAccommodation,
   notify,
 }: {
   trips: Trip[];
+  favoriteTrips: Trip[];
   favoriteAccommodations: FavoriteAccommodation[];
   tripIdeas: TripIdea[];
   counts: DashboardCounts;
@@ -3038,7 +3043,6 @@ function Dashboard({
   viewAnalytics: () => void;
   viewBadges: () => void;
   viewTripIdeas: () => void;
-  removeFavoriteAccommodation: (hotel: FavoriteAccommodation) => void;
   notify: (message: string) => void;
 }) {
   const t = useT();
@@ -3080,7 +3084,7 @@ function Dashboard({
         <TripCard
           key={trip.id}
           trip={trip}
-          past={isPast}
+          past={isPast || tripTemporalStatus(trip, now).past}
           now={now}
           selectTrip={selectTrip}
           manageCollaborators={manageCollaborators}
@@ -3302,6 +3306,18 @@ function Dashboard({
           <article className="card past-empty">{t("ยังไม่มีทริปที่เล็งไว้")}</article>
         )}
       </section>}
+      {favoriteTrips.length > 0 && <section className="dashboard-ideas-section" aria-label={t("ทริปที่ชื่นชอบ")}>
+        <div className="section-head">
+          <div className="section-title-row">
+            <h2><Heart size={18} fill="currentColor" />{t("ทริปที่ชื่นชอบ")}</h2>
+            <span className="section-trip-count">{favoriteTrips[0]?.favorite_total || favoriteTrips.length} {t("ทริป")}</span>
+          </div>
+          {(favoriteTrips[0]?.favorite_total || favoriteTrips.length) > 6 && <button type="button" className="section-view-all" onClick={() => viewAll("favorite")}>
+            {t("ดูทั้งหมด")}<ArrowRight size={14} />
+          </button>}
+        </div>
+        {cards(favoriteTrips.slice(0, 6), false, false, "upcoming")}
+      </section>}
       {favoriteAccommodations.length > 0 && (
         <section
           className="dashboard-favorite-hotels"
@@ -3341,13 +3357,6 @@ function Dashboard({
                   <small>{hotel.location || hotel.destination}</small>
                   <em>{hotel.trip_name}</em>
                 </Link>
-                <button
-                  type="button"
-                  className="dashboard-favorite-hotel-remove"
-                  onClick={() => removeFavoriteAccommodation(hotel)}
-                  aria-label={`นำ ${hotel.name} ออกจากโรงแรมที่ชื่นชอบ`}
-                  title="นำออกจากโรงแรมที่ชื่นชอบ"
-                ><Heart size={14} fill="currentColor" /></button>
               </article>
             ))}
           </div>
@@ -4040,6 +4049,7 @@ function TripsDirectory({
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "บันทึกรายการโปรดไม่สำเร็จ");
+      sessionStorage.setItem("bn-trip-favorites-changed", "1");
       if (tripListCache) tripListCache = tripListCache.map((item) => item.id === trip.id ? { ...item, is_favorite: favorite } : item);
       if (dashboardSnapshotCache) dashboardSnapshotCache = {
         ...dashboardSnapshotCache,
@@ -10223,6 +10233,7 @@ export function BNTripApp({
     ongoing: Trip[];
     upcoming: Trip[];
     past: Trip[];
+    favoriteTrips?: Trip[];
     favoriteAccommodations: FavoriteAccommodation[];
     tripIdeas: TripIdea[];
     counts: DashboardCounts;
@@ -10299,6 +10310,7 @@ export function BNTripApp({
       initialDashboard?.countryHighlights ||
       [],
   );
+  const [dashboardFavoriteTrips, setDashboardFavoriteTrips] = useState<Trip[]>(cachedDashboardSnapshot?.favoriteTrips || initialDashboard?.favoriteTrips || []);
   const [dashboardFavoriteAccommodations, setDashboardFavoriteAccommodations] = useState<FavoriteAccommodation[]>(
     cachedDashboardSnapshot?.favoriteAccommodations ||
       initialDashboard?.favoriteAccommodations ||
@@ -10337,6 +10349,7 @@ export function BNTripApp({
   }, [dashboardRefreshToken]);
   useEffect(() => {
     if (initialDashboard) {
+      setDashboardFavoriteTrips(dashboardSnapshotCache?.favoriteTrips || initialDashboard.favoriteTrips || []);
       setDashboardFavoriteAccommodations(
         dashboardSnapshotCache?.favoriteAccommodations || initialDashboard.favoriteAccommodations || [],
       );
@@ -10351,6 +10364,7 @@ export function BNTripApp({
       tripListCache = initialTrips;
       dashboardSnapshotCache = {
         trips: initialTrips,
+        favoriteTrips: initialDashboard.favoriteTrips || [],
         favoriteAccommodations: initialDashboard.favoriteAccommodations || [],
         tripIdeas: initialDashboard.tripIdeas || [],
         counts: initialDashboard.counts,
@@ -10478,6 +10492,7 @@ export function BNTripApp({
             },
           );
           setDashboardCountryHighlights(data.countryHighlights || []);
+          setDashboardFavoriteTrips(data.favoriteTrips || []);
           setDashboardFavoriteAccommodations(data.favoriteAccommodations || []);
           setDashboardTripIdeas(data.tripIdeas || []);
         } else if (tripId) {
@@ -10540,6 +10555,7 @@ export function BNTripApp({
         setTrips(snapshot.trips);
         setDashboardCounts(snapshot.counts);
         setDashboardCountryHighlights(snapshot.countryHighlights);
+        setDashboardFavoriteTrips(snapshot.favoriteTrips);
         setDashboardFavoriteAccommodations(snapshot.favoriteAccommodations);
         setDashboardTripIdeas(snapshot.tripIdeas);
         setDashboardRefreshToken((value) => value + 1);
@@ -10591,42 +10607,6 @@ export function BNTripApp({
   const flash = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(""), 2400);
-  };
-  const removeFavoriteAccommodation = async (hotel: FavoriteAccommodation) => {
-    const previousIndex = dashboardFavoriteAccommodations.findIndex((item) => item.id === hotel.id);
-    setDashboardFavoriteAccommodations((current) => current.filter((item) => item.id !== hotel.id));
-    if (dashboardSnapshotCache) {
-      dashboardSnapshotCache = {
-        ...dashboardSnapshotCache,
-        favoriteAccommodations: dashboardSnapshotCache.favoriteAccommodations.filter((item) => item.id !== hotel.id),
-      };
-    }
-    try {
-      const response = await fetch(`/api/trips/${hotel.trip_id}/accommodations/${hotel.id}/favorite`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ favorite: false }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "นำโรงแรมออกจากรายการโปรดไม่สำเร็จ");
-      invalidateClientResource(accommodationResourceKey(hotel.trip_id));
-      flash("นำออกจากโรงแรมที่ชื่นชอบแล้ว");
-    } catch (error) {
-      const restore = (current: FavoriteAccommodation[]) => {
-        if (current.some((item) => item.id === hotel.id)) return current;
-        const next = [...current];
-        next.splice(Math.max(0, Math.min(previousIndex, next.length)), 0, hotel);
-        return next;
-      };
-      setDashboardFavoriteAccommodations(restore);
-      if (dashboardSnapshotCache) {
-        dashboardSnapshotCache = {
-          ...dashboardSnapshotCache,
-          favoriteAccommodations: restore(dashboardSnapshotCache.favoriteAccommodations),
-        };
-      }
-      flash(error instanceof Error ? error.message : "นำโรงแรมออกจากรายการโปรดไม่สำเร็จ");
-    }
   };
   const toggleTheme = () => {
     const next = !dark;
@@ -11026,6 +11006,7 @@ export function BNTripApp({
   ) : page === "dashboard" ? (
     <Dashboard
       trips={trips}
+      favoriteTrips={dashboardFavoriteTrips}
       favoriteAccommodations={dashboardFavoriteAccommodations}
       tripIdeas={dashboardTripIdeas}
       counts={dashboardCounts}
@@ -11043,7 +11024,6 @@ export function BNTripApp({
       viewAnalytics={() => router.push("/analytics")}
       viewBadges={() => router.push("/analytics#travel-badges")}
       viewTripIdeas={() => router.push("/trip-ideas")}
-      removeFavoriteAccommodation={(hotel) => void removeFavoriteAccommodation(hotel)}
       notify={flash}
     />
   ) : page === "analytics" && initialAnalytics && initialBadges ? (

@@ -15,6 +15,7 @@ export function AuthenticatedDashboard({
     upcoming: Trip[];
     past: Trip[];
     favoriteAccommodations: FavoriteAccommodation[];
+    favoriteTrips?: Trip[];
     tripIdeas: TripIdea[];
     counts: DashboardCounts;
     countryHighlights: CountryHighlight[];

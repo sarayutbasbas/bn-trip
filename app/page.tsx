@@ -20,7 +20,7 @@ export default async function Home({searchParams}:{searchParams:Promise<{authErr
   if(!session)return <LoginScreen authError={authError}/>;
   const ideaId=typeof params.tripIdea==="string"?params.tripIdea:"";
   const [initialDashboard,idea]=await Promise.all([
-    loadDashboard(session) as Promise<DashboardPayload & {ongoing:Trip[];upcoming:Trip[];past:Trip[];counts:DashboardCounts}>,
+    loadDashboard(session) as Promise<DashboardPayload & {ongoing:Trip[];upcoming:Trip[];past:Trip[];favoriteTrips:Trip[];counts:DashboardCounts}>,
     ideaId?loadTripIdea(session,ideaId):Promise.resolve(null),
   ]);
   const initialTripPreset=idea?.kind==="planned"&&idea.target_year&&idea.target_month?{
