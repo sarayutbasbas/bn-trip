@@ -38,6 +38,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { PageIntro } from "@/src/components/page-intro";
+import { NavIcon } from "@/src/components/nav-icon";
 import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
@@ -3597,7 +3598,7 @@ function TravelAnalyticsDashboard({
   const badgeSection = <TravelBadgesPage collection={badges} embedded highlightScope={scope} progressCard={<TravelBadgeProgressCard unlocked={badges.badges.filter(badge => badge.unlocked).length} total={badges.badges.length} onClick={() => router.push(badgesHrefForScope(scope))} />} />;
   const analyticsHero = <PageIntro
     title={t("ความทรงจำของเรา")}
-    titleIcon={<Heart size={22} fill="currentColor" />}
+    titleIcon={<NavIcon name="stats" filled width={22} height={22} aria-hidden="true" />}
     subtitle={t("เก็บทุกการเดินทาง ให้เป็นเรื่องราวที่สวยงามเสมอ")}
   />;
 
@@ -4088,7 +4089,7 @@ function TripsDirectory({
   return (
     <>
       <div className="screen trips-directory">
-      <PageIntro title={t("ทริป")} titleIcon={<Heart size={22} fill="currentColor"/>} subtitle={t("เก็บทุกการเดินทาง ไว้ในที่เดียว")}/>
+      <PageIntro title={t("ทริป")} titleIcon={<NavIcon name="trip" filled width={22} height={22} aria-hidden="true" />} subtitle={t("เก็บทุกการเดินทาง ไว้ในที่เดียว")}/>
       <div className="trip-directory-search-row">
           <label className="trip-search trip-ideas-search trip-directory-search">
             <Search size={20} />
