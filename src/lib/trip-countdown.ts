@@ -1,4 +1,4 @@
-/** Compact remaining time: approximate months, with days only below 30. */
+/** Compact remaining time: approximate 30-day months; omit days once years are shown. */
 export function tripDaysUntilLabel(daysUntil: number) {
   const days = Math.max(0, Math.floor(daysUntil));
   if (days === 0) return "วันนี้";
@@ -6,6 +6,11 @@ export function tripDaysUntilLabel(daysUntil: number) {
   if (days < 30) return `อีก ${days} วัน`;
   const years = Math.floor(days / 365);
   const months = Math.min(11, Math.floor((days % 365) / 30));
-  if (!years) return `อีก ${months} เดือน`;
+  if (!years) {
+    const remainingDays = days % 30;
+    return remainingDays
+      ? `อีก ${months} เดือน ${remainingDays} วัน`
+      : `อีก ${months} เดือน`;
+  }
   return months ? `อีก ${years} ปี ${months} เดือน` : `อีก ${years} ปี`;
 }
