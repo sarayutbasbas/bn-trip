@@ -1338,6 +1338,22 @@ type DashboardSnapshot = {
   countryHighlights: CountryHighlight[];
 };
 let dashboardSnapshotCache: DashboardSnapshot | null = null;
+function forgetTripFromDashboardCache(tripId: string) {
+  tripListCache = tripListCache?.filter((trip) => trip.id !== tripId) || null;
+  if (dashboardSnapshotCache) {
+    const trips = dashboardSnapshotCache.trips.filter((trip) => trip.id !== tripId);
+    dashboardSnapshotCache = {
+      ...dashboardSnapshotCache,
+      trips,
+      favoriteAccommodations: dashboardSnapshotCache.favoriteAccommodations.filter((hotel) => hotel.trip_id !== tripId),
+      counts: {
+        ...dashboardSnapshotCache.counts,
+        total: trips.length,
+      },
+    };
+  }
+  tripReviewSummaryCache.delete(tripId);
+}
 let tripInvitationsCache: TripInvitation[] | null = null;
 let nearbyFlightsCache: {
   flights: NearbyFlight[];
@@ -10241,12 +10257,12 @@ export function BNTripApp({
       [],
   );
   const [dashboardFavoriteAccommodations, setDashboardFavoriteAccommodations] = useState<FavoriteAccommodation[]>(
-    initialDashboard?.favoriteAccommodations ||
-      cachedDashboardSnapshot?.favoriteAccommodations ||
+    cachedDashboardSnapshot?.favoriteAccommodations ||
+      initialDashboard?.favoriteAccommodations ||
       [],
   );
   const [dashboardTripIdeas, setDashboardTripIdeas] = useState<TripIdea[]>(
-    initialDashboard?.tripIdeas || cachedDashboardSnapshot?.tripIdeas || [],
+    cachedDashboardSnapshot?.tripIdeas || initialDashboard?.tripIdeas || [],
   );
   const [tripRevision, setTripRevision] = useState(0);
   const [dashboardRefreshToken, setDashboardRefreshToken] = useState(0);
@@ -10279,17 +10295,9 @@ export function BNTripApp({
   useEffect(() => {
     if (initialDashboard) {
       setDashboardFavoriteAccommodations(
-        initialDashboard.favoriteAccommodations || [],
+        dashboardSnapshotCache?.favoriteAccommodations || initialDashboard.favoriteAccommodations || [],
       );
-      setDashboardTripIdeas(initialDashboard.tripIdeas || []);
-      if (dashboardSnapshotCache) {
-        dashboardSnapshotCache = {
-          ...dashboardSnapshotCache,
-          favoriteAccommodations:
-            initialDashboard.favoriteAccommodations || [],
-          tripIdeas: initialDashboard.tripIdeas || [],
-        };
-      }
+      setDashboardTripIdeas(dashboardSnapshotCache?.tripIdeas || initialDashboard.tripIdeas || []);
     }
     if (initialDashboard && !dashboardSnapshotCache) {
       const initialTrips = applyCachedTripReviewSummaries([
@@ -10812,15 +10820,13 @@ export function BNTripApp({
   }
   async function removeTrip(trip: Trip) {
     await request(`/api/trips/${trip.id}`, { method: "DELETE" });
-    setTrips((old) => {
-      const next = old.filter((t) => t.id !== trip.id);
-      tripListCache = next;
-      return next;
-    });
+    forgetTripFromDashboardCache(trip.id);
+    setTrips((old) => old.filter((item) => item.id !== trip.id));
+    setDashboardFavoriteAccommodations((old) => old.filter((hotel) => hotel.trip_id !== trip.id));
     setTripRevision((value) => value + 1);
     itineraryCache.delete(trip.id);
     if (selected?.id === trip.id) setSelected(null);
-    await refreshDashboard({ announce: false });
+    await refreshDashboard({ announce: false, force: true });
     if (page !== "trips") {
       sessionStorage.setItem(NAVIGATION_TOAST_KEY, "ลบทริปสำเร็จแล้ว");
       router.push("/");
@@ -10839,17 +10845,20 @@ export function BNTripApp({
         await request(`/api/trips/${trip.id}/collaborators`, {
           method: "DELETE",
         });
-        setTrips((old) => {
-          const next = old.filter((item) => item.id !== trip.id);
-          tripListCache = next;
-          return next;
-        });
+        forgetTripFromDashboardCache(trip.id);
+        setTrips((old) => old.filter((item) => item.id !== trip.id));
+        setDashboardFavoriteAccommodations((old) => old.filter((hotel) => hotel.trip_id !== trip.id));
         itineraryCache.delete(trip.id);
         setTripCards([]);
         if (selected?.id === trip.id) setSelected(null);
         setTripRevision((value) => value + 1);
-        flash("ออกจากทริปสำเร็จแล้ว");
-        router.push(returnTo || "/");
+        await refreshDashboard({ announce: false, force: true });
+        if (page === "trips") {
+          flash("ออกจากทริปสำเร็จแล้ว");
+        } else {
+          sessionStorage.setItem(NAVIGATION_TOAST_KEY, "ออกจากทริปสำเร็จแล้ว");
+          router.push(returnTo || "/trips");
+        }
       },
     });
   }

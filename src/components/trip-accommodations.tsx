@@ -131,19 +131,24 @@ function BreakfastPlateIcon({ size }: { size: number }) {
   );
 }
 
-function AccommodationGuestAvatars({ memberIds, members }: { memberIds: string[]; members: Member[] }) {
-  const selected = memberIds.flatMap((id) => {
-    const member = members.find((candidate) => candidate.id === id);
-    return member ? [member] : [];
-  });
+function AccommodationGuestAvatars({ memberIds, guestIds, members, guests }: { memberIds: string[]; guestIds: string[]; members: Member[]; guests: { id: string; name: string }[] }) {
+  const selected = [
+    ...memberIds.map((id) => {
+      const member = members.find((candidate) => candidate.id === id);
+      return { id: `member:${id}`, name: member?.display_name || member?.email || "สมาชิก", avatarUrl: member?.avatar_url };
+    }),
+    ...guestIds.map((id) => {
+      const guest = guests.find((candidate) => candidate.id === id);
+      return { id: `guest:${id}`, name: guest?.name || "ผู้ร่วมพัก", avatarUrl: null };
+    }),
+  ];
   if (!selected.length) return null;
   const visible = selected.slice(0, 3);
   const remaining = selected.length - visible.length;
   return (
-    <span className="accommodation-guest-avatars" role="img" aria-label={`ผู้หารค่าที่พัก ${selected.length} คน: ${selected.map((member) => member.display_name || member.email || "สมาชิก").join(", ")}`}>
-      {visible.map((member) => {
-        const name = member.display_name || member.email || "สมาชิก";
-        return <span key={member.id} className={`accommodation-guest-avatar${member.role === "owner" ? " is-owner" : ""}`} title={name} style={member.avatar_url ? { backgroundImage: `url("${member.avatar_url}")` } : undefined}>{!member.avatar_url && name.charAt(0).toUpperCase()}</span>;
+    <span className="accommodation-guest-avatars" role="img" aria-label={`ผู้หารค่าที่พัก ${selected.length} คน: ${selected.map((person) => person.name).join(", ")}`}>
+      {visible.map((person) => {
+        return <span key={person.id} className="accommodation-guest-avatar" title={person.name} style={person.avatarUrl ? { backgroundImage: `url("${person.avatarUrl}")` } : undefined}>{!person.avatarUrl && person.name.charAt(0).toUpperCase()}</span>;
       })}
       {remaining > 0 && <span className="accommodation-guest-avatar is-more" title={`และอีก ${remaining} คน`}>+{remaining}</span>}
     </span>
@@ -1014,7 +1019,7 @@ export function TripAccommodations({
                       <span><b>{item.nights} คืน</b></span>
                     </div>
                     <footer>
-                      {(bookingPlatform || item.includes_breakfast || item.split_member_ids?.length) && (
+                      {(bookingPlatform || item.includes_breakfast || item.split_member_ids?.length || item.split_guest_ids?.length) && (
                         <div className="accommodation-card-icons">
                           {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={36} height={36} /></span>}
                           {item.includes_breakfast && (
@@ -1022,7 +1027,7 @@ export function TripAccommodations({
                               <BreakfastPlateIcon size={23} />
                             </span>
                           )}
-                          <AccommodationGuestAvatars memberIds={item.split_member_ids || []} members={members} />
+                          <AccommodationGuestAvatars memberIds={item.split_member_ids || []} guestIds={item.split_guest_ids || []} members={members} guests={expenseGuests} />
                         </div>
                       )}
                       <strong className="accommodation-total-price">
