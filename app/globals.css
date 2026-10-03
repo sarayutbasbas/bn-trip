@@ -3784,15 +3784,15 @@ button:disabled {
 .trips-directory > .status-filter:has(.status-favorite),
 .trip-ideas-screen > .status-filter:has(.status-favorite) { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .trips-directory > .status-filter:has(.status-favorite) button,
-.trip-ideas-screen > .status-filter:has(.status-favorite) button { gap:3px; }
+.trip-ideas-screen > .status-filter:has(.status-favorite) button { gap:2px;padding:3px 2px;flex-direction:column;text-align:center; }
 .trips-directory > .status-filter:has(.status-favorite) button > svg,
-.trip-ideas-screen > .status-filter:has(.status-favorite) button > svg { width:19px;height:19px;flex-basis:19px; }
+.trip-ideas-screen > .status-filter:has(.status-favorite) button > svg { width:22px;height:22px;flex-basis:22px; }
 .trips-directory > .status-filter:has(.status-favorite) button strong,
-.trip-ideas-screen > .status-filter:has(.status-favorite) button strong { font-size:10px; }
+.trip-ideas-screen > .status-filter:has(.status-favorite) button strong { font-size:12px; }
 .trips-directory > .status-filter:has(.status-favorite) button small,
-.trip-ideas-screen > .status-filter:has(.status-favorite) button small { font-size:8px; }
+.trip-ideas-screen > .status-filter:has(.status-favorite) button small { font-size:10px;margin-top:0; }
 .trip-favorite-button { position:absolute;z-index:8;bottom:9px;left:9px;width:34px;height:34px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.55);border-radius:50%;color:#e84d94;background:rgba(255,255,255,.94);box-shadow:0 5px 15px rgba(20,20,35,.22);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);touch-action:manipulation; }
-.trip-favorite-button { color:#26344b;border:0;background:rgba(255,255,255,.92); }
+.trip-favorite-button { width:29px;height:29px;color:#26344b;border:0;background:rgba(255,255,255,.92); }
 .trip-favorite-button.is-favorite { color:#c2185b; }
 .trip-favorite-button:disabled { opacity:.6; }
 .trip-favorite-button:focus-visible { outline:2px solid #e84d94;outline-offset:2px; }
@@ -4808,6 +4808,7 @@ html.dark .trip-section-nav button.active {
   stroke-width: 2.2;
 }
 .trip-cover-actions {
+  align-items: center;
   position: absolute !important;
   top: calc(env(safe-area-inset-top) + 14px);
   right: max(10px, env(safe-area-inset-right));
@@ -4818,6 +4819,9 @@ html.dark .trip-section-nav button.active {
 .trip-cover-actions a span {
   display: none;
 }
+.trip-cover-actions .trip-cover-favorite { width:29px;height:29px;min-height:29px;color:#26344b;background:rgba(255,255,255,.92);border:0; }
+.trip-cover-actions .trip-cover-favorite.is-favorite { color:#c2185b; }
+.trip-cover-actions .trip-cover-favorite svg { width:16px;height:16px; }
 .trip-cover-actions .travel-stay-icon{position:relative;width:24px;height:22px;display:block}.trip-cover-actions .travel-stay-icon svg{position:absolute;width:14px;height:14px}.trip-cover-actions .travel-stay-icon svg:first-child{top:0;left:0}.trip-cover-actions .travel-stay-icon svg:last-child{right:0;bottom:0;padding:1px;border-radius:5px;background:rgba(28,28,30,.64)}
 .trip-cover-actions .travel-stay-glyph{display:block;width:23px;height:23px;overflow:visible}
 .trip-cover-actions .has-notification-dot {
@@ -9429,7 +9433,9 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .trip-crop-guide-nav { position:absolute;top:calc(env(safe-area-inset-top) + 14px);left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));display:flex;justify-content:space-between; }
 .trip-crop-guide-nav i { display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:.5px solid #ffffff3d;background:rgba(28,28,30,.48);box-shadow:0 1px 0 #fff3 inset,0 5px 16px #0000001f;backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%); }
 .trip-crop-guide-nav svg { width:19px;height:19px;stroke-width:2.2; }
-.trip-crop-guide-actions { display:flex;gap:5px; }
+.trip-crop-guide-actions { display:flex;gap:5px;align-items:center; }
+.trip-crop-guide-actions i.trip-crop-guide-favorite { width:29px;height:29px;color:#c2185b;background:rgba(255,255,255,.92);border:0; }
+.trip-crop-guide-actions .trip-crop-guide-favorite svg { width:16px;height:16px; }
 .settings-page-wrapper .account-name-editor .account-name-row a.storage-toggle { width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border:1px solid var(--line-strong);border-radius:50%;background:var(--orange);color:white;text-decoration:none; }
 .system-screen { padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
 .system-screen h2 { display:flex;align-items:center;gap:8px; }

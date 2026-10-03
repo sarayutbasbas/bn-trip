@@ -70,6 +70,25 @@ try {
       browser("screenshot", "/tmp/bn-trip-home-favorites.png");
       const result = browser("eval", `(() => { const section = document.querySelector('section[aria-label="ทริปที่ชื่นชอบ"]'); if(section.querySelectorAll('.trip-card').length !== 6) throw new Error('Expected six cards'); if(section.querySelector('.trip-favorite-button')) throw new Error('Home must not have favorite controls'); section.querySelector('.section-view-all').click(); return true; })()`);
       browser("wait", "--url", "**/trips?status=favorite");
+      browser("wait", ".trip-favorite-button");
+      browser("eval", "document.querySelector('.trip-favorite-button').click()");
+      browser("wait", ".toast-success");
+      browser("screenshot", "/tmp/bn-trip-favorite-filters.png");
+      browser("open", `${base}/trips/${trip}`);
+      browser("wait", ".trip-cover-favorite");
+      browser("click", ".trip-cover-favorite");
+      browser("wait", '.trip-cover-favorite[aria-pressed="true"]');
+      browser("wait", ".toast-success");
+      browser("screenshot", "/tmp/bn-trip-favorite-cover.png");
+      browser("reload");
+      browser("wait", '.trip-cover-favorite[aria-pressed="true"]');
+      browser("screenshot", "/tmp/bn-trip-favorite-cover.png");
+      browser("open", `${base}/trip-ideas`);
+      browser("wait", ".trip-favorite-button");
+      browser("click", ".trip-favorite-button");
+      browser("wait", '.trip-favorite-button[aria-pressed="true"]');
+      browser("wait", ".toast");
+      console.log("PASS: list and idea favorites show toasts; trip cover favorite persists");
       console.log("PASS: mobile Home shows six cards without favorite controls and links to the favorite filter", result.trim());
     } finally { browser("close"); }
   }

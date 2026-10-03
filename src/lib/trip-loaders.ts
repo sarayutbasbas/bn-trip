@@ -722,7 +722,7 @@ export async function loadTrip(session: SessionUser, id: string) {
   if (session.isDemo) return getDemoTrip(id);
   await ensureLatestDatabaseSchema();
   const result = await query(
-    `SELECT t.*,${tripRoleSql("t")},${tripMembersSql("t")},${tripReviewSummarySql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,
+    `SELECT t.*,${tripRoleSql("t")},${tripMembersSql("t")},${tripReviewSummarySql("t")},${tripFavoriteSql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,
     [session.userId, id],
   );
   return clientSafe(result.rows[0] ?? null);

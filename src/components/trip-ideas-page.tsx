@@ -190,6 +190,7 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo,currentUserId}:{i
     try{
       await readResponse(await fetch(`/api/trip-ideas/${idea.id}/favorite`,{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({favorite})}));
       sessionStorage.setItem("bn-trip-favorites-changed","1");
+      notify(favorite?"เพิ่มทริปในรายการโปรดแล้ว":"นำทริปออกจากรายการโปรดแล้ว");
     }catch(error){
       setIdeas(items=>items.map(item=>item.id===idea.id?{...item,is_favorite:Boolean(idea.is_favorite)}:item));
       notify(error instanceof Error?error.message:"บันทึกรายการโปรดไม่สำเร็จ");

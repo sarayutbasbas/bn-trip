@@ -3761,6 +3761,7 @@ function CompactTripCard({
 }
 
 function TripsDirectory({
+  notify,
   initialFilters,
   initialData,
   revision,
@@ -3770,6 +3771,7 @@ function TripsDirectory({
   onRefreshComplete,
 }: {
   initialFilters: TripFilters;
+  notify: (message: string) => void;
   initialData?: { items: Trip[]; total: number; years: number[]; filterMembers?: TripFilterMember[]; hasMore: boolean; statusCounts?: Record<TripStatus,number> };
   revision: number;
   selectTrip: (trip: Trip, origin: string) => void;
@@ -4057,6 +4059,7 @@ function TripsDirectory({
       };
       setStatusCounts((current) => ({ ...current, favorite: Math.max(0, current.favorite + (favorite ? 1 : -1)) }));
       if (status === "favorite" && !favorite) setRefreshToken((value) => value + 1);
+      notify(favorite ? "เพิ่มทริปในรายการโปรดแล้ว" : "นำทริปออกจากรายการโปรดแล้ว");
     } catch (error) {
       setItems((current) => current.map((item) => item.id === trip.id ? { ...item, is_favorite: Boolean(trip.is_favorite) } : item));
       setFavoriteError(error instanceof Error ? error.message : "บันทึกรายการโปรดไม่สำเร็จ");
@@ -4186,6 +4189,8 @@ function TripsDirectory({
 }
 
 function TripHeader({
+  toggleFavorite,
+  favoriteBusy,
   trip,
   openReviews,
   manageMembers,
@@ -4194,6 +4199,8 @@ function TripHeader({
 }: {
   trip: Trip;
   openReviews?: () => void;
+  toggleFavorite?: () => void;
+  favoriteBusy?: boolean;
   manageMembers?: () => void;
   goBack?: () => void;
   editTrip?: () => void;
@@ -4216,11 +4223,12 @@ function TripHeader({
           <ChevronLeft size={21} />
         </button>
       )}
-      {(editTrip || trip.summary_image_url || ((trip.access_role === "owner" || trip.access_role === "admin") && manageMembers)) && (
+      {(toggleFavorite || editTrip || trip.summary_image_url || ((trip.access_role === "owner" || trip.access_role === "admin") && manageMembers)) && (
         <div className="trip-cover-actions">
           {trip.summary_image_url && <button type="button" onClick={() => setPlanImageOpen(true)} aria-label={t("แพลนเที่ยว")} title={t("แพลนเที่ยว")}>
             <ImageIcon size={20} />
           </button>}
+          {toggleFavorite && <button type="button" className={`trip-cover-favorite${trip.is_favorite ? " is-favorite" : ""}`} disabled={favoriteBusy} onClick={toggleFavorite} aria-pressed={Boolean(trip.is_favorite)} aria-label={trip.is_favorite ? "นำออกจากทริปที่ติดดาว" : "ติดดาวทริปนี้"}><Heart size={16} fill={trip.is_favorite ? "currentColor" : "none"} /></button>}
           {(trip.access_role === "owner" || trip.access_role === "admin") && manageMembers && <button type="button" onClick={manageMembers} aria-label={t("เชิญเพื่อนร่วมทริป")} title={t("เชิญเพื่อนร่วมทริป")}>
             <UserPlus size={20} />
           </button>}
@@ -5131,6 +5139,8 @@ function TimelineInsertPlaceButton({
 }
 
 function TripHub({
+  toggleFavorite,
+  favoriteBusy,
   trip,
   items,
   cards,
@@ -5155,6 +5165,8 @@ function TripHub({
   items: Itinerary[];
   cards: PaymentCard[];
   day: number;
+  toggleFavorite: () => void;
+  favoriteBusy: boolean;
   setDay: (day: number) => void;
   openReviews: () => void;
   manageCollaborators: () => void;
@@ -5277,6 +5289,8 @@ function TripHub({
       <div className="trip-cover-region">
         <TripHeader
           trip={trip}
+          toggleFavorite={toggleFavorite}
+          favoriteBusy={favoriteBusy}
           openReviews={openReviews}
           goBack={() => router.replace(backHref)}
           editTrip={editTrip}
@@ -5657,6 +5671,8 @@ function TripHub({
 }
 
 function TimelineScreen({
+  toggleFavorite,
+  favoriteBusy,
   trip,
   items,
   cards,
@@ -5669,6 +5685,8 @@ function TimelineScreen({
   backHref,
 }: {
   trip: Trip;
+  toggleFavorite: () => void;
+  favoriteBusy: boolean;
   items: Itinerary[];
   cards: PaymentCard[];
   day: number;
@@ -5722,7 +5740,7 @@ function TimelineScreen({
   return (
       <div className="screen timeline-screen">
       <div className="trip-cover-region">
-        <TripHeader trip={trip} goBack={() => router.replace(backHref)} editTrip={editTrip} />
+        <TripHeader trip={trip} goBack={() => router.replace(backHref)} editTrip={editTrip} toggleFavorite={toggleFavorite} favoriteBusy={favoriteBusy} />
       </div>
       <TripSectionNav
         trip={trip}
@@ -7892,12 +7910,12 @@ export function CoverImagePicker({
             onPointerCancel={endMove}
           />
           {cover && showCoverGuide ? <div className="trip-crop-guide" aria-hidden="true">
-            <div className="trip-crop-guide-nav"><i><ChevronLeft size={21} /></i><div className="trip-crop-guide-actions"><i><ImageIcon size={20} /></i><i><Pencil size={20} /></i></div></div>
+            <div className="trip-crop-guide-nav"><i><ChevronLeft size={21} /></i><div className="trip-crop-guide-actions"><i><ImageIcon size={20} /></i><i className="trip-crop-guide-favorite"><Heart size={16} fill="currentColor" /></i><i><UserPlus size={20} /></i><i><Pencil size={20} /></i></div></div>
             <div className="trip-crop-guide-copy">
               <TripCountdownBadge label="อีก 105 วัน" />
               <strong>ทดสอบชื่อทริปยาวสองบรรทัด เพื่อทดสอบการแสดงรูป</strong>
-              <div><span className="trip-crop-guide-flag">🇹🇭</span> ฉะเชิงเทรา, ไทย</div>
-              <small>19 ก.ย. 69 - 19 ก.ย. 69 (1 วัน)</small>
+              <div><span className="trip-crop-guide-flag">🇯🇵</span> โตเกียว, ญี่ปุ่น</div>
+              <small>19 ก.ย. 69 - 2 ต.ค. 69 (14 วัน)</small>
             </div>
             <div className="trip-crop-guide-members">
               <span className="trip-crop-guide-rating"><Star size={14} fill="#ffd166" color="#ffd166" /> 3.9 <small>(2)</small></span>
@@ -10311,6 +10329,7 @@ export function BNTripApp({
       [],
   );
   const [dashboardFavoriteTrips, setDashboardFavoriteTrips] = useState<Trip[]>(cachedDashboardSnapshot?.favoriteTrips || initialDashboard?.favoriteTrips || []);
+  const [tripFavoriteBusy, setTripFavoriteBusy] = useState(false);
   const [dashboardFavoriteAccommodations, setDashboardFavoriteAccommodations] = useState<FavoriteAccommodation[]>(
     cachedDashboardSnapshot?.favoriteAccommodations ||
       initialDashboard?.favoriteAccommodations ||
@@ -10608,6 +10627,25 @@ export function BNTripApp({
     setToast(message);
     setTimeout(() => setToast(""), 2400);
   };
+  async function toggleSelectedFavorite() {
+    if (!selected || tripFavoriteBusy) return;
+    const trip = selected;
+    const favorite = !trip.is_favorite;
+    setTripFavoriteBusy(true);
+    try {
+      const response = await fetch(`/api/trips/${trip.id}/favorite`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ favorite }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "บันทึกรายการโปรดไม่สำเร็จ");
+      const update = (item: Trip) => item.id === trip.id ? { ...item, is_favorite: favorite } : item;
+      setSelected(current => current ? update(current) : current);
+      setTrips(current => current.map(update));
+      if (tripListCache) tripListCache = tripListCache.map(update);
+      if (dashboardSnapshotCache) dashboardSnapshotCache = { ...dashboardSnapshotCache, trips: dashboardSnapshotCache.trips.map(update) };
+      sessionStorage.setItem("bn-trip-favorites-changed", "1");
+      flash(favorite ? "เพิ่มทริปในรายการโปรดแล้ว" : "นำทริปออกจากรายการโปรดแล้ว");
+    } catch (error) { flash(error instanceof Error ? error.message : "บันทึกรายการโปรดไม่สำเร็จ"); }
+    finally { setTripFavoriteBusy(false); }
+  }
   const toggleTheme = () => {
     const next = !dark;
     setDark(next);
@@ -11030,6 +11068,7 @@ export function BNTripApp({
     <TravelAnalyticsDashboard datasets={initialAnalytics} badges={initialBadges} refreshRequestRef={analyticsRefreshRef} notify={flash} createTrip={protect(() => setModal({ type: "trip" }))} />
   ) : page === "album" ? (
     <TripsDirectory
+      notify={flash}
       initialFilters={{
         status: "past",
         type: "",
@@ -11060,6 +11099,7 @@ export function BNTripApp({
     />
   ) : page === "trips" ? (
     <TripsDirectory
+      notify={flash}
       initialFilters={initialTripFilters}
       initialData={initialTripDirectory}
       revision={tripRevision + tripDirectoryRefreshToken}
@@ -11073,6 +11113,8 @@ export function BNTripApp({
   ) : page === "trip" && selected ? (
     <TripHub
       trip={selected}
+      toggleFavorite={protect(() => void toggleSelectedFavorite())}
+      favoriteBusy={tripFavoriteBusy}
       items={itineraries}
       cards={tripCards}
       day={activeDay}
@@ -11113,6 +11155,8 @@ export function BNTripApp({
     />
   ) : page === "timeline" && selected ? (
     <TimelineScreen
+      toggleFavorite={protect(() => void toggleSelectedFavorite())}
+      favoriteBusy={tripFavoriteBusy}
       trip={selected}
       items={itineraries}
       cards={tripCards}

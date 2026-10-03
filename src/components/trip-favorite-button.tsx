@@ -18,7 +18,7 @@ export function TripFavoriteButton({ favorite, onToggle, disabled = false }: {
       onClick={(event) => { event.stopPropagation(); onToggle(); }}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <Heart size={18} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
+      <Heart size={16} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />
     </button>
   );
 }
