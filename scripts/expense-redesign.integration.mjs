@@ -44,9 +44,13 @@ try {
   assert(evaluate("getComputedStyle(document.querySelectorAll('.expense-member-disclosure article')[0]).backgroundColor!==getComputedStyle(document.querySelectorAll('.expense-member-disclosure article')[1]).backgroundColor"));
   assert(evaluate("Number(getComputedStyle(document.querySelector('.expense-category-heading button')).fontWeight)>=700"));
   assert(evaluate("getComputedStyle(document.querySelectorAll('.expense-plan-row')[0]).backgroundColor!==getComputedStyle(document.querySelectorAll('.expense-plan-row')[1]).backgroundColor"));
-  assert(evaluate("getComputedStyle(document.querySelectorAll('.expense-day-card')[0]).background!==getComputedStyle(document.querySelectorAll('.expense-day-card')[1]).background"));
+  assert(evaluate("getComputedStyle(document.querySelectorAll('.expense-day-card')[0]).background===getComputedStyle(document.querySelectorAll('.expense-day-card')[1]).background"));
+  assert(evaluate("[...document.querySelectorAll('.expense-day-list')].every(list=>getComputedStyle(list.children[0]).backgroundColor!==getComputedStyle(list.children[1]).backgroundColor)"));
+  assert(evaluate("[...document.querySelectorAll('.day-member-breakdown')].every(row=>row.querySelectorAll('svg').length===2)"));
   for(const theme of ['light','dark']){
     evaluate("document.documentElement.classList.toggle('dark',"+(theme==='dark')+");document.querySelector('.expense-overview').scrollIntoView({block:'start'});true");
+    assert(evaluate("getComputedStyle(document.querySelectorAll('.expense-day-card')[0]).background===getComputedStyle(document.querySelectorAll('.expense-day-card')[1]).background"));
+    assert(evaluate("getComputedStyle(document.querySelector('.expense-day-head')).backgroundColor!==getComputedStyle(document.querySelector('.expense-plan-row')).backgroundColor"));
     browser('screenshot','/tmp/expense-redesign-'+theme+'.png');
   }
   console.log('PASS responsive budgets with first-row percentages and larger amounts, bold reset, bordered people summary, even-row backgrounds, two-column legend and bar filtering');

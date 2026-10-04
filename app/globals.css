@@ -7380,13 +7380,10 @@ html.dark .trip-section-nav button.active {
 .expense-member-disclosure .expense-member-clearing { padding-top:3px; }
 .expense-member-disclosure .expense-member-clearing > div > span { padding:3px 2px; }
 .expense-member-disclosure .expense-member-clearing b { font-size:clamp(13px,3.6vw,17px);margin-top:0; }
-.redesigned-plan-expenses .expense-day-card:nth-child(odd) { background:var(--surface-solid); }
-.redesigned-plan-expenses .expense-day-card:nth-child(even) { background:color-mix(in srgb,var(--orange) 5%,var(--surface-solid)); }
-html.dark .redesigned-plan-expenses .expense-day-card:nth-child(even) { --card-glass-accent-layer:linear-gradient(rgba(255,145,60,.1),rgba(255,145,60,.1)); }
 html.dark .redesigned-plan-expenses .expense-member-disclosure { background:transparent !important;box-shadow:none !important; }
-.redesigned-plan-expenses .expense-day-card .expense-day-head { background:transparent; }
 .redesigned-plan-expenses .expense-day-list .expense-plan-row { min-height:52px;padding:6px 0;grid-template-columns:28px minmax(0,1fr) auto;gap:6px; }
-.redesigned-plan-expenses .expense-day-list .expense-plan-row:nth-child(even) { background:color-mix(in srgb,var(--orange) 6%,transparent);border-radius:8px; }
+.redesigned-plan-expenses .expense-day-list .expense-plan-row:nth-child(even) { background:rgba(100,116,139,.065);border-radius:8px; }
+html.dark .redesigned-plan-expenses .expense-day-list .expense-plan-row:nth-child(even) { background:rgba(148,163,184,.09); }
 .redesigned-plan-expenses .expense-plan-row .expense-category-icon { width:28px;height:28px;min-width:28px; }
 .redesigned-plan-expenses .expense-plan-row .expense-category-icon svg { width:16px;height:16px; }
 .redesigned-plan-expenses .expense-plan-row .expense-category-pill { display:none; }
@@ -7493,11 +7490,15 @@ html.dark .redesigned-plan-expenses .expense-member-disclosure { background:tran
   background: var(--surface);
 }
 .redesigned-plan-expenses .expense-day-head {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) minmax(0, 2.3fr);
+  gap: 6px;
   min-height: 48px;
   padding: 7px 8px 7px 12px;
   border-bottom-color: var(--line);
-  background: color-mix(in srgb, var(--surface-2) 76%, transparent);
+  background: #edf0f4;
 }
+html.dark .redesigned-plan-expenses .expense-day-head { background:rgba(148,163,184,.16); }
 .expense-day-toggle {
   min-width: 0;
   display: grid;
@@ -7519,11 +7520,19 @@ html.dark .redesigned-plan-expenses .expense-member-disclosure { background:tran
   font-weight: 550;
 }
 .redesigned-plan-expenses .expense-day-actions {
-  gap: 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px 20px;
+  gap: 3px;
+  min-width: 0;
 }
 .redesigned-plan-expenses .day-split-total {
-  max-width: 142px;
+  max-width: none;
+  min-width: 0;
 }
+.day-member-breakdown { display:flex;justify-content:flex-end;flex-wrap:wrap;gap:3px 7px;margin-top:3px; }
+.day-member-breakdown > span { display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:9px;white-space:nowrap; }
+.day-member-breakdown svg { flex-shrink:0; }
+.day-member-breakdown b { font-weight:650;font-variant-numeric:tabular-nums; }
 .redesigned-plan-expenses .day-split-total > span {
   color: var(--muted);
   font-size: 9px;
@@ -7537,9 +7546,9 @@ html.dark .redesigned-plan-expenses .expense-member-disclosure { background:tran
   white-space: nowrap;
 }
 .redesigned-plan-expenses .expense-day-actions > button {
-  width: 30px;
+  width: 24px;
   height: 30px;
-  flex-basis: 30px;
+  flex-basis: 24px;
 }
 .redesigned-plan-expenses .expense-day-actions .expense-day-chevron {
   color: var(--muted);

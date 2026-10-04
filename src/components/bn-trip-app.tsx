@@ -6364,7 +6364,10 @@ function PlanExpensesContent({
                           {t("ส่วนของสมาชิก")}{" "}
                           <strong>฿{bahtFormat(dayGrandTotal)}</strong>
                         </span>
-                        <small>{t("ค่าใช้จ่ายทริป")} ฿{bahtFormat(dayTripTotal)} · {t("ค่า Shopping")} ฿{bahtFormat(dayShoppingTotal)}</small>
+                        <div className="day-member-breakdown">
+                          <span title={t("ค่าใช้จ่ายทริป")} aria-label={`${t("ค่าใช้จ่ายทริป")} ฿${bahtFormat(dayTripTotal)}`}><WalletCards size={12} aria-hidden="true" /><b>฿{bahtFormat(dayTripTotal)}</b></span>
+                          <span title={t("ค่า Shopping")} aria-label={`${t("ค่า Shopping")} ฿${bahtFormat(dayShoppingTotal)}`}><ShoppingBag size={12} aria-hidden="true" /><b>฿{bahtFormat(dayShoppingTotal)}</b></span>
+                        </div>
                       </div>
                     )}
                     <button
