@@ -3799,11 +3799,13 @@ button:disabled {
 .trip-ideas-screen > .status-filter:has(.status-favorite) button strong { font-size:12px; }
 .trips-directory > .status-filter:has(.status-favorite) button small,
 .trip-ideas-screen > .status-filter:has(.status-favorite) button small { font-size:10px;margin-top:0; }
-.trip-favorite-button { position:absolute;z-index:8;bottom:9px;left:9px;width:34px;height:34px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.55);border-radius:50%;color:#e84d94;background:rgba(255,255,255,.94);box-shadow:0 5px 15px rgba(20,20,35,.22);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);touch-action:manipulation; }
-.trip-favorite-button { width:29px;height:29px;color:#26344b;border:0;background:rgba(255,255,255,.92); }
+.trip-favorite-button,
+.accommodation-favorite-button { position:absolute;width:29px;height:29px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.2);border-radius:50%;color:#fff;background:rgba(28,28,30,.28);box-shadow:0 2px 8px rgba(0,0,0,.12);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);touch-action:manipulation; }
+.trip-favorite-button { z-index:8;bottom:9px;left:9px; }
 .trip-favorite-button.is-favorite { color:#c2185b; }
 .trip-favorite-button:disabled { opacity:.6; }
-.trip-favorite-button:focus-visible { outline:2px solid #e84d94;outline-offset:2px; }
+.trip-favorite-button:focus-visible,
+.accommodation-favorite-button:focus-visible { outline:2px solid #e84d94;outline-offset:2px; }
 .trip-favorite-error { margin:0 0 10px;color:#bc356f;font-size:11px; }
 .filter-bottom {
   margin-top: 9px;
@@ -14585,7 +14587,7 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-card-hit { position:absolute;z-index:1;inset:0;width:100%;height:100%;border:0;background:transparent; }
 .accommodation-card-image { position:relative;min-height:0;overflow:hidden;border-radius:0;background:#e9ecef; }
 .accommodation-card-image img { object-fit:cover; }
-.accommodation-favorite-button { position:absolute;z-index:3;bottom:7px;left:7px;width:29px;height:29px;border:0;border-radius:50%;display:grid;place-items:center;color:#26344b;background:rgba(255,255,255,.92);box-shadow:0 3px 10px rgba(0,0,0,.14); }
+.accommodation-favorite-button { z-index:3;bottom:7px;left:7px; }
 .accommodation-favorite-button.active { color:#c2185b; }
 .accommodation-favorite-button:disabled { opacity:.65; }
 .accommodation-card-copy { position:relative;z-index:2;min-width:0;padding:8px 9px 8px 10px;display:flex;flex-direction:column;gap:3px;pointer-events:none; }
