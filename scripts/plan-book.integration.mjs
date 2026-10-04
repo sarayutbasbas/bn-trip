@@ -16,8 +16,10 @@ const token = await tokenFor(user, email), otherToken = await tokenFor(other, `o
 const browser = (...args) => execFileSync('npx', ['--yes', 'agent-browser', '--session', 'plan-book-test', ...args], { encoding: 'utf8', timeout: 45000 });
 const evaluate = code => JSON.parse(browser('eval', code));
 const next = '[aria-label="หน้าถัดไป"]', prev = '[aria-label="หน้าก่อนหน้า"]';
-const settled = () => browser('wait', '--fn', '!document.querySelector("[data-book-turn]")');
-const pointer = (type, x, y = 300) => evaluate(`(()=>{const b=document.querySelector('[data-book-base]').parentElement;b.dispatchEvent(new PointerEvent('${type}',{bubbles:true,isPrimary:true,pointerId:1,pointerType:'touch',clientX:${x},clientY:${y}}));return true})()`);
+const settled = () => browser('wait', '--fn', 'document.querySelector("[data-book-state=read]") !== null');
+const atPage = page => browser('wait', '--fn', `document.querySelector('[data-book-page="${page}"]') !== null`);
+const touch = (type, fraction, yFraction = .5) => evaluate(`(()=>{const b=document.querySelector('.stf__block'),r=document.querySelector('[data-book-base]').getBoundingClientRect();const t=new Touch({identifier:1,target:b,clientX:r.left+r.width*${fraction},clientY:r.top+r.height*${yFraction}});b.dispatchEvent(new TouchEvent('${type}',{bubbles:true,cancelable:true,touches:${type === 'touchend' || type === 'touchcancel' ? '[]' : '[t]'},changedTouches:[t]}));return true})()`);
+const curl = () => evaluate(`Array.from(document.querySelectorAll('.stf__item')).map(e=>e.style.transform+'|'+e.style.clipPath).join(';')`);
 async function trip(name, date, auth, hasPlan = true) {
   const r = await fetch(base + '/api/trips', { method: 'POST', headers: { cookie: `bn_trip_session=${auth}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name, countryCode: 'JP', locationIds: ['JP:kyoto'], outboundDate: date, outboundTime: '08:00', returnDate: date, returnTime: '18:00', budgetThb: 0, coverImageUrl: '/travel-postcard-fallback.jpg', summaryImageUrl: hasPlan ? '/travel-postcard-background.jpg' : null }) });
   assert(r.ok, await r.clone().text());
@@ -44,7 +46,8 @@ try {
   const html = await (await fetch(base + '/plan-book', { headers: { cookie: `bn_trip_session=${token}` } })).text();
   assert(html.includes('BOOK-SHARED') && html.includes('BOOK-NEW'));
   assert(!html.includes('BOOK-PRIVATE') && !html.includes('BOOK-NO-PLAN'));
-  browser('open', base + '/plan-book'); browser('wait', '[data-book-base]');
+  browser('open', base + '/plan-book'); browser('wait', '.stf__item');
+  assert.equal(evaluate('getComputedStyle(document.querySelector("main")).paddingTop'), '20px');
   for (const width of [320, 390, 430, 1024]) {
     browser('set', 'viewport', String(width), '844');
     assert(evaluate('document.documentElement.scrollWidth <= innerWidth'), `overflow at ${width}`);
@@ -55,9 +58,9 @@ try {
   evaluate('document.documentElement.classList.add("dark"); true');
   browser('screenshot', '/tmp/bn-plan-book-cover-dark.png');
   evaluate('document.documentElement.classList.remove("dark"); true');
-  browser('click', next); settled();
+  browser('click', next); atPage(1); settled();
   browser('wait', '[aria-label="ดูแพลน BOOK-NEW ขนาดเต็ม"]');
-  assert(evaluate('document.querySelectorAll("main img").length === 1'));
+  assert(evaluate('document.querySelectorAll(".stf__item").length === 4'));
   // Exercise the iPhone fallback even in Chromium: fullscreen API rejection is safe.
   evaluate('window.bookNativeFullscreen=document.documentElement.requestFullscreen; document.documentElement.requestFullscreen=()=>Promise.reject(new Error("unsupported")); true');
   browser('click', '[aria-label="ดูแพลน BOOK-NEW ขนาดเต็ม"]'); browser('wait', '[data-book-fullscreen="true"]');
@@ -77,47 +80,42 @@ try {
   assert.equal(evaluate('document.body.style.overflow'), 'hidden');
   browser('click', '[aria-label="ออกจากเต็มจอ"]');
   assert.notEqual(evaluate('document.body.style.overflow'), 'hidden');
+  assert.equal(evaluate('document.querySelector("[data-book-page]").dataset.bookPage'), '1');
+  // All three events in one task exercise fast swipes, not only slow held drags.
+  evaluate(`(()=>{const b=document.querySelector('.stf__block'),r=document.querySelector('[data-book-base]').getBoundingClientRect();for(const [type,f] of [['touchstart',.95],['touchmove',.25],['touchend',.25]]){const t=new Touch({identifier:1,target:b,clientX:r.left+r.width*f,clientY:r.top+r.height/2});b.dispatchEvent(new TouchEvent(type,{bubbles:true,cancelable:true,touches:type==='touchend'?[]:[t],changedTouches:[t]}));}return true})()`);
+  atPage(2); settled(); browser('click',prev); atPage(1); settled();
   // Progress changes BEFORE release, and follows the finger back instead of auto-flipping.
-  pointer('pointerdown',270); pointer('pointermove',220);
-  browser('wait','[data-book-turn]');
-  const firstProgress=evaluate('Number(document.querySelector("[data-book-turn]").style.getPropertyValue("--turn-progress"))');
-  assert(firstProgress>0 && firstProgress<.3);
-  const firstTransform=evaluate('getComputedStyle(document.querySelector("[data-book-turn]")).transform');
-  pointer('pointermove',120);
-  assert(evaluate('Number(document.querySelector("[data-book-turn]").style.getPropertyValue("--turn-progress"))') > firstProgress);
-  assert.notEqual(evaluate('getComputedStyle(document.querySelector("[data-book-turn]")).transform'),firstTransform);
+  touch('touchstart',.95); touch('touchmove',.75);
+  browser('wait','[data-book-state=user_fold]');
+  const firstTransform=curl();
+  touch('touchmove',.35);
+  assert.notEqual(curl(),firstTransform);
   browser('screenshot','/tmp/bn-plan-book-held-page.png');
-  pointer('pointermove',265); pointer('pointerup',265); settled();
-  browser('wait','[aria-label="ดูแพลน BOOK-NEW ขนาดเต็ม"]');
-  pointer('pointerdown',270); pointer('pointermove',80); pointer('pointerup',80); settled();
-  browser('wait','[aria-label="ดูแพลน BOOK-SHARED ขนาดเต็ม"]');
-  pointer('pointerdown',270); pointer('pointermove',80); pointer('pointercancel',80); settled();
-  browser('wait','[aria-label="ดูแพลน BOOK-SHARED ขนาดเต็ม"]');
-  pointer('pointerdown',80); pointer('pointermove',260); pointer('pointerup',260); settled();
-  browser('wait','[aria-label="ดูแพลน BOOK-NEW ขนาดเต็ม"]');
-  pointer('pointerdown',200); pointer('pointermove',205,450); pointer('pointerup',205,450);
-  assert(evaluate('!document.querySelector("[data-book-turn]")'));
+  touch('touchmove',.98); touch('touchend',.98); settled(); atPage(1);
+  touch('touchstart',.95); touch('touchmove',-.15); touch('touchend',-.15); atPage(2); settled();
+  touch('touchstart',.05); touch('touchmove',.9); touch('touchend',.9); atPage(1); settled();
+  touch('touchstart',.5); touch('touchmove',.51,.8); touch('touchend',.51,.8); atPage(1); settled();
   browser('click', '[aria-haspopup="dialog"]'); browser('wait', 'dialog[open]');
   const names = evaluate('[...document.querySelectorAll("dialog button strong")].map(e => e.textContent)');
   assert.deepEqual(names, ['BOOK-NEW', 'BOOK-SHARED', 'BOOK-OLD']);
   browser('fill', '[aria-label="ค้นหาแพลน"]', 'BOOK-OLD');
   assert.equal(evaluate('document.querySelectorAll("dialog button strong").length'), 1);
-  browser('click', 'dialog button:has(strong)'); settled();
+  browser('click', 'dialog button:has(strong)'); atPage(3); settled();
   browser('wait', '[aria-label="ดูแพลน BOOK-OLD ขนาดเต็ม"]');
   assert(evaluate(`document.querySelector('${next}').disabled`));
   assert(evaluate(`document.querySelector('a[href="/trips/${old.id}"]') !== null`));
   // Touch-style swipe changes the page but never opens the image preview.
-  pointer('pointerdown',80); pointer('pointermove',250); pointer('pointerup',250);
-  settled(); browser('wait', '[aria-label="ดูแพลน BOOK-SHARED ขนาดเต็ม"]');
+  touch('touchstart',.05); touch('touchmove',.95); touch('touchend',.95);
+  atPage(2); settled();
   assert(evaluate('!document.querySelector(".attachment-preview-overlay")'));
-  browser('click', prev); settled(); browser('wait', '[aria-label="ดูแพลน BOOK-NEW ขนาดเต็ม"]');
+  browser('click', prev); atPage(1); settled();
   browser('screenshot', '/tmp/bn-plan-book-page.png');
   // Native pointer capture: keep receiving movement even outside the page bounds.
   const bounds=evaluate('(()=>{const b=document.querySelector("[data-book-base]").getBoundingClientRect();return {x:b.right-20,y:b.top+b.height/2}})()');
   browser('mouse','move',String(Math.round(bounds.x)),String(Math.round(bounds.y))); browser('mouse','down');
   browser('mouse','move','12',String(Math.round(bounds.y)),'--steps','12','--duration','450');
-  assert(evaluate('Number(document.querySelector("[data-book-turn]").style.getPropertyValue("--turn-progress")) > .5'));
-  browser('mouse','up'); settled(); browser('wait','[aria-label="ดูแพลน BOOK-SHARED ขนาดเต็ม"]');
+  assert(evaluate('!!document.querySelector("[data-book-state=user_fold]")'));
+  browser('mouse','up'); atPage(2); settled();
   assert(evaluate('document.querySelector("main").dataset.bookFullscreen === "false"'));
   // Native fullscreen (where supported), Escape, and reopening the same book page.
   evaluate('document.documentElement.requestFullscreen=window.bookNativeFullscreen; true');
@@ -129,10 +127,12 @@ try {
   browser('open', base); browser('wait', '.dashboard-quick-actions');
   assert.equal(evaluate('document.querySelectorAll(".dashboard-quick-actions > button").length'), 4);
   browser('click', '.dashboard-quick-actions > button:nth-child(4)'); browser('wait', '[data-book-base]');
-  console.log('PASS: auth/access, ordering, home entry, 9:16 fullscreen (320/390/430/landscape), fallback, auto-hide toolbar, zoom, live drag progress/reversal/cancel, swipe both ways, vertical scroll, search/jump, bounded image loading');
+  console.log('PASS: auth/access, ordering, home entry, safe area, 9:16 fullscreen (320/390/430/landscape), fallback, auto-hide toolbar, zoom, library live paper curl/reversal, swipe both ways, vertical scroll, search/jump');
 } catch (error) {
   console.error(browser('get', 'url'));
   console.error(browser('snapshot', '-i'));
+  console.error(evaluate(`({state:document.querySelector('[data-book-state]')?.dataset.bookState,page:document.querySelector('[data-book-page]')?.dataset.bookPage,orientation:document.querySelector('.stf__wrapper')?.className})`));
+  browser('screenshot', '/tmp/bn-plan-book-failure.png');
   throw error;
 } finally {
   try { browser('close'); } catch {}

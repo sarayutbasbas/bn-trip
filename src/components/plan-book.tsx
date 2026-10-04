@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, ChevronLeft, ChevronRight, Compass, List, MapPin, Maximize2, Minimize2, Search, Sparkles, X, ZoomIn } from "lucide-react";
 import { AttachmentPreviewOverlay } from "./attachment-preview-overlay";
-import { useBookTurn } from "./use-book-turn";
+import type { BookEngine } from "./plan-book-flipper";
 import type { PlanBookTrip } from "@/src/lib/plan-book";
 import styles from "./plan-book.module.css";
+
+const PlanBookFlipper = dynamic(() => import("./plan-book-flipper").then(module => module.PlanBookFlipper), { ssr: false });
 
 const dateLabel = (date: string) => date ? new Intl.DateTimeFormat("th-TH", {
   day: "numeric", month: "short", year: "2-digit", timeZone: "Asia/Bangkok",
@@ -41,19 +44,28 @@ function FantasyCover({ count }: { count: number }) {
   </div>;
 }
 
-function PlanImage({ trip, open, immersive }: { trip: PlanBookTrip; open?: () => void; immersive: boolean }) {
+function PlanImage({ trip }: { trip: PlanBookTrip }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   if (failed) return <div className={styles.imageError}><BookOpen/><p>โหลดรูปแพลนไม่สำเร็จ</p><button type="button" onClick={() => { setFailed(false); setLoaded(false); }}>ลองใหม่</button><Link href={`/trips/${trip.id}`}>ไปที่ทริป</Link></div>;
-  return <button type="button" className={styles.planImage} onClick={open} disabled={!open} aria-label={`ดูแพลน ${trip.name} ขนาดเต็ม`}>
+  return <div className={styles.planImage} role="button" tabIndex={0} aria-label={`ดูแพลน ${trip.name} ขนาดเต็ม`}>
     {!loaded && <span className={styles.imageLoading}>กำลังเปิดแพลน…</span>}
     <Image src={trip.summary_image_url} alt={`แพลนเที่ยว ${trip.name}`} fill unoptimized sizes="(orientation: portrait) 100vw, 56.25vh" draggable={false} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
-    {!immersive && <span className={styles.zoomHint}><Maximize2 size={13}/> แตะเพื่ออ่านเต็มจอ</span>}
-  </button>;
+    <span className={styles.zoomHint}><Maximize2 size={13}/> แตะเพื่ออ่านเต็มจอ</span>
+  </div>;
 }
 
 export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
-  const { page, turn, layer, changePage, canTap, handlers } = useBookTurn(trips.length);
+  const [page, setPage] = useState(0);
+  const engine = useRef<BookEngine | null>(null);
+  const gesture = useRef({ x: 0, y: 0, moved: false });
+  const changePage = (target: number) => {
+    if (target >= 0 && target <= trips.length) engine.current?.pageFlip()?.turnToPage(target);
+  };
+  const pages = useMemo(() => [
+    <div key="cover" className={styles.flipPage} data-density="soft"><FantasyCover count={trips.length}/></div>,
+    ...trips.map(trip => <div key={trip.id} className={styles.flipPage} data-density="soft"><PlanImage trip={trip}/></div>),
+  ], [trips]);
   const [immersive, setImmersive] = useState(false);
   const [chrome, setChrome] = useState(true);
   const [preview, setPreview] = useState<PlanBookTrip | null>(null);
@@ -99,10 +111,17 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
   }, [leaveFullscreen]);
 
   useEffect(() => {
-    if (!immersive || !chrome || contentsOpen || preview || turn) return;
+    if (!immersive || !chrome || contentsOpen || preview) return;
     const timer = window.setTimeout(() => setChrome(false), 3500);
     return () => window.clearTimeout(timer);
-  }, [immersive, chrome, contentsOpen, preview, turn]);
+  }, [immersive, chrome, contentsOpen, preview, page]);
+
+  useEffect(() => {
+    if (!book.current) return;
+    const observer = new ResizeObserver(() => engine.current?.pageFlip()?.getUI().update());
+    observer.observe(book.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!immersive || contentsOpen || preview) return;
@@ -120,24 +139,17 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
 
   const closePreview = useCallback(() => {
     setPreview(null);
-    requestAnimationFrame(() => book.current?.querySelector<HTMLButtonElement>("[data-book-base] button")?.focus({ preventScroll: true }));
+    requestAnimationFrame(() => book.current?.focus({ preventScroll: true }));
   }, []);
   const closeContents = () => { dialog.current?.close(); setContentsOpen(false); contentsButton.current?.focus(); };
   const matching = useMemo(() => trips.map((trip, index) => ({ trip, page: index + 1 })).filter(({ trip }) => `${trip.name} ${trip.destination}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())), [trips, search]);
 
   const controlsHidden = immersive && !chrome && !contentsOpen && !preview;
-  const renderPage = (index: number, interactive: boolean) => index === 0
-    ? <FantasyCover count={trips.length}/>
-    : <PlanImage key={trips[index - 1].id} trip={trips[index - 1]} immersive={immersive} open={interactive ? () => {
-      if (!canTap()) return;
-      if (immersive) setChrome(value => !value);
-      else enterFullscreen();
-    } : undefined}/>;
 
   return <main data-book-fullscreen={immersive} className={`${styles.shell} ${immersive ? styles.immersive : ""} ${controlsHidden ? styles.hideControls : ""}`} onKeyDown={event => {
     if (preview || contentsOpen || /INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName)) return;
-    if (event.key === "ArrowRight") { event.preventDefault(); changePage(page + 1); }
-    if (event.key === "ArrowLeft") { event.preventDefault(); changePage(page - 1); }
+    if (event.key === "ArrowRight") { event.preventDefault(); engine.current?.flipNext(); }
+    if (event.key === "ArrowLeft") { event.preventDefault(); engine.current?.flipPrev(); }
     if (event.key === "Escape") leaveFullscreen();
   }}>
     <header className={styles.header} inert={controlsHidden}>
@@ -149,14 +161,20 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
     {!trips.length ? <section className={styles.empty}><BookOpen size={42}/><h2>การผจญภัยหน้าแรก รอคุณอยู่</h2><p>เพิ่มรูปแพลนรวมในหน้าแก้ไขทริป<br/>แล้วกลับมาเปิดอ่านทุกแพลนในเล่มนี้ได้เลย</p><Link href="/trips">เลือกทริปเพื่อเพิ่มแพลน <ArrowRight size={17}/></Link></section> : <>
       <div className={styles.intro}><span><Sparkles size={14}/> {trips.length} แพลนพร้อมออกเดินทาง</span><small>วันเดินทางใหม่ → เก่า</small></div>
       <section className={styles.stage} aria-label="หนังสือรวมแพลนเที่ยว">
-        <div ref={book} className={styles.book} {...handlers} onClick={event => {
-          if (immersive && canTap() && !(event.target as HTMLElement).closest("button,a")) setChrome(value => !value);
+        <div ref={book} className={styles.book} data-book-base data-book-page={page} tabIndex={0}
+          onPointerDownCapture={event => { gesture.current = { x: event.clientX, y: event.clientY, moved: false }; }}
+          onPointerMoveCapture={event => {
+            if (Math.hypot(event.clientX - gesture.current.x, event.clientY - gesture.current.y) > 8) gesture.current.moved = true;
+          }}
+          onPointerCancel={() => { gesture.current.moved = true; }}
+          onKeyDown={event => {
+            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (immersive) setChrome(value => !value); else enterFullscreen(); }
+          }} onClick={event => {
+          if (gesture.current.moved || (event.target as HTMLElement).closest("button,a")) return;
+          if (immersive) setChrome(value => !value); else if (page > 0) enterFullscreen();
         }}>
-          <div className={styles.paper} data-book-base>{renderPage(turn && turn.to > turn.from ? turn.to : page, !turn)}</div>
-          {turn && <div ref={layer} data-book-turn className={`${styles.turning} ${turn.to > turn.from ? styles.forward : styles.backward}`} aria-hidden="true" inert>
-            {renderPage(turn.to > turn.from ? turn.from : turn.to, false)}
-          </div>}
-          {page === 0 && !turn && <button type="button" data-book-control className={styles.openBook} onClick={() => { enterFullscreen(); changePage(1); }}>เปิดสมุดแพลน <ArrowRight size={17}/></button>}
+          <PlanBookFlipper engine={engine} startPage={0} onPageChange={setPage}>{pages}</PlanBookFlipper>
+          {page === 0 && <button type="button" data-book-control className={styles.openBook} onClick={() => { enterFullscreen(); changePage(1); }}>เปิดสมุดแพลน <ArrowRight size={17}/></button>}
         </div>
       </section>
       <div className={styles.caption} aria-live="polite" aria-atomic="true">
@@ -165,15 +183,15 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
       </div>
       <footer className={styles.controls} inert={controlsHidden}>
         <div className={styles.navigation}>
-          <button type="button" className={styles.iconButton} disabled={page === 0 || !!turn} onClick={() => changePage(page - 1)} aria-label="หน้าก่อนหน้า"><ChevronLeft/></button>
+          <button type="button" className={styles.iconButton} disabled={page === 0} onClick={() => engine.current?.flipPrev()} aria-label="หน้าก่อนหน้า"><ChevronLeft/></button>
           <div><strong>{page === 0 ? "หน้าปก" : `แพลน ${page} / ${trips.length}`}</strong><span>{page === trips.length ? "หน้าสุดท้ายของเล่ม" : "ปัดซ้าย–ขวาเพื่อพลิกหน้า"}</span></div>
-          <button type="button" className={styles.iconButton} disabled={page === trips.length || !!turn} onClick={() => changePage(page + 1)} aria-label="หน้าถัดไป"><ChevronRight/></button>
+          <button type="button" className={styles.iconButton} disabled={page === trips.length} onClick={() => engine.current?.flipNext()} aria-label="หน้าถัดไป"><ChevronRight/></button>
         </div>
         <div className={styles.progress}><span style={{ width: `${page / trips.length * 100}%` }}/></div>
         <div className={styles.tools}>
-          <button ref={contentsButton} type="button" aria-haspopup="dialog" disabled={!!turn} onClick={() => { setSearch(""); setChrome(true); setContentsOpen(true); dialog.current?.showModal(); }}><List size={18}/> เลือกทริป</button>
-          <button type="button" onClick={() => changePage(0)} disabled={page === 0 || !!turn}><BookOpen size={17}/> หน้าปก</button>
-          {current && <button type="button" aria-label="ขยายรูปแพลน" disabled={!!turn} onClick={() => { setChrome(true); setPreview(current); }}><ZoomIn size={17}/><span>ขยาย</span></button>}
+          <button ref={contentsButton} type="button" aria-haspopup="dialog" onClick={() => { setSearch(""); setChrome(true); setContentsOpen(true); dialog.current?.showModal(); }}><List size={18}/> เลือกทริป</button>
+          <button type="button" onClick={() => changePage(0)} disabled={page === 0}><BookOpen size={17}/> หน้าปก</button>
+          {current && <button type="button" aria-label="ขยายรูปแพลน" onClick={() => { setChrome(true); setPreview(current); }}><ZoomIn size={17}/><span>ขยาย</span></button>}
           {current && <Link href={`/trips/${current.id}`}>ไปที่ทริป <ArrowRight size={15}/></Link>}
         </div>
       </footer>

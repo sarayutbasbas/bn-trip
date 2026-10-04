@@ -22,6 +22,7 @@
     "@liqui-design/glass": "^0.3.0",
     "@types/pg": "^8.21.0",
     "@vercel/blob": "^2.8.0",
+    "@vuvandinh203/react-flipbook": "1.0.2",
     "drizzle-orm": "0.45.2",
     "exceljs": "^4.4.0",
     "jose": "^6.2.8",
