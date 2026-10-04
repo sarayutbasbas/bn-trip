@@ -23,6 +23,11 @@ try {
   browser('open',base);browser('cookies','set','bn_trip_session',token,'--url',base);browser('set','viewport','390','844');browser('open',base+'/trips/'+trip.id+'/expenses');browser('wait','.expense-category-bar button');
   assert.equal(evaluate("document.querySelectorAll('.expense-plan-row').length"),6);
   assert(evaluate("!document.querySelector('.payment-summary,.interactive-donut,.expense-participant-stack')"));
+  assert(evaluate("getComputedStyle(document.querySelector('.redesigned-plan-expenses')).paddingBottom==='48px'"));
+  assert(evaluate("[...document.querySelectorAll('.expense-category-icon')].every(icon=>getComputedStyle(icon).color==='rgb(255, 255, 255)')"));
+  assert(evaluate("getComputedStyle(document.querySelector('.expense-day-list')).paddingLeft==='0px'"));
+  assert(evaluate("[...document.querySelectorAll('.expense-day-actions > button:not(.expense-day-chevron)')].every(button=>{const r=button.getBoundingClientRect();return r.width===r.height&&r.width>=36&&getComputedStyle(button).borderRadius==='50%';})"));
+  assert(evaluate("parseFloat(getComputedStyle(document.querySelector('.expense-category-bar button:last-child')).borderTopRightRadius)>=12"));
   for(const width of [320,390,430]){
     browser('set','viewport',String(width),'844');
     assert(evaluate("document.documentElement.scrollWidth<=innerWidth+1"));
@@ -53,6 +58,8 @@ try {
   assert.equal(evaluate("document.querySelectorAll('.expense-plan-row').length"),3);
   assert(evaluate("document.querySelector('.expense-category-bar button:first-child').getAttribute('aria-pressed')==='true'"));
   browser('wait','--fn',"document.querySelector('.expense-category-bar button.active').getBoundingClientRect().height>30");
+  browser('click','.expense-category-bar button:last-child');
+  assert(evaluate("parseFloat(getComputedStyle(document.querySelector('.expense-category-bar button:last-child')).borderTopRightRadius)>=12"));
   browser('click','.expense-category-heading button');
   assert.equal(evaluate("document.querySelectorAll('.expense-plan-row').length"),6);
   browser('click','.expense-member-disclosure summary');
