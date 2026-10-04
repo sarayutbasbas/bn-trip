@@ -56,16 +56,22 @@ try {
     await db.query("INSERT INTO user_favorite_trips(user_id,trip_id) VALUES($1,$2)", [owner, id]);
   }
   const dashboard = await (await api(owner, "/api/trips?mode=dashboard")).json();
+  assert.equal(dashboard.past.length, 6);
+  assert.equal(dashboard.counts.past, 7);
   assert.equal(dashboard.favoriteTrips.length, 6);
   assert.equal(dashboard.favoriteTrips[0].favorite_total, 7);
   assert(dashboard.favoriteTrips.every((item) => homeTrips.includes(item.id)));
   if (process.env.FAVORITES_BROWSER === "1") {
+    for(let index=0;index<7;index++) await db.query("INSERT INTO trip_ideas(user_id,name,destination,country_code,kind,target_month,target_year) VALUES($1,'Preview limit idea','Kyoto','JP','planned',1,2030)",[owner]);
     const browser = (...args) => execFileSync("npx", ["--yes", "agent-browser", "--session", "favorite-home", ...args], { encoding: "utf8" });
     try {
       browser("set", "viewport", "390", "844");
       browser("cookies", "set", "bn_trip_session", tokens.get(owner), "--url", base);
       browser("open", base);
       browser("wait", 'section[aria-label="ทริปที่ชื่นชอบ"]');
+      assert.equal(JSON.parse(browser("eval", "document.querySelectorAll('.past-section .trip-card').length")),6);
+      assert.equal(JSON.parse(browser("eval", "document.querySelectorAll('.home-ideas-grid .trip-card').length")),6);
+      console.log("PASS: Home past, planned ideas and favorites are capped at six with full counts retained");
       browser("scrollintoview", 'section[aria-label="ทริปที่ชื่นชอบ"]');
       browser("screenshot", "/tmp/bn-trip-home-favorites.png");
       const result = browser("eval", `(() => { const section = document.querySelector('section[aria-label="ทริปที่ชื่นชอบ"]'); if(section.querySelectorAll('.trip-card').length !== 6) throw new Error('Expected six cards'); if(section.querySelector('.trip-favorite-button')) throw new Error('Home must not have favorite controls'); section.querySelector('.section-view-all').click(); return true; })()`);

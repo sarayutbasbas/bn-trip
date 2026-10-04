@@ -3117,7 +3117,7 @@ function Dashboard({
   const unlockedBadges = counts.badges_unlocked ?? 0;
   const totalBadges = counts.badges_total ?? 0;
   const plannedIdeas = tripIdeas.filter((idea) => idea.kind === "planned");
-  const previewIdeas = plannedIdeas.slice(0, 8);
+  const previewIdeas = plannedIdeas.slice(0, 6);
   const heading = (
     kicker: string,
     title: string,
@@ -3276,7 +3276,7 @@ function Dashboard({
           "past",
         )}
         {past.length ? (
-          cards(past.slice(0, 8), true, false, "upcoming")
+          cards(past.slice(0, 6), true, false, "upcoming")
         ) : (
           <article className="card past-empty">
             {t("เมื่อจบทริปแล้ว เราจะเก็บการเดินทางไว้ตรงนี้ให้อัตโนมัติ")}
