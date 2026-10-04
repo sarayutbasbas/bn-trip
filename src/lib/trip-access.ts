@@ -152,4 +152,5 @@ export const tripMembersSql=(alias="trips")=>`(
       WHERE collaborator.trip_id=${alias}.id AND collaborator.user_id IS NOT NULL
     ) shared_member
   ) AS members,
-  (SELECT count(*)::int FROM trip_collaborators sheet_member WHERE sheet_member.trip_id=${alias}.id) AS collaborator_count`;
+  (SELECT count(*)::int FROM trip_collaborators sheet_member WHERE sheet_member.trip_id=${alias}.id) AS collaborator_count,
+  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',guest.id,'name',guest.name) ORDER BY guest.created_at,guest.id),'[]'::jsonb) FROM trip_expense_guests guest WHERE guest.trip_id=${alias}.id) AS companions`;

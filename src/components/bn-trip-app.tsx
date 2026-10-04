@@ -1,4 +1,5 @@
 "use client";
+import { ParticipantMode, TripCompanions } from "./trip-companions";
 import { tripDurationDays } from "@/src/lib/trip-duration";
 import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
 import { TripCoverArt, TripCoverCarousel } from "./trip-cover-gallery";
@@ -279,6 +280,7 @@ type ExpenseGuest = {
   name: string;
 };
 export type Trip = {
+  companions?: { id: string; name: string }[];
   favorite_total?: number;
   is_favorite?: boolean;
   collaborator_count?: number;
@@ -1684,19 +1686,22 @@ function AccountAvatar({
 }
 
 function SharedTripAvatars({
-  members = [],
+  members: accountMembers = [],
+  companions = [],
   variant = "card",
   limit = 3,
   onClick,
   actionLabel,
 }: {
   members?: TripMember[];
+  companions?: { id: string; name: string }[];
   variant?: "card" | "compact" | "header";
   limit?: number;
   onClick?: () => void;
   actionLabel?: string;
 }) {
   const t = useT();
+  const members: TripMember[] = [...accountMembers, ...companions.map(person => ({ id: `guest:${person.id}`, display_name: person.name, email: null, avatar_url: null, role: "collaborator" as const }))];
   if (!members.length) return null;
   const owner = members.find((member) => member.role === "owner");
   const collaborators = members.filter((member) => member.role !== "owner");
@@ -1721,7 +1726,7 @@ function SharedTripAvatars({
             : undefined
         }
       >
-        {!member.avatar_url && label.charAt(0).toUpperCase()}
+        {!member.avatar_url && (member.id.startsWith("guest:") ? <UserRound size={18}/> : label.charAt(0).toUpperCase())}
       </span>
     );
   };
@@ -2532,6 +2537,7 @@ function TripCard({
         {past && <TripRatingBadge trip={trip} variant="cover" />}
         <SharedTripAvatars
           members={trip.members}
+          companions={trip.companions}
           limit={3}
           actionLabel={t("ผู้ร่วมทริป")}
         />
@@ -2585,7 +2591,7 @@ function HomeTripIdeaCard({
       <div className="trip-cover">
         <TripCoverArt record={idea} sizes="(max-width: 600px) 50vw, 380px" priority={priority} />
         {countdown && <TripCountdownBadge label={countdown} />}
-        <SharedTripAvatars members={idea.members} limit={3} actionLabel="ผู้ร่วมวางแผน" />
+        <SharedTripAvatars members={idea.members} companions={idea.companions} limit={3} actionLabel="ผู้ร่วมวางแผน" />
       </div>
       <div className="trip-body">
         <h3>{idea.name}</h3>
@@ -3754,6 +3760,7 @@ function CompactTripCard({
       </div>
       <SharedTripAvatars
         members={trip.members}
+        companions={trip.companions}
         variant="compact"
         limit={3}
         onClick={() => manageCollaborators(trip)}
@@ -4265,6 +4272,7 @@ function TripHeader({
       </div>
       <SharedTripAvatars
         members={trip.members}
+        companions={trip.companions}
         variant="header"
         limit={3}
         onClick={manageMembers}
@@ -8362,6 +8370,8 @@ function CollaboratorsSheet({
   const t = useT();
   const canManage = trip.access_role === "owner";
   const canInvite = trip.access_role === "owner" || trip.access_role === "admin";
+  const [participantMode, setParticipantMode] = useState<"email" | "name">("email");
+  const [inviteAccess, setInviteAccess] = useState<"view" | "admin">("view");
   const [items, setItems] = useState<Collaborator[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [email, setEmail] = useState("");
@@ -8404,7 +8414,7 @@ function CollaboratorsSheet({
       const response = await fetch(`/api/trips/${trip.id}/collaborators`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, accessLevel: inviteAccess }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
@@ -8509,7 +8519,9 @@ function CollaboratorsSheet({
             <X size={18} />
           </button>
         </div>
-        {canInvite && (
+        {canInvite && <ParticipantMode value={participantMode} onChange={setParticipantMode}/>}
+        <TripCompanions id={trip.id} editable={canInvite} showForm={participantMode === "name"} onChanged={onChanged}/>
+        {canInvite && participantMode === "email" && (
           <form className="collaborator-form" onSubmit={add}>
             <div className="field">
               <label>{t("อีเมลผู้ร่วมทริป")}</label>
@@ -8530,8 +8542,9 @@ function CollaboratorsSheet({
               disabled={saving || !email.trim()}
             >
               <UserPlus size={16} />
-              {t(saving ? "กำลังเพิ่ม…" : "เพิ่มผู้ร่วมทริป")}
+              {t(saving ? "กำลังเพิ่ม…" : "ส่งคำเชิญ")}
             </button>
+            {canManage && <label className="participant-access">สิทธิ์เข้าถึง<select value={inviteAccess} onChange={event => setInviteAccess(event.target.value as "view" | "admin")}><option value="view">View · ดูและแก้ไข</option><option value="admin">Admin · ช่วยจัดการ</option></select></label>}
             {suggestions.length > 0 && (
               <div className="recent-collaborators">
                 <small>{t("เลือกจากคนที่เพิ่มล่าสุด")}</small>
@@ -8606,7 +8619,7 @@ function CollaboratorsSheet({
               </div>
             ))
           ) : (
-            <p className="collaborator-empty">{t("ยังไม่มีผู้ร่วมทริป")}</p>
+            <p className="collaborator-empty">{t("ยังไม่ได้เชิญผู้ร่วมทริปด้วยอีเมล")}</p>
           )}
         </div>
         {trip.access_role !== "owner" && (

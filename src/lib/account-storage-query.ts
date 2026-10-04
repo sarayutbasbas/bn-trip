@@ -2,6 +2,7 @@
 const tripTables = ["itineraries", "expenses", "flights", "lounges", "trip_checklist_items", "trip_documents", "trip_activity_logs", "trip_collaborators", "trip_flight_segments", "trip_accommodations", "trip_expense_guests", "trip_reviews", "trip_travel_insurance", "trip_travel_insurance_documents", "trip_travel_insurance_passengers", "trip_travel_insurance_policies"];
 const personalTables = ["credit_cards", "checklist_master_categories", "checklist_master_items", "user_badge_visits", "user_favorite_accommodations"];
 const contributions = [
+  "SELECT t.user_id AS owner_id,pg_column_size(r)::bigint AS bytes FROM trip_idea_expense_guests r JOIN trip_ideas t ON t.id=r.trip_idea_id",
   "SELECT r.id AS owner_id,pg_column_size(r)::bigint AS bytes FROM users r",
   "SELECT r.owner_id,pg_column_size(r)::bigint AS bytes FROM trips r",
   "SELECT r.user_id AS owner_id,pg_column_size(r)::bigint AS bytes FROM trip_ideas r",

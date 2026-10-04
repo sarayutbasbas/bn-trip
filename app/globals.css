@@ -9537,6 +9537,27 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .expense-title-row select { width: 100%; min-width: 0; }
 .expense-people-row select { width: 100%; min-width: 0; text-overflow: ellipsis; }
 .expense-people-row .split-member-menu { left: 0; right: auto; width: calc(200% + 10px); }
+.expense-people-row .payer-member-menu { left: auto; right: 0; }
+.expense-people-row .people-menu-up .split-member-menu { top: auto; bottom: calc(100% + 6px); }
+.expense-people-row .split-member-menu { overscroll-behavior: contain; }
+.participant-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 16px; }
+.participant-modes button { display: flex; align-items: center; gap: 9px; padding: 12px 10px; border-radius: 16px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); text-align: left; }
+.participant-modes button.active { color: var(--orange); border-color: var(--orange); background: var(--brand-soft); }
+.participant-modes button svg { flex-shrink: 0; }
+.participant-modes span { font-size: 13px; font-weight: 600; }
+.participant-modes small { display: block; margin-top: 3px; font-size: 10px; font-weight: 400; color: var(--muted); }
+.companion-form { display: grid; gap: 8px; margin-bottom: 18px; }
+.companion-form > div { display: flex; gap: 8px; }
+.companion-form input { min-width: 0; width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); color: var(--ink); font-size: 16px; }
+.companion-form .primary-btn { flex-shrink: 0; padding: 10px 14px; }
+.companion-form > small { font-size: 11px; color: var(--muted); line-height: 1.65; }
+.trip-companions h3 { font-size: 13px; margin: 12px 0; }
+.trip-companions h3 small { font-weight: 400; color: var(--muted); margin-left: 5px; }
+.companion-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.companion-chips > span { display: flex; align-items: center; gap: 7px; border-radius: 14px; background: var(--surface-2); padding: 9px 12px; font-size: 13px; overflow-wrap: anywhere; }
+.companion-chips svg { flex-shrink: 0; color: var(--muted); }
+.participant-access { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; grid-column: 1 / -1; font-size: 12px; }
+.participant-access select { min-width: 0; width: 100%; }
 .expense-settlement-summary { margin-top: 20px; }
 .expense-settlement-summary h3 { font-size: 14px; margin: 0 0 6px; }
 .expense-settlement-summary > p { color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -12446,7 +12467,8 @@ html.dark .badge-recent-highlight :is(.badge-recent-copy small, .badge-recent-it
 .trip-idea-submit-actions .primary-btn { min-width: 0; flex: 1 1 auto; }
 .trip-idea-submit-actions > .delete-record-btn { width: 48px; height: 48px; border-radius: 50%; }
 .trip-idea-form-grid { padding:2px 2px 4px; }
-.collaborator-row.idea-collaborator-row:not(.is-readonly) { grid-template-columns: 40px minmax(0,1fr) 42px; }
+.collaborator-row.idea-collaborator-row:not(.is-readonly) { grid-template-columns: 34px minmax(0,1fr) 70px 32px; }
+.idea-collaborator-row select { min-width: 0; width: 70px; padding: 8px 4px; font-size: 12px; }
 .collaborator-row.idea-collaborator-row .delete-record-btn { justify-self: end; }
 .trip-idea-card.compact-trip-card { min-height: 142px; padding: 0; grid-template-columns: minmax(120px,36%) minmax(0,1fr); align-items: stretch; gap: 0; overflow: hidden; }
 .trip-idea-card .compact-trip-cover { width: auto; height: auto; min-height: 142px; border-radius: 0; }

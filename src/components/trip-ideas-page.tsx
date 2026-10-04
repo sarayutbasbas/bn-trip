@@ -1,4 +1,6 @@
 "use client";
+import { ParticipantMode, TripCompanions } from "./trip-companions";
+import { UserRound } from "lucide-react";
 import { TripNameInput } from "@/src/components/trip-name-input";
 import Image from "next/image";
 import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
@@ -32,7 +34,7 @@ import { collectFilterMembers, matchesMemberFilter } from "@/src/lib/trip-member
 
 type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string;coverImageUrls:string[]};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
-type IdeaCollaborator={id:string;email:string;user_id:string|null;joined:boolean;display_name:string|null;avatar_url:string|null};
+type IdeaCollaborator={id:string;email:string;user_id:string|null;joined:boolean;display_name:string|null;avatar_url:string|null;access_level:"view"|"admin"};
 type HeaderProfile={id:string;email:string;display_name:string;avatar_url:string|null};
 type IdeaTripType="all"|"domestic"|"international";
 const monthNames=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
@@ -41,14 +43,15 @@ function timestamp(value:string){const parsed=Date.parse(value);return Number.is
 function sortIdeas(items:TripIdea[]){return [...items].sort((a,b)=>a.kind!==b.kind?(a.kind==="planned"?-1:1):a.kind==="planned"?((a.target_year||9999)-(b.target_year||9999)||(a.target_month||99)-(b.target_month||99)):timestamp(b.created_at)-timestamp(a.created_at))}
 async function readResponse(response:Response){const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||"บันทึกไม่สำเร็จ กรุณาลองอีกครั้ง");return data}
 function stop(event:{stopPropagation:()=>void}){event.stopPropagation()}
-function IdeaAvatars({members,open}:{members:TripIdeaMember[];open:()=>void}){
+function IdeaAvatars({members:accounts,companions=[],open}:{members:TripIdeaMember[];companions?:{id:string;name:string}[];open:()=>void}){
+  const members:TripIdeaMember[]=[...accounts,...companions.map(person=>({id:`guest:${person.id}`,display_name:person.name,email:"",avatar_url:null,role:"collaborator" as const}))];
   const owner=members.find(member=>member.role==="owner");
   const others=members.filter(member=>member.role!=="owner");
   const hasOverflow=members.length>3;
   const visible=[...others.slice(0,owner?(hasOverflow?1:2):(hasOverflow?2:3)),...(owner?[owner]:[])];
   const hidden=Math.max(0,members.length-visible.length);
   return <button type="button" className="trip-idea-avatars" onClick={event=>{stop(event);open()}} aria-label={`ผู้ร่วมวางแผน ${members.length} คน`} title="ผู้ร่วมวางแผน">
-    {visible.map(member=><span key={member.id} className={member.role==="owner"?"is-owner":""} style={member.avatar_url?{backgroundImage:`url("${member.avatar_url}")`}:undefined} title={member.display_name||member.email}>{!member.avatar_url&&(member.display_name||member.email||"?").charAt(0).toUpperCase()}</span>)}
+    {visible.map(member=><span key={member.id} className={member.role==="owner"?"is-owner":""} style={member.avatar_url?{backgroundImage:`url("${member.avatar_url}")`}:undefined} title={member.display_name||member.email}>{!member.avatar_url&&(member.id.startsWith("guest:")?<UserRound size={18}/>:(member.display_name||member.email||"?").charAt(0).toUpperCase())}</span>)}
     {hidden>0?<span className="is-more">+{hidden}</span>:null}
   </button>;
 }
@@ -66,10 +69,10 @@ function IdeaCard({idea,edit,convert,share,toggleFavorite,favoriteBusy}:{idea:Tr
       {targetDate?<small className="trip-idea-target-date"><CalendarDays size={11}/><span>{targetDate}</span></small>:null}
       {detail?<small className="trip-idea-note">{detail}</small>:null}
       <div className="trip-idea-card-footer">
-        <IdeaAvatars members={idea.members||[]} open={share}/>
+        <IdeaAvatars members={idea.members||[]} companions={idea.companions} open={share}/>
         <div className="trip-idea-footer-actions">
-          {idea.access_role === "owner" && <button className="trip-idea-invite" type="button" onClick={event=>{stop(event);share()}} aria-label="เชิญเพื่อนร่วมวางแผน" title="เชิญเพื่อนร่วมวางแผน"><UserPlus size={16}/></button>}
-          {idea.kind==="planned"&&convert?<button className="trip-idea-convert" type="button" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={15}/> สร้างทริป</button>:null}
+          {(idea.access_role === "owner"||idea.access_level === "admin") && <button className="trip-idea-invite" type="button" onClick={event=>{stop(event);share()}} aria-label="เชิญเพื่อนร่วมวางแผน" title="เชิญเพื่อนร่วมวางแผน"><UserPlus size={16}/></button>}
+          {idea.kind==="planned"&&convert&&idea.access_level!=="view"?<button className="trip-idea-convert" type="button" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={15}/> สร้างทริป</button>:null}
         </div>
       </div>
     </div>
@@ -124,14 +127,22 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
 }
 
 function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:TripIdea;close:()=>void;onChanged:()=>void;confirm:(value:Confirmation)=>void;notify:(message:string)=>void}){
+  const [participantMode,setParticipantMode]=useState<"email"|"name">("email");
+  const [inviteAccess,setInviteAccess]=useState<"view"|"admin">("view");
+  const canInvite=idea.access_role==="owner"||idea.access_level==="admin";
   const canManage=idea.access_role==="owner";const [items,setItems]=useState<IdeaCollaborator[]>([]);const [recent,setRecent]=useState<string[]>([]);const [email,setEmail]=useState("");const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);const [error,setError]=useState("");
   useEffect(()=>{Promise.all([fetch(`/api/trip-ideas/${idea.id}/collaborators`),fetch("/api/collaborators/recent")]).then(async([membersResponse,recentResponse])=>{const members=await readResponse(membersResponse);const contacts=await recentResponse.json();setItems(members);setRecent(Array.isArray(contacts)?contacts.map(contact=>contact.email):[])}).catch(reason=>setError(reason instanceof Error?reason.message:"โหลดผู้ร่วมวางแผนไม่สำเร็จ")).finally(()=>setLoading(false))},[idea.id]);
-  async function add(event:FormEvent){event.preventDefault();setSaving(true);setError("");try{const added=await readResponse(await fetch(`/api/trip-ideas/${idea.id}/collaborators`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})}));setItems(old=>[...old.filter(item=>item.id!==added.id),added]);setRecent(old=>[added.email,...old.filter(value=>value!==added.email)]);setEmail("");onChanged();notify("เพิ่มผู้ร่วมวางแผนแล้ว")}catch(reason){setError((reason as Error).message)}finally{setSaving(false)}}
+  async function add(event:FormEvent){event.preventDefault();setSaving(true);setError("");try{const added=await readResponse(await fetch(`/api/trip-ideas/${idea.id}/collaborators`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,accessLevel:inviteAccess})}));setItems(old=>[...old.filter(item=>item.id!==added.id),added]);setRecent(old=>[added.email,...old.filter(value=>value!==added.email)]);setEmail("");onChanged();notify("ส่งคำเชิญแล้ว")}catch(reason){setError((reason as Error).message)}finally{setSaving(false)}}
+  async function updateAccess(item:IdeaCollaborator,accessLevel:"view"|"admin"){
+    setSaving(true);setError("");try{await readResponse(await fetch(`/api/trip-ideas/${idea.id}/collaborators/${item.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({accessLevel})}));setItems(current=>current.map(person=>person.id===item.id?{...person,access_level:accessLevel}:person));onChanged();notify("อัปเดตสิทธิ์แล้ว")}catch(reason){setError((reason as Error).message)}finally{setSaving(false)}
+  }
   async function remove(item:IdeaCollaborator){await readResponse(await fetch(`/api/trip-ideas/${idea.id}/collaborators/${item.id}`,{method:"DELETE"}));setItems(old=>old.filter(row=>row.id!==item.id));onChanged();notify("ลบผู้ร่วมวางแผนแล้ว")}
   const suggestions=recent.filter(value=>!items.some(item=>item.email===value));
   return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)close()}}><section className="modal collaborators-sheet"><div className="modal-head"><div><h2>ผู้ร่วมวางแผน</h2><p>{canManage?"แชร์รายการนี้ให้เพื่อนช่วยดูและแก้ไขข้อมูลร่วมกัน":"รายชื่อผู้ที่วางแผนรายการนี้ร่วมกัน"}</p></div><button type="button" className="icon-btn" onClick={close} aria-label="ปิด"><X size={18}/></button></div>
-    {canManage?<form className="collaborator-form" onSubmit={add}><div className="field"><label>อีเมลผู้ร่วมวางแผน</label><input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="friend@gmail.com" value={email} onChange={event=>setEmail(event.target.value)} required/></div><button className="primary-btn" disabled={saving}><UserPlus size={16}/>{saving?"กำลังเพิ่ม…":"เพิ่มผู้ร่วมวางแผน"}</button>{suggestions.length?<div className="recent-collaborators"><small>เลือกจากคนที่เพิ่มล่าสุด</small><div>{suggestions.map(value=><button type="button" key={value} onClick={()=>setEmail(value)}>{value}</button>)}</div></div>:null}</form>:null}
-    {error?<p className="login-error">{error}</p>:null}<div className="collaborator-list">{loading?<CollaboratorsSkeleton count={idea.collaborator_count ?? idea.members.filter(member=>member.role!=="owner").length} label="กำลังโหลดผู้ร่วมวางแผน" />:items.length?items.map(item=><div className={`collaborator-row idea-collaborator-row ${canManage?"":"is-readonly"}`} key={item.id}><span className="collaborator-avatar" style={item.avatar_url?{backgroundImage:`url("${item.avatar_url}")`}:undefined}>{!item.avatar_url&&(item.display_name||item.email).charAt(0).toUpperCase()}</span><div className="collaborator-copy"><strong>{item.display_name||item.email}</strong><small>{item.display_name?item.email:item.joined?"เข้าร่วมแล้ว":"แชร์ด้วยอีเมลแล้ว"}</small></div>{canManage?<button type="button" className="delete-record-btn" onClick={()=>confirm({title:`ลบผู้ร่วมวางแผน “${item.email}”?`,description:"บุคคลนี้จะไม่สามารถเปิดหรือแก้ไขรายการนี้ได้อีก",confirmLabel:"ลบผู้ร่วมวางแผน",onConfirm:()=>remove(item)})} aria-label="ลบผู้ร่วมวางแผน"><Trash2 size={17}/></button>:<span className="collaborator-access-badge is-view">ร่วมวางแผน</span>}</div>):<p className="collaborator-empty">ยังไม่มีผู้ร่วมวางแผน</p>}</div>
+    {canInvite&&<ParticipantMode value={participantMode} onChange={setParticipantMode}/>}
+    <TripCompanions id={idea.id} idea editable={canInvite} showForm={participantMode==="name"} onChanged={onChanged}/>
+    {canInvite&&participantMode==="email"?<form className="collaborator-form" onSubmit={add}><div className="field"><label>อีเมลผู้ร่วมวางแผน</label><input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="friend@gmail.com" value={email} onChange={event=>setEmail(event.target.value)} required/></div><button className="primary-btn" disabled={saving||!email.trim()}><UserPlus size={16}/>{saving?"กำลังเพิ่ม…":"ส่งคำเชิญ"}</button>{canManage&&<label className="participant-access">สิทธิ์เข้าถึง<select value={inviteAccess} onChange={event=>setInviteAccess(event.target.value as "view"|"admin")}><option value="view">View · ดูและแก้ไข</option><option value="admin">Admin · ช่วยจัดการ</option></select></label>}{suggestions.length?<div className="recent-collaborators"><small>เลือกจากคนที่เพิ่มล่าสุด</small><div>{suggestions.map(value=><button type="button" key={value} onClick={()=>setEmail(value)}>{value}</button>)}</div></div>:null}</form>:null}
+    {error?<p className="login-error">{error}</p>:null}<div className="collaborator-list">{loading?<CollaboratorsSkeleton count={idea.collaborator_count ?? idea.members.filter(member=>member.role!=="owner").length} label="กำลังโหลดผู้ร่วมวางแผน" />:items.length?items.map(item=><div className={`collaborator-row idea-collaborator-row ${canManage?"":"is-readonly"}`} key={item.id}><span className="collaborator-avatar" style={item.avatar_url?{backgroundImage:`url("${item.avatar_url}")`}:undefined}>{!item.avatar_url&&(item.display_name||item.email).charAt(0).toUpperCase()}</span><div className="collaborator-copy"><strong>{item.display_name||item.email}</strong><small>{item.display_name?item.email:item.joined?"เข้าร่วมแล้ว":"แชร์ด้วยอีเมลแล้ว"}</small></div>{canManage&&<select aria-label={`สิทธิ์ ${item.email}`} disabled={saving} value={item.access_level} onChange={event=>void updateAccess(item,event.target.value as "view"|"admin")}><option value="view">View</option><option value="admin">Admin</option></select>}{canManage?<button type="button" className="delete-record-btn" onClick={()=>confirm({title:`ลบผู้ร่วมวางแผน “${item.email}”?`,description:"บุคคลนี้จะไม่สามารถเปิดหรือแก้ไขรายการนี้ได้อีก",confirmLabel:"ลบผู้ร่วมวางแผน",onConfirm:()=>remove(item)})} aria-label="ลบผู้ร่วมวางแผน"><Trash2 size={17}/></button>:<span className="collaborator-access-badge is-view">{item.access_level==="admin"?"Admin":"View"}</span>}</div>):<p className="collaborator-empty">ยังไม่ได้เชิญผู้ร่วมทริปด้วยอีเมล</p>}</div>
   </section></div>;
 }
 

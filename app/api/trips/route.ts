@@ -93,7 +93,7 @@ export async function POST(request:Request) {
         const source=await client.query<{id:string;note:string;cover_image_url:string;cover_image_urls:string[]}>(`SELECT idea.id,idea.note,idea.cover_image_url,idea.cover_image_urls FROM trip_ideas idea
           WHERE idea.id=$1 AND (idea.user_id=$2 OR EXISTS(
             SELECT 1 FROM trip_idea_collaborators member
-            WHERE member.trip_idea_id=idea.id AND member.user_id=$2
+            WHERE member.trip_idea_id=idea.id AND member.user_id=$2 AND member.access_level='admin'
           )) FOR UPDATE`,[input.sourceIdeaId,session.userId]);
         if(!source.rows[0])throw new Error("source_idea_not_found");
         sourceNote=source.rows[0].note;
@@ -110,19 +110,21 @@ export async function POST(request:Request) {
           WHERE favorite.trip_idea_id=$2
           ON CONFLICT(user_id,trip_id) DO NOTHING`,[created.id,input.sourceIdeaId]);
         await client.query(`INSERT INTO trip_collaborators(trip_id,email,user_id,invited_by,access_level)
-          SELECT $1,source.email,source.user_id,$2,'admin'
+          SELECT $1,source.email,source.user_id,$2,source.access_level
           FROM (
-            SELECT owner.email,owner.id AS user_id
+            SELECT owner.email,owner.id AS user_id,'admin' AS access_level
             FROM trip_ideas idea JOIN users owner ON owner.id=idea.user_id
             WHERE idea.id=$3
             UNION
-            SELECT member.email,member.user_id
+            SELECT member.email,member.user_id,member.access_level
             FROM trip_idea_collaborators member
             WHERE member.trip_idea_id=$3
           ) source
           WHERE source.email IS NOT NULL AND lower(source.email)<>lower($4)
           ON CONFLICT(trip_id,email) DO UPDATE SET
-            user_id=EXCLUDED.user_id,access_level='admin'`,[created.id,session.userId,input.sourceIdeaId,session.email]);
+            user_id=EXCLUDED.user_id,access_level=EXCLUDED.access_level`,[created.id,session.userId,input.sourceIdeaId,session.email]);
+        await client.query(`INSERT INTO trip_expense_guests(id,trip_id,name,created_by,created_at)
+          SELECT id,$1,name,created_by,created_at FROM trip_idea_expense_guests WHERE trip_idea_id=$2`, [created.id,input.sourceIdeaId]);
         await client.query("DELETE FROM trip_ideas WHERE id=$1",[input.sourceIdeaId]);
       }
       const members=await client.query(`SELECT account.id,COALESCE(account.email,'') AS email,account.display_name,account.avatar_url,

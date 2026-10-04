@@ -10,6 +10,8 @@ export type TripIdea = {
   trip_destinations:TripDestinationSelection[];kind:TripIdeaKind;target_month:number|null;target_year:number|null;
   note:string;cover_image_url:string;cover_image_urls?:string[];access_role:"owner"|"collaborator";members:TripIdeaMember[];collaborator_count?:number;created_at:string;updated_at:string;
   is_favorite?:boolean;
+  access_level?: "owner" | "view" | "admin";
+  companions?: { id: string; name: string }[];
 };
 
 type DatabaseTripIdea = Omit<TripIdea,"created_at"|"updated_at">&{
@@ -42,6 +44,8 @@ const ideaSelect=`SELECT idea.id,idea.user_id AS owner_id,idea.name,idea.destina
   idea.kind,idea.target_month,idea.target_year,idea.note,idea.cover_image_url,idea.cover_image_urls,idea.created_at,idea.updated_at,
   EXISTS(SELECT 1 FROM user_favorite_trip_ideas favorite_idea WHERE favorite_idea.trip_idea_id=idea.id AND favorite_idea.user_id=$1) AS is_favorite,
   CASE WHEN idea.user_id=$1 THEN 'owner' ELSE 'collaborator' END AS access_role,
+  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',guest.id,'name',guest.name) ORDER BY guest.created_at,guest.id),'[]'::jsonb) FROM trip_idea_expense_guests guest WHERE guest.trip_idea_id=idea.id) AS companions,
+  CASE WHEN idea.user_id=$1 THEN 'owner' ELSE (SELECT access_level FROM trip_idea_collaborators WHERE trip_idea_id=idea.id AND user_id=$1 LIMIT 1) END AS access_level,
   (SELECT count(*)::int FROM trip_idea_collaborators sheet_member WHERE sheet_member.trip_idea_id=idea.id) AS collaborator_count,
   (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',member.id,'email',member.email,'display_name',member.display_name,'avatar_url',member.avatar_url,'role',member.role) ORDER BY member.sort_order,member.created_at),'[]'::jsonb)
    FROM (
@@ -74,4 +78,11 @@ export async function getTripIdeaRole(session:SessionUser,id:string) {
     FROM trip_ideas idea LEFT JOIN trip_idea_collaborators member ON member.trip_idea_id=idea.id AND member.user_id=$2
     WHERE idea.id=$1 AND (idea.user_id=$2 OR member.id IS NOT NULL) LIMIT 1`,[id,session.userId]);
   return result.rows[0]?.role||null;
+}
+
+export async function getTripIdeaAccess(session: SessionUser, id: string) {
+  const result = await query<{ role: "owner" | "view" | "admin" }>(`SELECT CASE WHEN idea.user_id=$2 THEN 'owner' ELSE member.access_level END AS role
+    FROM trip_ideas idea LEFT JOIN trip_idea_collaborators member ON member.trip_idea_id=idea.id AND member.user_id=$2
+    WHERE idea.id=$1 AND (idea.user_id=$2 OR member.id IS NOT NULL) LIMIT 1`, [id, session.userId]);
+  return result.rows[0]?.role || null;
 }
