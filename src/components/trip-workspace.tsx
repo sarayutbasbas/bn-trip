@@ -1,5 +1,7 @@
 "use client";
 
+import { DOCUMENT_QUOTA_BYTES, DOCUMENT_QUOTA_MESSAGE, PDF_LIMIT_BYTES } from "@/src/lib/document-storage";
+
 import {
   startTransition,
   useDeferredValue,
@@ -138,7 +140,7 @@ const EMPTY: Workspace = {
   currentUserId: "",
   role: "view",
   documentUploadMode: "server",
-  documentQuotaBytes: 100 * 1024 * 1024,
+  documentQuotaBytes: DOCUMENT_QUOTA_BYTES,
   documentUsageBytes: 0,
 };
 import { notifyOfflineDocumentsChanged } from "@/src/lib/offline-document-usage";
@@ -591,12 +593,12 @@ export function TripWorkspace({
     }
     const sourceLimit =
       sourceFile.type === "application/pdf"
-        ? 10 * 1024 * 1024
+        ? PDF_LIMIT_BYTES
         : MAX_SOURCE_IMAGE_BYTES;
     if (sourceFile.size > sourceLimit) {
       setError(
         sourceFile.type === "application/pdf"
-          ? "PDF ต้องมีขนาดไม่เกิน 10 MB"
+          ? DOCUMENT_QUOTA_MESSAGE
           : "รูปต้นฉบับต้องมีขนาดไม่เกิน 20 MB",
       );
       return;
@@ -606,15 +608,15 @@ export function TripWorkspace({
     try {
       const file = await prepareDocumentFile(sourceFile);
       const limit =
-        file.type === "application/pdf" ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
+        file.type === "application/pdf" ? PDF_LIMIT_BYTES : 3 * 1024 * 1024;
       if (file.size > limit)
         throw new Error(
           file.type === "application/pdf"
-            ? "PDF ต้องมีขนาดไม่เกิน 10 MB"
+            ? DOCUMENT_QUOTA_MESSAGE
             : "ไม่สามารถลดรูปให้ต่ำกว่า 3 MB ได้ กรุณาเลือกรูปอื่น",
         );
       if (data.documentUsageBytes + file.size > data.documentQuotaBytes)
-        throw new Error("พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)");
+        throw new Error(DOCUMENT_QUOTA_MESSAGE);
       form.set("file", file);
       if (data.documentUploadMode === "client") {
         const extension =
@@ -706,12 +708,12 @@ export function TripWorkspace({
     if (sourceFile) {
       const sourceLimit =
         sourceFile.type === "application/pdf"
-          ? 10 * 1024 * 1024
+          ? PDF_LIMIT_BYTES
           : MAX_SOURCE_IMAGE_BYTES;
       if (sourceFile.size > sourceLimit) {
         setError(
           sourceFile.type === "application/pdf"
-            ? "PDF ต้องมีขนาดไม่เกิน 10 MB"
+            ? DOCUMENT_QUOTA_MESSAGE
             : "รูปต้นฉบับต้องมีขนาดไม่เกิน 20 MB",
         );
         return;
@@ -725,18 +727,18 @@ export function TripWorkspace({
         : undefined;
       if (file) {
         const limit =
-          file.type === "application/pdf" ? 10 * 1024 * 1024 : 3 * 1024 * 1024;
+          file.type === "application/pdf" ? PDF_LIMIT_BYTES : 3 * 1024 * 1024;
         if (file.size > limit)
           throw new Error(
             file.type === "application/pdf"
-              ? "PDF ต้องมีขนาดไม่เกิน 10 MB"
+              ? DOCUMENT_QUOTA_MESSAGE
               : "ไม่สามารถลดรูปให้ต่ำกว่า 3 MB ได้ กรุณาเลือกรูปอื่น",
           );
         if (
           data.documentUsageBytes - Number(editingDocument.file_size) + file.size >
           data.documentQuotaBytes
         )
-          throw new Error("พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)");
+          throw new Error(DOCUMENT_QUOTA_MESSAGE);
       }
       if (file && data.documentUploadMode === "client") {
         const extension =
@@ -1107,10 +1109,11 @@ export function TripWorkspace({
             type="button"
             className="trip-section-add"
             onClick={() => {
+              if (usagePercent >= 100) { setError(DOCUMENT_QUOTA_MESSAGE); return; }
               setError("");
               setDocumentSheetOpen(true);
             }}
-            disabled={loading || usagePercent >= 100}
+            disabled={loading}
             aria-label={label("เพิ่มไฟล์")}
             title={label("เพิ่มไฟล์")}
           >
@@ -1386,7 +1389,7 @@ export function TripWorkspace({
             <div>
               <strong>{label("พื้นที่เอกสาร")}</strong>
               <span>
-                {(data.documentUsageBytes / 1024 / 1024).toFixed(1)} / 100 MB ·{" "}
+                {(data.documentUsageBytes / 1024 / 1024).toFixed(1)} / {data.documentQuotaBytes / 1024 / 1024} MB ·{" "}
                 {usagePercent.toFixed(0)}%
               </span>
             </div>
@@ -1932,7 +1935,7 @@ export function TripWorkspace({
             </div>
             <small className="document-upload-note">
               {label(
-                "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 10 MB",
+                "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 5 MB",
               )}
             </small>
             {error && <p className="login-error">{label(error)}</p>}
@@ -2011,14 +2014,14 @@ export function TripWorkspace({
             </div>
             <small className="document-upload-note">
               {label(
-                "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 10 MB · เลือกเก็บออฟไลน์ภายหลังได้",
+                "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 5 MB · เลือกเก็บออฟไลน์ภายหลังได้",
               )}
             </small>
             {error && <p className="login-error">{label(error)}</p>}
             <div className="modal-submit-actions">
               <button
                 className="primary-btn document-upload-submit"
-                disabled={busy === "document" || usagePercent >= 100}
+                disabled={busy === "document"}
               >
                 <Upload size={16} />
                 {label(
@@ -2029,9 +2032,9 @@ export function TripWorkspace({
           </form>
         </div>
       )}
-      {error && (checklistSheetOpen || documentSheetOpen || Boolean(editingDocument)) && (
+      {error && (error === DOCUMENT_QUOTA_MESSAGE || checklistSheetOpen || documentSheetOpen || Boolean(editingDocument)) && (
         <FormErrorDialog
-          title={documentSheetOpen || editingDocument ? label("ตรวจสอบข้อมูลเอกสาร") : label("ตรวจสอบข้อมูล Checklist")}
+          title={error === DOCUMENT_QUOTA_MESSAGE ? label("พื้นที่เอกสารไม่เพียงพอ") : documentSheetOpen || editingDocument ? label("ตรวจสอบข้อมูลเอกสาร") : label("ตรวจสอบข้อมูล Checklist")}
           description={label(error)}
           onClose={() => setError("")}
         />

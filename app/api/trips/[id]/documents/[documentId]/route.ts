@@ -5,7 +5,7 @@ import { logTripActivity } from "@/src/lib/activity";
 import { getSession } from "@/src/lib/auth";
 import { query, transaction } from "@/src/lib/db";
 import {
-  DOCUMENT_QUOTA_BYTES,
+  DOCUMENT_QUOTA_BYTES, DOCUMENT_QUOTA_MESSAGE,
   documentExtension,
   validateDocument,
 } from "@/src/lib/document-storage";
@@ -212,7 +212,7 @@ export async function PATCH(
       await deleteUpload(orphan.filename, orphan.blobUrl).catch(() => undefined);
     if (error instanceof Error && error.message === "quota_exceeded")
       return NextResponse.json(
-        { error: "พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)" },
+        { error: DOCUMENT_QUOTA_MESSAGE },
         { status: 413 },
       );
     console.error("Document update error", error);

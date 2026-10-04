@@ -3,7 +3,7 @@ import { head } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { getSession } from "@/src/lib/auth";
 import { query, transaction } from "@/src/lib/db";
-import { DOCUMENT_QUOTA_BYTES, documentExtension, validateDocument } from "@/src/lib/document-storage";
+import { DOCUMENT_QUOTA_BYTES, DOCUMENT_QUOTA_MESSAGE, documentExtension, validateDocument } from "@/src/lib/document-storage";
 import { getTripRole } from "@/src/lib/trip-access";
 import { deleteUpload, getStorageBackend, saveUpload } from "@/src/lib/storage";
 import { logTripActivity } from "@/src/lib/activity";
@@ -66,7 +66,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
       originalFilename=file.name;mimeType=file.type;size=file.size;const validation=validateDocument(mimeType,size);if(validation)return NextResponse.json({error:validation},{status:400});
       const extension=documentExtension(mimeType);storedFilename=`doc-${randomUUID()}.${extension}`;
       const used=await query<{used:string}>("SELECT COALESCE(SUM(file_size),0)::text AS used FROM trip_documents WHERE trip_id=$1",[id]);
-      if(Number(used.rows[0]?.used||0)+size>DOCUMENT_QUOTA_BYTES)return NextResponse.json({error:"พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)"},{status:413});
+      if(Number(used.rows[0]?.used||0)+size>DOCUMENT_QUOTA_BYTES)return NextResponse.json({error:DOCUMENT_QUOTA_MESSAGE},{status:413});
       await saveUpload(storedFilename,Buffer.from(await file.arrayBuffer()),mimeType);orphan={filename:storedFilename,blobUrl:null};
     }
     const item=await insertDocument({tripId:id,title,storedFilename,blobUrl,originalFilename,mimeType,size,userId:session.userId,flightSegmentId,itineraryId});orphan=null;
@@ -75,7 +75,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   }catch(error){
     if(orphan)await deleteUpload(orphan.filename,orphan.blobUrl).catch(()=>undefined);
     console.error("Document upload error",error);
-    if(error instanceof Error&&error.message==="quota_exceeded")return NextResponse.json({error:"พื้นที่เอกสารของทริปเต็มแล้ว (สูงสุด 100 MB)"},{status:413});
+    if(error instanceof Error&&error.message==="quota_exceeded")return NextResponse.json({error:DOCUMENT_QUOTA_MESSAGE},{status:413});
     if(error instanceof Error&&error.message==="invalid_flight_segment")return NextResponse.json({error:"ไม่พบเที่ยวบินสำหรับเอกสารนี้"},{status:400});
     if(error instanceof Error&&error.message==="invalid_itinerary")return NextResponse.json({error:"ไม่พบรายการ Timeline สำหรับเอกสารนี้"},{status:400});
     return NextResponse.json({error:error instanceof Error&&error.message==="invalid_blob"?"ตรวจสอบไฟล์ที่อัปโหลดไม่สำเร็จ":"อัปโหลดเอกสารไม่สำเร็จ"},{status:500});

@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {readFile} from 'node:fs/promises';
+import {Pool} from 'pg';
+import {SignJWT} from 'jose';
+const db=new Pool({connectionString:'postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip'});
+const id=randomUUID(),email=`documents-${id}@example.invalid`,base='http://localhost:8001';
+const env=JSON.parse(execFileSync('docker',['inspect','bn-trip-app-1'],{encoding:'utf8'}))[0].Config.Env;
+const secret=env.find(v=>v.startsWith('AUTH_SECRET='))?.slice(12)||'dev-only-change-me-before-production';
+const token=await new SignJWT({email,displayName:'Documents test',demo:false}).setProtectedHeader({alg:'HS256'}).setSubject(id).setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));
+const api=async(path,method='GET',body)=>{const multipart=body instanceof FormData;const r=await fetch(base+path,{method,headers:{cookie:`bn_trip_session=${token}`,...(!multipart?{'Content-Type':'application/json'}:{})},...(body?{body:multipart?body:JSON.stringify(body)}:{})});assert(r.ok,await r.clone().text());return r.json()};
+const browser=(...args)=>execFileSync('npx',['--yes','agent-browser','--session','documents-notifications',...args],{encoding:'utf8',timeout:45000});
+const evaluate=code=>JSON.parse(browser('eval',code));
+let trip;const ids=[];const MB=1024*1024;
+const send=async(size,documentId)=>{const form=new FormData();form.set('title','Quota fixture');form.set('file',new Blob([new Uint8Array(size)],{type:'application/pdf'}),'quota.pdf');const r=await fetch(base+'/api/trips/'+trip.id+'/documents'+(documentId?'/'+documentId:''),{method:documentId?'PATCH':'POST',headers:{cookie:'bn_trip_session='+token},body:form});const body=await r.json();if(r.ok&&!documentId)ids.push(body.id);return {status:r.status,body}};
+try{
+ await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Quota test')",[id,email]);
+ trip=await api('/api/trips','POST',{name:'Document quota test',countryCode:'JP',locationIds:['JP:kyoto'],outboundDate:'2027-01-01',outboundTime:'08:00',returnDate:'2027-01-02',returnTime:'18:00',budgetThb:0});
+ assert.equal((await send(3*MB)).status,201);const second=await send(2*MB);assert.equal(second.status,201);
+ let usage=await api('/api/trips/'+trip.id+'/workspace?tab=documents');assert.equal(usage.documentQuotaBytes,5*MB);assert.equal(usage.documentUsageBytes,5*MB);
+ const over=await send(1);assert.equal(over.status,413);assert.match(over.body.error,/5 MB/);assert.match(over.body.error,/ลบเอกสาร/);
+ browser('open',base);browser('cookies','set','bn_trip_session',token,'--url',base);browser('set','viewport','390','844');browser('open',base+'/trips/'+trip.id+'?workspace=documents');browser('wait','.document-quota');
+ assert(evaluate("document.querySelector('.document-quota').textContent.includes('/ 5 MB')"));
+ browser('click','.trip-section-add[aria-label="เพิ่มไฟล์"]');browser('wait','[role=alertdialog]');assert(evaluate("document.querySelector('[role=alertdialog]').textContent.includes('ลบเอกสารที่ไม่ใช้')"));browser('screenshot','/tmp/document-quota-full.png');
+ assert.equal((await send(MB,second.body.id)).status,200);
+ const results=await Promise.all([send(.75*MB),send(.75*MB)]);assert.deepEqual(results.map(r=>r.status).sort(),[201,413]);
+ usage=await api('/api/trips/'+trip.id+'/workspace?tab=documents');assert.equal(usage.documentUsageBytes,4.75*MB);
+ const rejected=await send(3*MB,second.body.id);assert.equal(rejected.status,413);
+ assert.equal((await api('/api/trips/'+trip.id+'/workspace?tab=documents')).documentUsageBytes,4.75*MB);
+ await api('/api/trips/'+trip.id+'/documents/'+ids[0],'DELETE');ids.shift();assert.equal((await send(MB)).status,201);
+ console.log('PASS 5MB exact limit, overflow rejection, full-storage popup, replacement accounting, concurrent upload protection and space reclaimed after delete');
+}finally{try{browser('close')}catch{}if(trip)for(const docId of ids)await api('/api/trips/'+trip.id+'/documents/'+docId,'DELETE');await db.query('DELETE FROM users WHERE id=$1',[id]);await db.end()}

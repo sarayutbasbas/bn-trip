@@ -1181,10 +1181,10 @@ Object.assign(EN_TEXT, {
   เพิ่มโดย: "Added by",
   นำเข้ารายการไม่สำเร็จ: "Could not import items",
   พื้นที่เอกสาร: "Document storage",
-  "รูปภาพสูงสุด 3 MB · PDF สูงสุด 10 MB · เลือกเก็บออฟไลน์ภายหลังได้":
-    "Images up to 3 MB · PDFs up to 10 MB · optionally save offline",
-  "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 10 MB · เลือกเก็บออฟไลน์ภายหลังได้":
-    "Images are optimized before upload · PDFs up to 10 MB · optionally save offline",
+  "รูปภาพสูงสุด 3 MB · PDF สูงสุด 5 MB · เลือกเก็บออฟไลน์ภายหลังได้":
+    "Images up to 3 MB · PDFs up to 5 MB · optionally save offline",
+  "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 5 MB · เลือกเก็บออฟไลน์ภายหลังได้":
+    "Images are optimized before upload · PDFs up to 5 MB · optionally save offline",
   "พื้นที่ใกล้เต็มมาก กรุณาลบไฟล์ที่ไม่ใช้":
     "Storage is almost full. Remove unused files.",
   "พื้นที่เหลือน้อย กรุณาตรวจสอบไฟล์":
@@ -1210,10 +1210,10 @@ Object.assign(EN_TEXT, {
   เลือกไฟล์ใหม่: "Choose new file",
   เลือกไฟล์ใหม่แล้ว: "New file selected",
   ไฟล์ปัจจุบัน: "Current file",
-  "ไม่เลือกไฟล์ใหม่ ระบบจะแก้เฉพาะชื่อ · รูปสูงสุด 3 MB · PDF สูงสุด 10 MB":
-    "Without a new file, only the name changes · Images up to 3 MB · PDFs up to 10 MB",
-  "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 10 MB":
-    "Images are optimized before upload · PDFs up to 10 MB",
+  "ไม่เลือกไฟล์ใหม่ ระบบจะแก้เฉพาะชื่อ · รูปสูงสุด 3 MB · PDF สูงสุด 5 MB":
+    "Without a new file, only the name changes · Images up to 3 MB · PDFs up to 5 MB",
+  "รูปจะถูกลดขนาดอัตโนมัติก่อนอัปโหลด · PDF สูงสุด 5 MB":
+    "Images are optimized before upload · PDFs up to 5 MB",
   "รูปต้นฉบับต้องมีขนาดไม่เกิน 20 MB":
     "The source image must be 20 MB or smaller",
   "ไม่สามารถลดรูปให้ต่ำกว่า 3 MB ได้ กรุณาเลือกรูปอื่น":
