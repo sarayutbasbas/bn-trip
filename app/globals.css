@@ -7352,7 +7352,8 @@ html.dark .trip-section-nav button.active {
 .expense-category-heading { display:flex;align-items:center;justify-content:space-between;gap:8px; }
 .expense-category-heading h3,.expense-member-disclosure .expense-member-summary-head h3 { display:flex;align-items:center;gap:7px;font-size:17px;font-weight:750;margin:0; }
 .expense-category-heading h3 svg,.expense-member-disclosure h3 svg { color:var(--orange);flex-shrink:0; }
-.expense-category-heading > button { min-height:36px;color:var(--orange);font-size:12px;font-weight:750;background:transparent; }
+.expense-category-heading > button { display:inline-flex;align-items:center;justify-content:center;gap:5px;flex-shrink:0;min-height:36px;padding:6px 12px;border:1px solid var(--brand-border);border-radius:999px;color:var(--orange);font-size:12px;font-weight:750;background:var(--brand-soft); }
+.expense-category-heading > button:disabled { color:var(--muted);background:var(--surface-2);border-color:var(--line);opacity:.55;cursor:not-allowed; }
 .expense-category-bar { display:flex;align-items:center;height:44px;margin:6px 0;background:transparent; }
 .expense-category-bar:empty { background:var(--surface-2);height:20px;border-radius:99px;margin:18px 0; }
 .expense-category-bar button { height:24px;min-width:0;padding:0;border:0;transition:height .18s ease,filter .18s ease; }
