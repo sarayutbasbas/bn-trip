@@ -17,7 +17,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarDays,CalendarRange,CheckCircle2,Compass,Globe2,Heart,LogOut,Luggage,MapPin,MapPinned,PlaneTakeoff,Plus,RefreshCw,RotateCcw,Search,Settings2,Trash2,UserPlus,X } from "lucide-react";
 import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas";
-import { getCurrentAccount } from "@/src/lib/client-account";
 import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
 import { TRIP_DESTINATION_OPTIONS,type TripDestinationOption } from "@/src/lib/travel-badges";
 import { ConfirmDialog,EmptyState,CountryFlagImage,CountryPicker,TripCoverPicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
@@ -38,7 +37,6 @@ import { collectFilterMembers, matchesMemberFilter } from "@/src/lib/trip-member
 type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string;coverImageUrls:string[]};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
 type IdeaCollaborator={id:string;email:string;user_id:string|null;joined:boolean;display_name:string|null;avatar_url:string|null;access_level:"view"|"admin"};
-type HeaderProfile={id:string;email:string;display_name:string;avatar_url:string|null};
 type IdeaTripType="all"|"domestic"|"international";
 const monthNames=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 
@@ -149,7 +147,7 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo,currentUserId}:{i
   const [selectedMembers,setSelectedMembers]=useState<string[]>([]);
   const [draftMembers,setDraftMembers]=useState<string[]>([]);
   const [favoriteBusyId,setFavoriteBusyId]=useState<string|null>(null);
-  const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor|undefined>(()=>{const idea=initialIdeas.find(item=>item.id===initialEditId);return idea?{idea,promote:false}:undefined});const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [kindFilter,setKindFilter]=useState<"all"|TripIdeaKind|"favorite">("all");const [tripType,setTripType]=useState<IdeaTripType>("all");const [selectedYears,setSelectedYears]=useState<string[]>([]);const [filtersOpen,setFiltersOpen]=useState(false);const [draftTripType,setDraftTripType]=useState<IdeaTripType>("all");const [draftYears,setDraftYears]=useState<string[]>([]);const [profile,setProfile]=useState<HeaderProfile|null>(null);const [refreshing,setRefreshing]=useState(false);
+  const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor|undefined>(()=>{const idea=initialIdeas.find(item=>item.id===initialEditId);return idea?{idea,promote:false}:undefined});const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [kindFilter,setKindFilter]=useState<"all"|TripIdeaKind|"favorite">("all");const [tripType,setTripType]=useState<IdeaTripType>("all");const [selectedYears,setSelectedYears]=useState<string[]>([]);const [filtersOpen,setFiltersOpen]=useState(false);const [draftTripType,setDraftTripType]=useState<IdeaTripType>("all");const [draftYears,setDraftYears]=useState<string[]>([]);const [refreshing,setRefreshing]=useState(false);
   const availableYears=useMemo(()=>[...new Set(ideas.filter(idea=>idea.kind==="planned").map(idea=>idea.target_year).filter((year):year is number=>typeof year==="number"))].sort((a,b)=>b-a),[ideas]);
   const hasDomestic=ideas.some(idea=>idea.country_code==="TH");
   const hasInternational=ideas.some(idea=>idea.country_code!=="TH");
@@ -177,7 +175,6 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo,currentUserId}:{i
     url.searchParams.delete("edit");
     window.history.replaceState(window.history.state,"",`${url.pathname}${url.search}${url.hash}`);
   },[initialEditId]);
-  useEffect(()=>{let active=true;getCurrentAccount().then(account=>{if(active)setProfile(account)}).catch(()=>{});return()=>{active=false}},[]);
   useEffect(()=>{
     if(sessionStorage.getItem("invitation:accepted:trip_idea")!=="1")return;
     const controller=new AbortController();
@@ -228,11 +225,10 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo,currentUserId}:{i
     notify("เพิ่มทริปที่เล็งไว้จากคำเชิญแล้ว");
   }
   function convertToTrip(idea:TripIdea){if(demo){notify("เข้าสู่ระบบเพื่อสร้างทริปจริง");return}router.push(`/?tripIdea=${encodeURIComponent(idea.id)}`)}
-  const avatarLabel=(profile?.display_name||profile?.email||"?").trim();
   return <div className="app-shell flow-shell trip-ideas-page-shell">
     {toast&&typeof document!=="undefined"?createPortal(<div className="toast toast-success" role="status" aria-live="polite"><CheckCircle2 size={17}/>{toast}</div>,document.body):null}
     <main>
-      <header className="mobile-head flow-header"><Link className="brand" href="/" aria-label="RouteRao · หน้าแรก"><Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized/><div>RouteRao<small>travel smarter together</small></div></Link><nav className="mobile-actions" aria-label="เมนูหลัก"><button className="icon-btn home-refresh-btn" type="button" onClick={()=>void refreshAll()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing?"analytics-refresh-spinning":""} size={24}/></button><InvitationNotifications onChanged={invitationChanged}/><button className="home-profile-btn" type="button" onClick={()=>router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์"><span className="account-avatar account-avatar-small"><span className="account-avatar-image" style={profile?.avatar_url?{backgroundImage:`url("${profile.avatar_url}")`}:undefined}>{!profile?.avatar_url&&avatarLabel.charAt(0).toUpperCase()}</span></span></button></nav></header>
+      <header className="mobile-head flow-header"><Link className="brand" href="/" aria-label="RouteRao · หน้าแรก"><Image src="/routerao-logo-transparent-512.png" alt="RouteRao" width={48} height={48} priority unoptimized/><div>RouteRao<small>travel smarter together</small></div></Link><nav className="mobile-actions" aria-label="เมนูหลัก"><button className="icon-btn home-refresh-btn" type="button" onClick={()=>void refreshAll()} disabled={refreshing} aria-label="รีเฟรช" title="รีเฟรช"><RefreshCw className={refreshing?"analytics-refresh-spinning":""} size={24}/></button><InvitationNotifications onChanged={invitationChanged}/></nav></header>
       <div className="trip-ideas-screen">
         <PageIntro title="ทริปที่เล็งไว้" titleIcon={<NavIcon name="radar" filled width={25} height={25} aria-hidden="true" />} subtitle={<>เก็บแพลนที่อยากไปไว้ที่นี่ แล้วออกเดินทางด้วยกัน</>}/>
         <div className="trip-ideas-search-row"><label className="trip-search trip-ideas-search"><Search size={20}/><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder="ค้นหาทริป เมือง หรือประเทศ" aria-label="ค้นหาทริป เมือง หรือประเทศ"/>{query?<button type="button" onClick={()=>setQuery("")} aria-label="ล้างคำค้นหา"><X size={15}/></button>:null}</label><button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={openFilters} aria-expanded={filtersOpen} aria-label="ตั้งค่าตัวกรอง" title="ตั้งค่าตัวกรอง"><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label="กำลังใช้ตัวกรอง"/>:null}</button><button className="trip-ideas-add-button" type="button" onClick={()=>openForm(null)} aria-label="เพิ่มทริปที่เล็งไว้" title="เพิ่มทริปที่เล็งไว้"><Plus size={21}/></button></div>

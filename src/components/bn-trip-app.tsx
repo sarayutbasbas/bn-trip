@@ -90,9 +90,11 @@ import {
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import {
   clearCurrentAccount,
+  ACCOUNT_UPDATED_EVENT,
   getCurrentAccount,
   updateCurrentAccount,
 } from "@/src/lib/client-account";
+import { ProfileAvatarEditor } from "./profile-avatar-editor";
 import { optimizedCanvasFile, prepareDocumentFile } from "@/src/lib/client-image-compression";
 import { uploadPrivateDocument } from "@/src/lib/client-blob-upload";
 import { scrollPageToTopAfterOverlay } from "@/src/lib/client-scroll";
@@ -6705,11 +6707,13 @@ function SettingsGlass({ children, dragging = false }: { children: ReactNode; dr
 function ProfileSettingsCard({
   profile,
   save,
+  saveAvatar,
   lang,
   storageAdmin = false,
 }: {
   profile: AccountProfile | null;
   save: (name: string) => Promise<void>;
+  saveAvatar: (file: File) => Promise<void>;
   lang: Lang;
   storageAdmin?: boolean;
 }) {
@@ -6745,7 +6749,7 @@ function ProfileSettingsCard({
   return (
     <SettingsGlass>
     <article className="card account-settings-card">
-      <AccountAvatar profile={profile} size="large" />
+      <ProfileAvatarEditor save={saveAvatar}><AccountAvatar profile={profile} size="large" /></ProfileAvatarEditor>
       <div className="account-settings-copy">
         <form className="account-name-editor" onSubmit={submit}>
           {editing ? <input aria-label={t("ชื่อที่แสดง")} value={name} disabled={saving} onChange={event => setName(event.target.value)} minLength={2} maxLength={120} autoFocus required /> : <strong className="account-name-display" title={name}>{name || t("กำลังโหลด…")}</strong>}
@@ -7037,6 +7041,15 @@ function SettingsScreen(
     updateCurrentAccount(data);
     setProfile(data);
   }
+  async function saveAvatar(file: File) {
+    if (props.demo) { props.demoAction?.(); throw new Error("กรุณาเข้าสู่ระบบเพื่อเปลี่ยนรูปโปรไฟล์"); }
+    const form = new FormData(); form.set("file", file);
+    const response = await fetch("/api/me/avatar", { method: "POST", body: form });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "บันทึกรูปไม่สำเร็จ");
+    updateCurrentAccount(data);
+    setProfile(data);
+  }
   return (
     <div className="settings-page-wrapper">
       <div className="screen settings-account-intro">
@@ -7044,6 +7057,7 @@ function SettingsScreen(
         <ProfileSettingsCard
           profile={profile}
           save={saveProfile}
+          saveAvatar={saveAvatar}
           lang={props.lang}
           storageAdmin={props.storageAdmin}
         />
@@ -9846,7 +9860,6 @@ export function BNTripApp({
   const analyticsRefreshRef = useRef<(() => Promise<void>) | null>(null);
   const [refreshingAnalytics, setRefreshingAnalytics] = useState(false);
   const lang: Lang = "TH";
-  const [headerProfile, setHeaderProfile] = useState<AccountProfile | null>(null);
   const [trips, setTrips] = useState<Trip[]>(() =>
     cachedDashboardSnapshot?.trips ||
       initialDashboardTrips ||
@@ -9911,16 +9924,15 @@ export function BNTripApp({
     [],
   );
   useEffect(() => {
-    let active = true;
-    getCurrentAccount()
-      .then((profile) => {
-        if (active) setHeaderProfile(profile);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
+    const changed = () => {
+      tripListCache = null;
+      dashboardSnapshotCache = null;
+      setTripRevision(value => value + 1);
+      router.refresh();
     };
-  }, [dashboardRefreshToken]);
+    window.addEventListener(ACCOUNT_UPDATED_EVENT, changed);
+    return () => window.removeEventListener(ACCOUNT_UPDATED_EVENT, changed);
+  }, [router]);
   useEffect(() => {
     if (initialDashboard) {
       setDashboardFavoriteTrips(dashboardSnapshotCache?.favoriteTrips || initialDashboard.favoriteTrips || []);
@@ -10909,9 +10921,6 @@ export function BNTripApp({
                         router.refresh();
                         flash(refreshed?"เพิ่มทริปจากคำเชิญแล้ว":"รับคำเชิญแล้ว แต่โหลดรายการไม่สำเร็จ กรุณาลองรีเฟรช");
                       }}/>
-                      <button className="home-profile-btn" type="button" onClick={() => router.push("/settings")} aria-label="โปรไฟล์" title="โปรไฟล์">
-                        <AccountAvatar profile={headerProfile} size="small" />
-                      </button>
                     </>
                   )}
                   {!mainNavigationPage && (

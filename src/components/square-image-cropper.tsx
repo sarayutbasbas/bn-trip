@@ -7,10 +7,11 @@ import { optimizedCanvasFile } from "@/src/lib/client-image-compression";
 
 const SIZE = 640;
 
-export function SquareImageCropper({ file, onApply, onClose }: {
+export function SquareImageCropper({ file, onApply, onClose, circular = false }: {
   file: File;
   onApply: (cropped: File) => void;
   onClose: () => void;
+  circular?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -21,6 +22,21 @@ export function SquareImageCropper({ file, onApply, onClose }: {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!circular) return;
+    const previous = document.body.style.overflow;
+    const focused = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = "hidden";
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopImmediatePropagation(); onClose(); }
+    };
+    document.addEventListener("keydown", escape, true);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", escape, true);
+      focused?.focus({ preventScroll: true });
+    };
+  }, [circular, onClose]);
 
   useEffect(() => {
     const url = URL.createObjectURL(file);
@@ -113,21 +129,21 @@ export function SquareImageCropper({ file, onApply, onClose }: {
     }
   }
 
-  return createPortal(<div className="crop-editor" role="dialog" aria-modal="true" aria-label="ครอบรูปที่พัก">
+  return createPortal(<div className="crop-editor" role="dialog" aria-modal="true" aria-label={circular ? "ครอบรูปโปรไฟล์" : "ครอบรูปที่พัก"}>
     <header>
       <button type="button" onClick={onClose} aria-label="ยกเลิก"><X size={20} /></button>
-      <div><strong>ครอบรูปที่พัก</strong><small>ลากด้วยหนึ่งนิ้ว · จีบเข้า–ออกด้วยสองนิ้ว</small></div>
+      <div><strong>{circular ? "ครอบรูปโปรไฟล์" : "ครอบรูปที่พัก"}</strong><small>ลากด้วยหนึ่งนิ้ว · จีบเข้า–ออกด้วยสองนิ้ว</small></div>
       <span />
     </header>
-    <main><div className="fixed-crop-frame is-square">
+    <main><div className={`fixed-crop-frame is-square${circular ? " is-profile-circle" : ""}`}>
       <canvas ref={canvasRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} />
       <span className="crop-gesture-hint">ลากเพื่อขยับ · จีบเพื่อซูม</span>
-      <span className="crop-ratio">1 : 1</span>
+      {!circular && <span className="crop-ratio">1 : 1</span>}
     </div></main>
     <footer>
       {error && <p className="cover-error" role="alert">{error}</p>}
       <button type="button" className="crop-apply" onClick={() => void apply()} disabled={!image || saving}>
-        <CheckCircle2 size={18} />{saving ? "กำลังครอบรูป…" : "ยืนยันและกลับไปบันทึก"}
+        <CheckCircle2 size={18} />{saving ? "กำลังครอบรูป…" : circular ? "บันทึกรูปโปรไฟล์" : "ยืนยันและกลับไปบันทึก"}
       </button>
     </footer>
   </div>, document.body);

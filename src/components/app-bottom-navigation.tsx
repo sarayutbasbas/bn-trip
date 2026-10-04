@@ -11,6 +11,8 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NavIcon } from "@/src/components/nav-icon";
+import Image from "next/image";
+import { ACCOUNT_UPDATED_EVENT, getCurrentAccount } from "@/src/lib/client-account";
 import {
   attachCodepenNavGlass,
   attachCodepenSwitcherGlass,
@@ -24,6 +26,14 @@ const NAV_VISIBLE_PATHS = new Set([
 export function AppBottomNavigation() {
   const router = useRouter();
   const pathname = usePathname();
+  const [profile, setProfile] = useState<Awaited<ReturnType<typeof getCurrentAccount>> | null>(null);
+  useEffect(() => {
+    let active = true;
+    const load = () => { void getCurrentAccount().then(value => { if (active) setProfile(value); }).catch(() => {}); };
+    load();
+    window.addEventListener(ACCOUNT_UPDATED_EVENT, load);
+    return () => { active = false; window.removeEventListener(ACCOUNT_UPDATED_EVENT, load); };
+  }, []);
   const navWrapRef = useRef<HTMLElement | null>(null);
   const navRef = useRef<HTMLDivElement | null>(null);
   const indicatorRef = useRef<HTMLSpanElement | null>(null);
@@ -404,7 +414,10 @@ export function AppBottomNavigation() {
               onContextMenu={(event) => event.preventDefault()}
             >
               <span className="app-bottom-navigation-content" aria-hidden="true">
-                <NavIcon className="ios-icon" name={icon} filled={visuallyActive} />
+                {icon === "profile" ? <span className="nav-profile-avatar">{profile?.avatar_url
+                  ? <Image src={profile.avatar_url} alt="" width={30} height={30} unoptimized />
+                  : <NavIcon className="ios-icon" name="profile" filled={false} />}</span>
+                  : <NavIcon className="ios-icon" name={icon} filled={visuallyActive} />}
                 <span className="app-bottom-navigation-label">{label}</span>
               </span>
             </button>

@@ -4,6 +4,7 @@ type Account = {
   display_name: string;
   avatar_url: string | null;
 };
+export const ACCOUNT_UPDATED_EVENT = "bn-trip:account-updated";
 
 let accountRequest: Promise<Account> | null = null;
 let currentAccount: Account | null = null;
@@ -32,6 +33,7 @@ export function getCurrentAccount() {
 export function updateCurrentAccount(account: Account) {
   currentAccount = account;
   accountRequest = Promise.resolve(account);
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(ACCOUNT_UPDATED_EVENT, { detail: account }));
 }
 
 export function clearCurrentAccount() {

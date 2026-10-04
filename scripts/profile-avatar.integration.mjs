@@ -1,0 +1,68 @@
+// Disposable local Docker accounts and uploads only.
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { Pool } from 'pg';
+import { SignJWT } from 'jose';
+import sharp from 'sharp';
+const base='http://localhost:8001', id=randomUUID(), peer=randomUUID();
+const db=new Pool({connectionString:'postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip'});
+const env=JSON.parse(execFileSync('docker',['inspect','bn-trip-app-1'],{encoding:'utf8'}))[0].Config.Env;
+const secret=env.find(v=>v.startsWith('AUTH_SECRET=')).slice(12);
+const token=async user=>new SignJWT({email:user+'@example.invalid',displayName:'Avatar test'}).setProtectedHeader({alg:'HS256'}).setSubject(user).setExpirationTime('1h').sign(new TextEncoder().encode(secret));
+const auth=await token(id), peerAuth=await token(peer);
+const browser=(...args)=>execFileSync('npx',['--yes','agent-browser','--session','profile-test',...args],{encoding:'utf8',timeout:45000});
+const evaluate=code=>JSON.parse(browser('eval',code));
+const api=(path,options={},cookie=auth)=>fetch(base+path,{...options,headers:{cookie:'bn_trip_session='+cookie,...options.headers}});
+const json=async response=>{assert(response.ok,await response.clone().text());return response.json();};
+const files=new Set();
+try {
+ await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Avatar test'),($3,$4,'Peer')",[id,id+'@example.invalid',peer,peer+'@example.invalid']);
+ const image=await sharp({create:{width:800,height:600,channels:3,background:'#e86d16'}}).png().toBuffer();
+ const form=()=>{const f=new FormData();f.set('file',new Blob([image],{type:'image/png'}),'avatar.png');return f;};
+ assert.equal((await fetch(base+'/api/me/avatar',{method:'POST',body:form()})).status,401);
+ const invalid=new FormData();invalid.set('file',new Blob(['not image'],{type:'image/png'}),'fake.png');
+ assert.equal((await api('/api/me/avatar',{method:'POST',body:invalid})).status,400);
+ const first=await json(await api('/api/me/avatar',{method:'POST',body:form()}));files.add(first.avatar_url);
+ const metadata=await sharp(Buffer.from(await (await api(first.avatar_url)).arrayBuffer())).metadata();
+ assert.equal(metadata.width,512);assert.equal(metadata.height,512);assert.equal(metadata.format,'webp');
+ const trip=await json(await api('/api/trips',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Avatar sharing',countryCode:'JP',locationIds:['JP:tokyo'],outboundDate:'2027-01-01',outboundTime:'08:00',returnDate:'2027-01-02',returnTime:'18:00',budgetThb:0})}));
+ await db.query("INSERT INTO trip_collaborators(trip_id,user_id,email,access_level,invited_by) VALUES($1,$2,$3,'view',$4)",[trip.id,peer,peer+'@example.invalid',id]);
+ const shared=await json(await api('/api/trips/'+trip.id,{},peerAuth));
+ assert.equal(shared.members.find(member=>member.id===id).avatar_url,first.avatar_url);
+ assert.equal((await api(first.avatar_url,{},peerAuth)).status,200);
+ const googleSql=readFileSync('app/api/auth/google/callback/route.ts','utf8').match(/"(UPDATE users SET email=.*?)"/)[1];
+ await db.query(googleSql,[id+'@example.invalid','test-'+id,'Google name','https://example.invalid/google.jpg',id]);
+ assert.equal((await json(await api('/api/me'))).avatar_url,first.avatar_url,'Google login preserves custom avatar');
+ browser('open',base);browser('cookies','set','bn_trip_session',auth,'--url',base);browser('set','viewport','390','844');browser('open',base+'/settings');browser('wait','.profile-avatar-upload');
+ assert(evaluate("!document.querySelector('.home-profile-btn')"));
+ browser('wait','.nav-profile-avatar img');
+ assert.equal(evaluate("getComputedStyle(document.querySelector('.nav-profile-avatar')).outlineWidth"),'2px');
+ browser('upload','.profile-avatar-editor input[type=file]',process.cwd()+'/public/travel-postcard-background.jpg');
+ browser('wait','.is-profile-circle canvas');
+ browser('wait','--fn',"!document.querySelector('.crop-apply').disabled");
+ assert.equal(evaluate("getComputedStyle(document.querySelector('.is-profile-circle')).borderRadius"),'50%');
+ browser('screenshot','/tmp/bn-profile-circle-crop.png');
+ browser('click','.crop-editor header button');
+ assert.equal((await json(await api('/api/me'))).avatar_url,first.avatar_url,'cancel preserves avatar');
+ browser('upload','.profile-avatar-editor input[type=file]',process.cwd()+'/public/travel-postcard-background.jpg');
+ browser('wait','--fn',"!!document.querySelector('.crop-apply')&&!document.querySelector('.crop-apply').disabled");
+ browser('click','.crop-apply');
+ browser('wait','--fn',"document.querySelector('.profile-avatar-editor [role=status]')?.textContent==='เปลี่ยนรูปแล้ว'");
+ const updated=await json(await api('/api/me'));files.add(updated.avatar_url);assert.notEqual(updated.avatar_url,first.avatar_url);
+ assert(evaluate(`document.querySelector('.nav-profile-avatar img').getAttribute('src')===${JSON.stringify(updated.avatar_url)}`));
+ const changed=await json(await api('/api/trips/'+trip.id,{},peerAuth));
+ assert.equal(changed.members.find(member=>member.id===id).avatar_url,updated.avatar_url);
+ assert.equal((await api(first.avatar_url)).status,404,'unreferenced previous upload deleted');
+ browser('screenshot','/tmp/bn-profile-settings.png');
+ browser('click','.app-bottom-navigation-item[aria-label="หน้าแรก"]');browser('wait','.dashboard-quick-actions');
+ browser('wait','--fn',"getComputedStyle(document.querySelector('.nav-profile-avatar')).outlineStyle==='none'");
+ assert(evaluate("!document.querySelector('.home-profile-btn')"));
+ console.log('PASS upload validation/auth, 512px WebP, shared member avatar, Google preservation, circle crop/cancel/save, live navbar, selected-only border, old image cleanup');
+} finally {
+ try{browser('close');}catch{}
+ const current=await db.query('SELECT avatar_url FROM users WHERE id=$1',[id]);if(current.rows[0]?.avatar_url)files.add(current.rows[0].avatar_url);
+ await db.query('DELETE FROM users WHERE id=ANY($1::uuid[])',[[id,peer]]);await db.end();
+ for(const url of files)if(/^\/api\/uploads\/[a-f0-9-]+\.webp$/.test(url))execFileSync('docker',['exec','bn-trip-app-1','node','-e',"require('fs').rmSync(process.argv[1],{force:true})",'/app/uploads/'+url.split('/').pop()]);
+}

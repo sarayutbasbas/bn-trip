@@ -25,7 +25,7 @@ export async function GET(request:Request){
       const existing=await client.query<{id:string}>("SELECT id FROM users WHERE google_sub=$1 OR lower(email)=$2 ORDER BY google_sub=$1 DESC LIMIT 1",[payload.sub,email]);
       const displayName=typeof payload.name==="string"?payload.name:email;const avatarUrl=typeof payload.picture==="string"?payload.picture:null;
       const row=existing.rows[0]
-        ?(await client.query<{id:string;email:string;display_name:string;avatar_url:string|null}>("UPDATE users SET email=$1,google_sub=$2,display_name=CASE WHEN google_sub IS NULL THEN $3 ELSE display_name END,avatar_url=$4,updated_at=now() WHERE id=$5 RETURNING id,email,display_name,avatar_url",[email,payload.sub,displayName,avatarUrl,existing.rows[0].id])).rows[0]
+        ?(await client.query<{id:string;email:string;display_name:string;avatar_url:string|null}>("UPDATE users SET email=$1,google_sub=$2,display_name=CASE WHEN google_sub IS NULL THEN $3 ELSE display_name END,avatar_url=CASE WHEN avatar_url LIKE '/api/uploads/%' THEN avatar_url ELSE $4 END,updated_at=now() WHERE id=$5 RETURNING id,email,display_name,avatar_url",[email,payload.sub,displayName,avatarUrl,existing.rows[0].id])).rows[0]
         :(await client.query<{id:string;email:string;display_name:string;avatar_url:string|null}>("INSERT INTO users(email,google_sub,display_name,avatar_url) VALUES($1,$2,$3,$4) RETURNING id,email,display_name,avatar_url",[email,payload.sub,displayName,avatarUrl])).rows[0];
       return row;
     });
