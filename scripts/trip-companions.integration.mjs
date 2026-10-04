@@ -91,6 +91,10 @@ try {
     for (const [url, addLabel, screenshot] of [[`${base}/trips/${trip.id}/expenses`, "เพิ่มค่าใช้จ่าย", "expense"], [`${base}/trips/${trip.id}?view=stays`, "เพิ่มที่พัก", "stay"]]) {
       browser("open", url); browser("wait", `button[aria-label="${addLabel}"]`); browser("click", `button[aria-label="${addLabel}"]`);
       browser("wait", ".expense-people-row"); browser("click", "#expense-paid-by"); browser("wait", ".payer-member-menu");
+      assert.equal(JSON.parse(browser("eval", "document.querySelector('.payer-member-menu input').value")), `member:${owner.id}`);
+      const payerLayout = JSON.parse(browser("eval", "(()=>{const menu=document.querySelector('.payer-member-menu');const arrow=menu.querySelector('.people-menu-arrow').getBoundingClientRect();const trigger=document.querySelector('#expense-paid-by').getBoundingClientRect();const labels=[...menu.querySelectorAll('label')].map(el=>el.getBoundingClientRect());return {columns:labels[0].top===labels[1].top&&labels[1].left>labels[0].left,arrowAligned:Math.abs((arrow.left+arrow.right-trigger.left-trigger.right)/2)<2}})()"));
+      assert.deepEqual(payerLayout, {columns:true,arrowAligned:true});
+      if(screenshot==="stay") assert.deepEqual(JSON.parse(browser("eval", "[...document.querySelectorAll('.accommodation-check-times .native-picker-value')].map(el=>getComputedStyle(el).fontSize)")), ["16px","16px"]);
       const choices = JSON.parse(browser("eval", "Array.from(document.querySelectorAll('.payer-member-menu label')).map(label=>label.textContent).sort()"));
       assert(choices.some(label => label.includes("แม่")));
       if (expectedPayers) assert.deepEqual(choices, expectedPayers); else expectedPayers = choices;
@@ -99,6 +103,8 @@ try {
       browser("screenshot", `/tmp/bn-companions-${screenshot}-payer.png`);
       browser("click", ".expense-people-row > .field:first-child .split-member-trigger");
       browser("wait", '.split-member-menu input[name="splitGuest"]');
+      assert.equal(JSON.parse(browser("eval", "document.querySelector('.split-member-menu input[name=splitMember]').value")), owner.id);
+      assert.equal(JSON.parse(browser("eval", "(()=>{const menu=document.querySelector('.split-member-menu');const arrow=menu.querySelector('.people-menu-arrow').getBoundingClientRect();const trigger=document.querySelector('.expense-people-row > .field:first-child button').getBoundingClientRect();return Math.abs((arrow.left+arrow.right-trigger.left-trigger.right)/2)<2})()")), true);
       const splits = JSON.parse(browser("eval", "Array.from(document.querySelectorAll('.split-member-menu input[name=splitGuest]')).map(input=>input.value)"));
       assert(splits.includes(named.id));
       browser("eval", "document.documentElement.classList.remove('dark')");

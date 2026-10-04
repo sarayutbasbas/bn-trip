@@ -1228,7 +1228,7 @@ export function TripAccommodations({
                     </div>
                   ))}
                 </section>
-                <div className="form-row flight-datetime-row">
+                <div className="form-row flight-datetime-row accommodation-check-times">
                   <div className="field">
                     <label>เวลาเช็กอิน</label>
                     <NativeTimeInput
