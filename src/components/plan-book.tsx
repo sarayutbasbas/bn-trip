@@ -24,21 +24,25 @@ function FantasyCover({ count }: { count: number }) {
     <div className={styles.coverTitle}><span>บันทึกการผจญภัย</span><h2>ทุกแพลน<br />ทุกความฝัน</h2><p>เปิดโลกของเรา ทีละหน้า</p></div>
     <svg className={styles.landscape} viewBox="0 0 400 430" fill="none" aria-hidden="true">
       <defs>
-        <linearGradient id={`${id}-sky`} x1="200" y1="0" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#19464c"/><stop offset="1" stopColor="#081e31"/></linearGradient>
-        <linearGradient id={`${id}-road`} x1="200" y1="190" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#fff0c2"/><stop offset="1" stopColor="#cf8750"/></linearGradient>
+        <linearGradient id={`${id}-sky`} x1="200" y1="0" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#d4e9f3"/><stop offset="1" stopColor="#f7cada"/></linearGradient>
+        <linearGradient id={`${id}-road`} x1="200" y1="190" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#fff9e7"/><stop offset="1" stopColor="#fff0fa"/></linearGradient>
+        <g id={`${id}-blossom`}>
+          {[0,72,144,216,288].map(angle => <ellipse key={angle} cy="-9" rx="7" ry="11" transform={`rotate(${angle})`} fill="#f9b4cd" stroke="#fff7fb" strokeWidth="1.5"/>)}
+          <circle r="4" fill="#e9b66f"/>
+        </g>
       </defs>
-      <ellipse cx="200" cy="170" rx="128" ry="144" stroke="#d8b975" strokeOpacity=".5"/>
-      <ellipse cx="200" cy="170" rx="115" ry="131" stroke="#d8b975" strokeOpacity=".2"/>
-      <circle cx="200" cy="124" r="43" fill="#efcf8f"/>
-      <circle cx="217" cy="107" r="39" fill="#153e45"/>
-      <path d="M0 240 55 186 99 229 173 131 247 239 308 166 400 243V430H0Z" fill="#39615e"/>
-      <path d="m173 131-30 40 30-13 19 21Z" fill="#e8d4a7" opacity=".85"/>
-      <path d="M0 285 80 231 150 280 259 210 400 289V430H0Z" fill="#23494c"/>
+      <ellipse cx="200" cy="170" rx="128" ry="144" stroke="#e1a0bb" strokeOpacity=".5"/>
+      <ellipse cx="200" cy="170" rx="115" ry="131" stroke="#e1a0bb" strokeOpacity=".25"/>
+      <circle cx="215" cy="119" r="43" fill="#ffe3a9"/>
+      <path d="M0 240 55 186 99 229 173 131 247 239 308 166 400 243V430H0Z" fill="#b7c9e5"/>
+      <path d="m173 131-30 40 30-13 19 21Z" fill="#fffaf7"/>
+      <path d="M0 285 80 231 150 280 259 210 400 289V430H0Z" fill="#c4dcd4"/>
       <path d="M0 322Q80 264 200 287T400 294V430H0Z" fill={`url(#${id}-sky)`}/>
       <path d="M207 264c-90 53 108 45 7 101-28 15-28 39 33 65h-90c-42-45-13-62 31-80 102-40-68-29 19-86Z" fill={`url(#${id}-road)`}/>
-      <g fill="#d7bd87"><path d="M256 237v-39h8v-15l5-10 5 10v15h8v39zm-6 0h37v4h-37z"/><path d="m77 119 3 9 9 3-9 3-3 9-3-9-9-3 9-3zm232-37 2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/><circle cx="120" cy="78" r="2"/><circle cx="286" cy="133" r="2"/><circle cx="234" cy="51" r="2"/><circle cx="100" cy="191" r="1.5"/></g>
-      <g stroke="#d9bd87" strokeWidth="1.5" opacity=".7"><path d="m39 350 0-55m-12 31 12-19 12 19m-17 11 5-8 9 10m305-7v-65m-13 34 13-22 13 22m-20 10 7-10 12 13"/></g>
-      <path d="M20 404h360" stroke="#d8b975" strokeOpacity=".35"/>
+      <g fill="#bd7193"><path d="M256 237v-39h8v-15l5-10 5 10v15h8v39zm-6 0h37v4h-37z"/><path d="m77 119 3 9 9 3-9 3-3 9-3-9-9-3 9-3zm232-37 2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/><circle cx="120" cy="78" r="2"/><circle cx="286" cy="133" r="2"/><circle cx="234" cy="51" r="2"/></g>
+      <path d="M8 273Q56 208 26 117M372 286Q327 230 378 119" stroke="#ad859d" strokeWidth="4" strokeLinecap="round"/>
+      {[[28,139,1.2],[46,180,.85],[25,219,1.1],[362,145,1.3],[344,196,.85],[377,240,1],[80,318,.6],[312,345,.65]].map(([x,y,scale],index) => <use key={index} href={`#${id}-blossom`} transform={`translate(${x} ${y}) scale(${scale})`}/>)}
+      <path d="M20 404h360" stroke="#c788a5" strokeOpacity=".35"/>
     </svg>
     <div className={styles.coverFoot}><Compass size={17}/><span>{count} การเดินทาง · เรื่องราวที่รอเปิดอ่าน</span></div>
   </div>;

@@ -49,8 +49,8 @@ export function HomeLoading() {
 function TripsLoading() {
   return <div className="route-skeleton-screen route-skeleton-trips">
     <Intro page="trips" />
-    <SearchRow buttons={2} />
-    <div className="route-skeleton-filters">{[0, 1, 2].map(index => <Block key={index} />)}</div>
+    <SearchRow buttons={3} />
+    <div className="route-skeleton-filters">{[0, 1, 2, 3].map(index => <Block key={index} />)}</div>
     <CardRows count={4} />
   </div>;
 }

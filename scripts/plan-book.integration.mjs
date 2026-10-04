@@ -43,6 +43,11 @@ try {
   await trip('BOOK-PRIVATE', '2036-01-01', otherToken);
   const shared = await trip('BOOK-SHARED', '2030-01-01', otherToken);
   await db.query("INSERT INTO trip_collaborators(trip_id,user_id,email,access_level,invited_by) VALUES($1,$2,$3,'view',$4)", [shared.id, user, email, other]);
+  const tripsHtml = await (await fetch(base + '/trips', { headers: { cookie: `bn_trip_session=${token}` } })).text();
+  const toolbarSkeleton = tripsHtml.match(/<div class="route-skeleton-search-row">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.equal((toolbarSkeleton.match(/route-skeleton-search-action/g) || []).length, 3, 'filter, sort, add skeleton actions');
+  const filtersSkeleton = tripsHtml.match(/<div class="route-skeleton-filters">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.equal((filtersSkeleton.match(/route-skeleton-block/g) || []).length, 4, 'four trip filter tabs');
   const html = await (await fetch(base + '/plan-book', { headers: { cookie: `bn_trip_session=${token}` } })).text();
   assert(html.includes('BOOK-SHARED') && html.includes('BOOK-NEW'));
   assert(!html.includes('BOOK-PRIVATE') && !html.includes('BOOK-NO-PLAN'));
