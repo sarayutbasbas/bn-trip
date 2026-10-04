@@ -60,12 +60,16 @@ try {
     assert(evaluate(`(()=>{const b=document.querySelector('[data-book-base]').getBoundingClientRect(),footer=document.querySelector('main footer').getBoundingClientRect();return b.width>0&&b.bottom<=footer.top&&footer.bottom<=innerHeight&&Math.abs(b.width/b.height-9/16)<.01})()`), `book and controls fit at ${width}x${height}`);
   }
   browser('set', 'viewport', '390', '844');
+  assert(evaluate(`!document.querySelector('[data-book-base] [data-book-control]')&&!document.body.textContent.includes('เรื่องราวของเรา เริ่มตรงนี้')`));
+  assert(evaluate(`(()=>{const button=document.querySelector('[data-book-control]'),book=document.querySelector('[data-book-base]');return button.textContent.includes('เปิดสมุดแพลน')&&button.getBoundingClientRect().top>=book.getBoundingClientRect().bottom})()`));
   evaluate('localStorage.setItem("bn-theme","light"); document.documentElement.classList.remove("dark"); true');
   browser('screenshot', '/tmp/bn-plan-book-cover-light.png');
   evaluate('document.documentElement.classList.add("dark"); true');
   browser('screenshot', '/tmp/bn-plan-book-cover-dark.png');
   evaluate('document.documentElement.classList.remove("dark"); true');
-  browser('click', next); atPage(1); settled();
+  browser('click', '[data-book-control]'); atPage(1); settled();
+  browser('wait','[data-book-fullscreen="true"]');
+  browser('click','[aria-label="ออกจากเต็มจอ"]');
   browser('wait', '[aria-label="ดูแพลน BOOK-NEW ขนาดเต็ม"]');
   assert(evaluate('document.querySelectorAll(".stf__item").length === 4'));
   // Exercise the iPhone fallback even in Chromium: fullscreen API rejection is safe.

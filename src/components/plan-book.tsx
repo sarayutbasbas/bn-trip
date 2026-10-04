@@ -24,25 +24,25 @@ function FantasyCover({ count }: { count: number }) {
     <div className={styles.coverTitle}><span>บันทึกการผจญภัย</span><h2>ทุกแพลน<br />ทุกความฝัน</h2><p>เปิดโลกของเรา ทีละหน้า</p></div>
     <svg className={styles.landscape} viewBox="0 0 400 430" fill="none" aria-hidden="true">
       <defs>
-        <linearGradient id={`${id}-sky`} x1="200" y1="0" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#d4e9f3"/><stop offset="1" stopColor="#f7cada"/></linearGradient>
-        <linearGradient id={`${id}-road`} x1="200" y1="190" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#fff9e7"/><stop offset="1" stopColor="#fff0fa"/></linearGradient>
+        <linearGradient id={`${id}-sky`} x1="200" y1="0" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#ffd6a1"/><stop offset="1" stopColor="#edac67"/></linearGradient>
+        <linearGradient id={`${id}-road`} x1="200" y1="190" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#fff9e7"/><stop offset="1" stopColor="#fff2db"/></linearGradient>
         <g id={`${id}-blossom`}>
-          {[0,72,144,216,288].map(angle => <ellipse key={angle} cy="-9" rx="7" ry="11" transform={`rotate(${angle})`} fill="#f9b4cd" stroke="#fff7fb" strokeWidth="1.5"/>)}
+          {[0,72,144,216,288].map(angle => <ellipse key={angle} cy="-9" rx="7" ry="11" transform={`rotate(${angle})`} fill="#f4ad51" stroke="#fff5e5" strokeWidth="1.5"/>)}
           <circle r="4" fill="#e9b66f"/>
         </g>
       </defs>
-      <ellipse cx="200" cy="170" rx="128" ry="144" stroke="#e1a0bb" strokeOpacity=".5"/>
-      <ellipse cx="200" cy="170" rx="115" ry="131" stroke="#e1a0bb" strokeOpacity=".25"/>
+      <ellipse cx="200" cy="170" rx="128" ry="144" stroke="#da9a47" strokeOpacity=".5"/>
+      <ellipse cx="200" cy="170" rx="115" ry="131" stroke="#da9a47" strokeOpacity=".25"/>
       <circle cx="215" cy="119" r="43" fill="#ffe3a9"/>
-      <path d="M0 240 55 186 99 229 173 131 247 239 308 166 400 243V430H0Z" fill="#b7c9e5"/>
+      <path d="M0 240 55 186 99 229 173 131 247 239 308 166 400 243V430H0Z" fill="#a4b5ad"/>
       <path d="m173 131-30 40 30-13 19 21Z" fill="#fffaf7"/>
-      <path d="M0 285 80 231 150 280 259 210 400 289V430H0Z" fill="#c4dcd4"/>
+      <path d="M0 285 80 231 150 280 259 210 400 289V430H0Z" fill="#c6c5a3"/>
       <path d="M0 322Q80 264 200 287T400 294V430H0Z" fill={`url(#${id}-sky)`}/>
       <path d="M207 264c-90 53 108 45 7 101-28 15-28 39 33 65h-90c-42-45-13-62 31-80 102-40-68-29 19-86Z" fill={`url(#${id}-road)`}/>
-      <g fill="#bd7193"><path d="M256 237v-39h8v-15l5-10 5 10v15h8v39zm-6 0h37v4h-37z"/><path d="m77 119 3 9 9 3-9 3-3 9-3-9-9-3 9-3zm232-37 2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/><circle cx="120" cy="78" r="2"/><circle cx="286" cy="133" r="2"/><circle cx="234" cy="51" r="2"/></g>
-      <path d="M8 273Q56 208 26 117M372 286Q327 230 378 119" stroke="#ad859d" strokeWidth="4" strokeLinecap="round"/>
+      <g fill="#b56a28"><path d="M256 237v-39h8v-15l5-10 5 10v15h8v39zm-6 0h37v4h-37z"/><path d="m77 119 3 9 9 3-9 3-3 9-3-9-9-3 9-3zm232-37 2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/><circle cx="120" cy="78" r="2"/><circle cx="286" cy="133" r="2"/><circle cx="234" cy="51" r="2"/></g>
+      <path d="M8 273Q56 208 26 117M372 286Q327 230 378 119" stroke="#a7895d" strokeWidth="4" strokeLinecap="round"/>
       {[[28,139,1.2],[46,180,.85],[25,219,1.1],[362,145,1.3],[344,196,.85],[377,240,1],[80,318,.6],[312,345,.65]].map(([x,y,scale],index) => <use key={index} href={`#${id}-blossom`} transform={`translate(${x} ${y}) scale(${scale})`}/>)}
-      <path d="M20 404h360" stroke="#c788a5" strokeOpacity=".35"/>
+      <path d="M20 404h360" stroke="#b98747" strokeOpacity=".35"/>
     </svg>
     <div className={styles.coverFoot}><Compass size={17}/><span>{count} การเดินทาง · เรื่องราวที่รอเปิดอ่าน</span></div>
   </div>;
@@ -177,11 +177,10 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
           if (immersive) setChrome(value => !value); else if (page > 0) enterFullscreen();
         }}>
           <PlanBookFlipper engine={engine} startPage={0} onPageChange={setPage}>{pages}</PlanBookFlipper>
-          {page === 0 && <button type="button" data-book-control className={styles.openBook} onClick={() => { enterFullscreen(); changePage(1); }}>เปิดสมุดแพลน <ArrowRight size={17}/></button>}
         </div>
       </section>
       <div className={styles.caption} aria-live="polite" aria-atomic="true">
-        <strong>{current?.name || "เรื่องราวของเรา เริ่มตรงนี้"}</strong>
+        {current ? <strong>{current.name}</strong> : <button type="button" data-book-control className={styles.openBook} onClick={() => { enterFullscreen(); changePage(1); }}><BookOpen size={17}/>เปิดสมุดแพลน <ArrowRight size={17}/></button>}
         <span>{current ? <><MapPin size={12}/>{current.destination} · {dateLabel(current.travel_date)}</> : "ปัดซ้ายเพื่อเปิดอ่าน หรือเลือกทริปจากสารบัญ"}</span>
       </div>
       <footer className={styles.controls} inert={controlsHidden}>
