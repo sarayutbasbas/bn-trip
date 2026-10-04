@@ -7499,6 +7499,7 @@ html.dark .redesigned-plan-expenses .expense-day-list .expense-plan-row:nth-chil
   background: #edf0f4;
 }
 html.dark .redesigned-plan-expenses .expense-day-head { background:rgba(148,163,184,.16); }
+.expense-day-head-interactive { cursor:pointer; }
 .expense-day-toggle {
   min-width: 0;
   display: grid;

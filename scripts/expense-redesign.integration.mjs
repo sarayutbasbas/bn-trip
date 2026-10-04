@@ -32,6 +32,23 @@ try {
     assert(evaluate("['.is-spent','.is-remaining'].every(selector=>{const card=document.querySelector('.expense-overview-stats '+selector);return card.querySelector('small').getBoundingClientRect().bottom<=card.querySelector('strong').getBoundingClientRect().top && getComputedStyle(card.querySelector('small')).gridRowStart==='1';})"));
   }
   browser('set','viewport','390','844');
+  browser('click','.expense-day-card:first-child .day-split-total');
+  assert(evaluate("document.querySelector('.expense-day-card').classList.contains('is-collapsed')"));
+  assert.equal(evaluate("document.querySelectorAll('.expense-plan-row').length"),4);
+  browser('click','.expense-day-card:first-child .day-split-total');
+  assert.equal(evaluate("document.querySelectorAll('.expense-plan-row').length"),6);
+  browser('click','.expense-day-card:first-child .expense-day-chevron');
+  assert(evaluate("document.querySelector('.expense-day-card').classList.contains('is-collapsed')"));
+  browser('click','.expense-day-card:first-child .expense-day-toggle');
+  assert.equal(evaluate("document.querySelectorAll('.expense-plan-row').length"),6);
+  evaluate("document.querySelector('.expense-day-toggle').focus();true");
+  browser('press','Enter');
+  assert(evaluate("document.querySelector('.expense-day-card').classList.contains('is-collapsed')"));
+  browser('press','Space');
+  assert.equal(evaluate("document.querySelectorAll('.expense-plan-row').length"),6);
+  evaluate("document.querySelector('.expense-day-head').click();true");
+  browser('wait','--fn',"document.querySelector('.expense-day-card').classList.contains('is-collapsed')");
+  browser('click','.expense-day-card:first-child .expense-day-toggle');
   browser('click','.expense-category-bar button:first-child');
   assert.equal(evaluate("document.querySelectorAll('.expense-plan-row').length"),3);
   assert(evaluate("document.querySelector('.expense-category-bar button:first-child').getAttribute('aria-pressed')==='true'"));
@@ -53,5 +70,8 @@ try {
     assert(evaluate("getComputedStyle(document.querySelector('.expense-day-head')).backgroundColor!==getComputedStyle(document.querySelector('.expense-plan-row')).backgroundColor"));
     browser('screenshot','/tmp/expense-redesign-'+theme+'.png');
   }
-  console.log('PASS responsive budgets with first-row percentages and larger amounts, bold reset, bordered people summary, even-row backgrounds, two-column legend and bar filtering');
+  browser('click','.expense-day-card:first-child .expense-day-actions > button:not(.expense-day-chevron)');
+  browser('wait','.cost-sheet');
+  assert(evaluate("!document.querySelector('.expense-day-card').classList.contains('is-collapsed')"));
+  console.log('PASS full day header/amount toggle, arrows and keyboard without double toggles, add expense without collapsing, responsive budgets, neutral row stripes and category filtering');
 } finally { try { browser('close'); } catch {} await db.query('DELETE FROM users WHERE id=$1',[id]);await db.end(); }

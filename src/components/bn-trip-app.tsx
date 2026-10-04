@@ -6340,7 +6340,13 @@ function PlanExpensesContent({
                 className={`expense-day-card ${dayItems.length ? "" : "without-timeline"} ${isCollapsed ? "is-collapsed" : ""}`}
                 key={dayNumber}
               >
-                <div className="expense-day-head">
+                <div className="expense-day-head expense-day-head-interactive"
+                  onClick={(event) => {
+                    // Native controls handle their own action; the rest of the header toggles the day.
+                    if ((event.target as Element).closest("button")) return;
+                    toggleDay(dayNumber);
+                  }}
+                >
                   <button
                     type="button"
                     className="expense-day-toggle"
