@@ -4869,6 +4869,43 @@ html.dark .trip-section-nav button.active {
     gap: 3px;
   }
 }
+.timeline-skeleton .is-circle { width:40px;height:40px;border-radius:50%;flex-shrink:0; }
+.timeline-skeleton .is-title { width:72%;height:22px;border-radius:6px; }
+.timeline-skeleton .is-location { width:65%;height:12px;border-radius:5px; }
+.timeline-skeleton .is-date { width:55%;height:10px;border-radius:5px; }
+.timeline-skeleton .trip-detail-head.has-cover { margin-bottom:0;background:var(--surface-solid); }
+.timeline-skeleton .trip-detail-head.has-cover::after { display:none; }
+.timeline-skeleton .trip-detail-head.has-cover > .trip-detail-image-frame { background:var(--surface-2); }
+.timeline-skeleton .trip-detail-head.has-cover > .timeline-skeleton-cover-controls { position:absolute;top:calc(env(safe-area-inset-top) + 16px);left:16px;right:16px;display:flex;justify-content:space-between; }
+.timeline-skeleton-cover-controls > div { display:flex;gap:8px; }
+.timeline-skeleton .trip-detail-head.has-cover > .timeline-skeleton-cover-copy { position:absolute;left:20px;right:80px;bottom:24px;display:flex;flex-direction:column;gap:12px; }
+.timeline-skeleton-cover-copy .is-badge { width:86px;height:24px;border-radius:99px; }
+.timeline-skeleton-cover-copy .is-title { height:30px; }
+.timeline-skeleton .trip-detail-head.has-cover > .timeline-skeleton-members { position:absolute;right:20px;bottom:24px;display:flex; }
+.timeline-skeleton-members > span + span { margin-left:-12px; }
+.timeline-skeleton-cover-controls .route-skeleton-block,.timeline-skeleton-cover-copy .route-skeleton-block,.timeline-skeleton-members .route-skeleton-block { background:var(--line); }
+.timeline-skeleton-nav > div { min-height:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px; }
+.timeline-skeleton-nav .is-icon { width:28px;height:28px;border-radius:7px; }
+.timeline-skeleton-nav .is-label { width:65%;height:12px;border-radius:4px; }
+.timeline-skeleton-heading { display:flex;align-items:center;gap:8px;margin:12px 0; }
+.timeline-skeleton-heading > div { flex:1;display:flex;flex-direction:column;gap:10px; }
+.timeline-skeleton-days { display:flex;justify-content:center;gap:8px;margin:16px 0; }
+.timeline-skeleton-days .is-circle { width:44px;height:44px; }
+.timeline-skeleton-items { position:relative;padding-left:32px; }
+.timeline-skeleton-items::before { content:"";position:absolute;top:24px;bottom:38px;left:10px;width:2px;background:var(--line); }
+.timeline-skeleton-stop { position:relative; }
+.timeline-skeleton .timeline-skeleton-node { position:absolute;left:-30px;top:28px;width:18px;height:18px;border:3px solid var(--surface-solid); }
+.timeline-skeleton-card { position:relative;display:flex;min-height:140px;overflow:hidden;border:1px solid var(--line);border-radius:22px;background:var(--surface); }
+.timeline-skeleton-photo { width:34%;flex-shrink:0; }
+.timeline-skeleton-copy { min-width:0;flex:1;padding:16px 38px 12px 12px;display:flex;flex-direction:column;gap:10px; }
+.timeline-skeleton-copy .is-title { width:100%;height:16px; }
+.timeline-skeleton-copy .is-location { width:85%; }
+.timeline-skeleton-copy .is-date { width:65%; }
+.timeline-skeleton-tags { display:flex;gap:5px;margin-top:auto; }
+.timeline-skeleton-tags > span { width:48%;height:18px;border-radius:99px; }
+.timeline-skeleton-actions { position:absolute;top:10px;right:7px;display:flex;flex-direction:column;gap:6px; }
+.timeline-skeleton-actions .is-circle { width:26px;height:26px; }
+.timeline-skeleton-transport { width:68px;height:23px;border-radius:99px;margin:12px 0 12px 8px; }
 .trip-hub-body {
   min-width: 0;
 }

@@ -12,6 +12,7 @@ import { useExpenseGuests, EXPENSE_GUESTS_CHANGED_EVENT } from "./use-expense-gu
 import { ExpensePeopleFields } from "./expense-people-fields";
 import { safeBookingUrl } from "@/src/lib/booking-url";
 import { FetchSkeleton } from "@/src/components/fetch-skeleton";
+import { TimelineSkeleton } from "@/src/components/timeline-skeleton";
 import { CollaboratorsSkeleton } from "@/src/components/collaborators-skeleton";
 import { AutoLoadMore } from "@/src/components/auto-load-more";
 import { LoginScreen as RedesignedLoginScreen } from "@/src/components/login-screen";
@@ -10912,7 +10913,7 @@ export function BNTripApp({
   // Directory routes own their request/error UI; unrelated page loading must
   // never prevent their component (and its recovery effect) from mounting.
   const content = (loading && page !== "trips" && page !== "album") || (page === "dashboard" && refreshingDashboard) ? (
-    page === "dashboard" ? <HomeLoading /> : <FetchSkeleton rows={4} />
+    page === "dashboard" ? <HomeLoading /> : page === "trip" || page === "timeline" ? <TimelineSkeleton /> : <FetchSkeleton rows={4} />
   ) : page === "dashboard" ? (
     <Dashboard
       trips={trips}
