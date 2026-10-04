@@ -131,11 +131,10 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
   }, [immersive, contentsOpen, preview, leaveFullscreen]);
 
   useEffect(() => {
-    if (!immersive) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [immersive]);
+  }, []);
 
   const closePreview = useCallback(() => {
     setPreview(null);

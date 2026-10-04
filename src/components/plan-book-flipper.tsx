@@ -31,6 +31,11 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
     let origin: { x: number; y: number } | null = null;
     let dragging = false;
     let startedAt = 0;
+    let direction = 1;
+    let anchor = { x: 0, y: 0 };
+    let lastFold = { x: 0, y: 0 };
+    let settleFrame = 0;
+    let settling = false;
     let mouseStartedHere = false;
     const mouseDown = () => { mouseStartedHere = true; };
     const mouseUp = (event: MouseEvent) => {
@@ -49,10 +54,11 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
       return touch && rect ? { x: touch.clientX - rect.left, y: touch.clientY - rect.top } : null;
     };
     // The package's native touch handler waits 250ms before tracking. Feed its
-    // public engine directly after horizontal intent so the paper follows now,
-    // while vertical gestures still scroll the non-fullscreen page naturally.
+    // public engine directly after horizontal intent so the paper follows now.
+    // Vertical gestures do not turn pages in the fixed-height reader.
     const start = (event: TouchEvent) => {
       event.stopImmediatePropagation();
+      if (settling) return;
       if (dragging && origin) engine.current?.pageFlip()?.userStop(origin);
       origin = event.touches.length === 1 ? point(event) : null;
       dragging = false;
@@ -65,23 +71,43 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
       const dx = Math.abs(current.x - origin.x), dy = Math.abs(current.y - origin.y);
       if (!dragging && dy > 8 && dy > dx) { origin = null; return; }
       if (!dragging && dx > 5 && dx > dy) {
-        if (!core.getFlipController().start(origin)) { origin = null; return; }
-        core.startUserTouch(origin);
+        direction = current.x < origin.x ? 1 : -1;
+        const bounds = core.getRender().getRect();
+        // Select the page by swipe direction, not by which half was touched.
+        anchor = { x: bounds.left + bounds.pageWidth + (direction === 1 ? bounds.pageWidth - 1 : -1), y: origin.y };
+        if (!core.getFlipController().start(anchor)) { origin = null; return; }
+        core.startUserTouch(anchor);
         dragging = true;
       }
-      if (dragging) { if (event.cancelable) event.preventDefault(); core.userMove(current, true); }
+      if (dragging) {
+        if (event.cancelable) event.preventDefault();
+        lastFold = { x: anchor.x + current.x - origin.x, y: current.y };
+        core.userMove(lastFold, true);
+      }
     };
     const end = (event: TouchEvent) => {
       event.stopImmediatePropagation();
       const current = point(event);
       const core = engine.current?.pageFlip();
-      if (dragging && current && core) {
-        if (event.type === "touchcancel" && origin) core.userMove(origin, true);
-        const quickSwipe = event.type !== "touchcancel" && origin && performance.now() - startedAt < 250 && Math.abs(current.x - origin.x) > 30;
-        core.userStop(current, !!quickSwipe);
-        if (quickSwipe && origin) {
-          if (current.x < origin.x) core.flipNext(); else core.flipPrev();
-        }
+      if (dragging && current && core && origin) {
+        const bounds = core.getRender().getRect();
+        const distance = (origin.x - current.x) * direction;
+        const threshold = Math.min(48, bounds.pageWidth * .18);
+        const commit = event.type !== "touchcancel" && (distance >= threshold || (distance > 24 && performance.now() - startedAt < 250));
+        const from = lastFold;
+        const destination = { x: commit ? bounds.left + bounds.pageWidth + (direction === 1 ? -bounds.pageWidth : bounds.pageWidth) : anchor.x, y: anchor.y };
+        core.userStop(lastFold, true);
+        const began = performance.now();
+        settling = true;
+        // Finish from the held fold instead of restarting flipNext at a corner.
+        const settle = (now: number) => {
+          const progress = Math.min(1, (now - began) / 220);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          core.getFlipController().fold({ x: from.x + (destination.x - from.x) * eased, y: from.y + (destination.y - from.y) * eased });
+          if (progress < 1) settleFrame = requestAnimationFrame(settle);
+          else { settling = false; core.getFlipController().stopMove(); }
+        };
+        settleFrame = requestAnimationFrame(settle);
       }
       origin = null;
       dragging = false;
@@ -99,6 +125,7 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
       element.removeEventListener("touchcancel", end, true);
       element.removeEventListener("mousedown", mouseDown, true);
       window.removeEventListener("mouseup", mouseUp, true);
+      cancelAnimationFrame(settleFrame);
       ownedEngine.current?.destroy();
     };
   }, [engine]);

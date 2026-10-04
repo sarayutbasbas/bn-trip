@@ -48,9 +48,11 @@ try {
   assert(!html.includes('BOOK-PRIVATE') && !html.includes('BOOK-NO-PLAN'));
   browser('open', base + '/plan-book'); browser('wait', '.stf__item');
   assert.equal(evaluate('getComputedStyle(document.querySelector("main")).paddingTop'), '20px');
-  for (const width of [320, 390, 430, 1024]) {
-    browser('set', 'viewport', String(width), '844');
+  for (const [width, height] of [[320,568], [390,844], [430,932], [844,390], [1024,768]]) {
+    browser('set', 'viewport', String(width), String(height));
     assert(evaluate('document.documentElement.scrollWidth <= innerWidth'), `overflow at ${width}`);
+    assert(evaluate('document.documentElement.scrollHeight <= innerHeight'), `vertical overflow at ${width}x${height}`);
+    assert(evaluate(`(()=>{const b=document.querySelector('[data-book-base]').getBoundingClientRect(),footer=document.querySelector('main footer').getBoundingClientRect();return b.width>0&&b.bottom<=footer.top&&footer.bottom<=innerHeight&&Math.abs(b.width/b.height-9/16)<.01})()`), `book and controls fit at ${width}x${height}`);
   }
   browser('set', 'viewport', '390', '844');
   evaluate('localStorage.setItem("bn-theme","light"); document.documentElement.classList.remove("dark"); true');
@@ -79,7 +81,7 @@ try {
   assert(evaluate('document.querySelector("[data-book-fullscreen=true]") !== null'));
   assert.equal(evaluate('document.body.style.overflow'), 'hidden');
   browser('click', '[aria-label="ออกจากเต็มจอ"]');
-  assert.notEqual(evaluate('document.body.style.overflow'), 'hidden');
+  assert.equal(evaluate('document.body.style.overflow'), 'hidden');
   assert.equal(evaluate('document.querySelector("[data-book-page]").dataset.bookPage'), '1');
   // All three events in one task exercise fast swipes, not only slow held drags.
   evaluate(`(()=>{const b=document.querySelector('.stf__block'),r=document.querySelector('[data-book-base]').getBoundingClientRect();for(const [type,f] of [['touchstart',.95],['touchmove',.25],['touchend',.25]]){const t=new Touch({identifier:1,target:b,clientX:r.left+r.width*f,clientY:r.top+r.height/2});b.dispatchEvent(new TouchEvent(type,{bubbles:true,cancelable:true,touches:type==='touchend'?[]:[t],changedTouches:[t]}));}return true})()`);
@@ -92,8 +94,14 @@ try {
   assert.notEqual(curl(),firstTransform);
   browser('screenshot','/tmp/bn-plan-book-held-page.png');
   touch('touchmove',.98); touch('touchend',.98); settled(); atPage(1);
-  touch('touchstart',.95); touch('touchmove',-.15); touch('touchend',-.15); atPage(2); settled();
-  touch('touchstart',.05); touch('touchmove',.9); touch('touchend',.9); atPage(1); settled();
+  // Same modest, slow drag in either direction, starting at the middle of the image.
+  touch('touchstart',.6); touch('touchmove',.35); touch('touchend',.35); atPage(2); settled();
+  touch('touchstart',.4); touch('touchmove',.65); touch('touchend',.65); atPage(1); settled();
+  // Small movements and cancelled gestures must not change pages in either direction.
+  touch('touchstart',.6); touch('touchmove',.56); touch('touchend',.56); settled(); atPage(1);
+  touch('touchstart',.4); touch('touchmove',.44); touch('touchend',.44); settled(); atPage(1);
+  touch('touchstart',.6); touch('touchmove',.3); touch('touchcancel',.3); settled(); atPage(1);
+  touch('touchstart',.4); touch('touchmove',.7); touch('touchcancel',.7); settled(); atPage(1);
   touch('touchstart',.5); touch('touchmove',.51,.8); touch('touchend',.51,.8); atPage(1); settled();
   browser('click', '[aria-haspopup="dialog"]'); browser('wait', 'dialog[open]');
   const names = evaluate('[...document.querySelectorAll("dialog button strong")].map(e => e.textContent)');
@@ -125,9 +133,10 @@ try {
   assert(evaluate('!document.fullscreenElement'));
   browser('wait','[aria-label="ดูแพลน BOOK-SHARED ขนาดเต็ม"]');
   browser('open', base); browser('wait', '.dashboard-quick-actions');
+  assert.notEqual(evaluate('document.body.style.overflow'), 'hidden');
   assert.equal(evaluate('document.querySelectorAll(".dashboard-quick-actions > button").length'), 4);
   browser('click', '.dashboard-quick-actions > button:nth-child(4)'); browser('wait', '[data-book-base]');
-  console.log('PASS: auth/access, ordering, home entry, safe area, 9:16 fullscreen (320/390/430/landscape), fallback, auto-hide toolbar, zoom, library live paper curl/reversal, swipe both ways, vertical scroll, search/jump');
+  console.log('PASS: auth/access, ordering, home entry, safe area, viewport-fit without scrolling (320/390/430/landscape/1024), 9:16 fullscreen, fallback, toolbar, zoom, live curl/reversal, symmetric slow swipes from center, small-drag/cancel both ways, search/jump, scroll restored after leaving');
 } catch (error) {
   console.error(browser('get', 'url'));
   console.error(browser('snapshot', '-i'));
