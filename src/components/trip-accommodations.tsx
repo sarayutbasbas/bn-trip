@@ -648,6 +648,7 @@ export function TripAccommodations({
     const close = (event: PointerEvent) => {
       if (
         event.target instanceof Node &&
+        !(event.target instanceof Element && event.target.closest('.expense-people-backdrop')) &&
         !splitPickerRef.current?.contains(event.target)
       )
         setSplitPickerOpen(false);

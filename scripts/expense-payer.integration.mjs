@@ -64,7 +64,7 @@ try {
     assert.equal(layout.round, "50%");
     assert.equal(layout.icon, true);
     if (width === 390) browser("screenshot", "/tmp/expense-dropdown.png");
-    browser("click", ".expense-people-row > .field:first-child .split-member-trigger");
+    browser("click", ".expense-people-sheet .bottom-sheet-head button");
   }
   browser("set", "viewport", "390", "844");
   console.log("PASS: dropdown inside viewport at 320/390/768px, title/category 50-50, round add icon");

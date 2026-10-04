@@ -88,27 +88,39 @@ try {
     browser("scrollintoview", ".expense-member-summary"); browser("screenshot", "/tmp/bn-merged-expense-summary.png");
     console.log("PASS: one avatar-based summary includes paid/share/balance and category totals");
     let expectedPayers;
+    for (let i = 0; i < 14; i++) await ok(await api(owner, `/api/trips/${trip.id}/expense-guests`, "POST", { name: `ผู้ร่วมทริปทดสอบ ${i + 1}` }), 201);
     for (const [url, addLabel, screenshot] of [[`${base}/trips/${trip.id}/expenses`, "เพิ่มค่าใช้จ่าย", "expense"], [`${base}/trips/${trip.id}?view=stays`, "เพิ่มที่พัก", "stay"]]) {
       browser("open", url); browser("wait", `button[aria-label="${addLabel}"]`); browser("click", `button[aria-label="${addLabel}"]`);
       browser("wait", ".expense-people-row"); browser("click", "#expense-paid-by"); browser("wait", ".payer-member-menu");
       assert.equal(JSON.parse(browser("eval", "document.querySelector('.payer-member-menu input').value")), `member:${owner.id}`);
-      const payerLayout = JSON.parse(browser("eval", "(()=>{const menu=document.querySelector('.payer-member-menu');const arrow=menu.querySelector('.people-menu-arrow').getBoundingClientRect();const trigger=document.querySelector('#expense-paid-by').getBoundingClientRect();const labels=[...menu.querySelectorAll('label')].map(el=>el.getBoundingClientRect());return {columns:labels[0].top===labels[1].top&&labels[1].left>labels[0].left,arrowAligned:Math.abs((arrow.left+arrow.right-trigger.left-trigger.right)/2)<2}})()"));
-      assert.deepEqual(payerLayout, {columns:true,arrowAligned:true});
+      const payerLayout = JSON.parse(browser("eval", "(()=>{const menu=document.querySelector('.payer-member-menu');const labels=[...menu.querySelectorAll('label')].map(el=>el.getBoundingClientRect());return {singleColumn:labels[1].top>labels[0].top&&labels[1].left===labels[0].left,font:getComputedStyle(menu.querySelector('label')).fontSize,inputHeight:document.querySelector('.people-sheet-footer input').getBoundingClientRect().height}})()"));
+      assert.deepEqual(payerLayout, {singleColumn:true,font:"16px",inputHeight:48});
+      const scrollLayout = JSON.parse(browser("eval", "(()=>{const list=document.querySelector('.people-sheet-list');const input=document.querySelector('.people-sheet-footer input');const top=input.getBoundingClientRect().top;list.scrollTop=10000;return {scrolled:list.scrollTop>0,fixed:input.getBoundingClientRect().top===top,visible:input.getBoundingClientRect().bottom<=innerHeight}})()"));
+      assert.deepEqual(scrollLayout, {scrolled:true,fixed:true,visible:true});
       if(screenshot==="stay") assert.deepEqual(JSON.parse(browser("eval", "[...document.querySelectorAll('.accommodation-check-times .native-picker-value')].map(el=>getComputedStyle(el).fontSize)")), ["16px","16px"]);
       const choices = JSON.parse(browser("eval", "Array.from(document.querySelectorAll('.payer-member-menu label')).map(label=>label.textContent).sort()"));
       assert(choices.some(label => label.includes("แม่")));
       if (expectedPayers) assert.deepEqual(choices, expectedPayers); else expectedPayers = choices;
       assert.equal(JSON.parse(browser("eval", "(()=>{const r=document.querySelector('.payer-member-menu').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})()")), true);
-      assert.equal(JSON.parse(browser("eval", "(()=>{const r=document.querySelector('.payer-member-menu').getBoundingClientRect();return r.top>=200&&r.bottom<=innerHeight-65})()")), true);
+      assert.equal(JSON.parse(browser("eval", "(()=>{const r=document.querySelector('.payer-member-menu').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()")), true);
       browser("screenshot", `/tmp/bn-companions-${screenshot}-payer.png`);
+      browser("click", ".expense-people-sheet .bottom-sheet-head button");
       browser("click", ".expense-people-row > .field:first-child .split-member-trigger");
       browser("wait", '.split-member-menu input[name="splitGuest"]');
       assert.equal(JSON.parse(browser("eval", "document.querySelector('.split-member-menu input[name=splitMember]').value")), owner.id);
-      assert.equal(JSON.parse(browser("eval", "(()=>{const menu=document.querySelector('.split-member-menu');const arrow=menu.querySelector('.people-menu-arrow').getBoundingClientRect();const trigger=document.querySelector('.expense-people-row > .field:first-child button').getBoundingClientRect();return Math.abs((arrow.left+arrow.right-trigger.left-trigger.right)/2)<2})()")), true);
       const splits = JSON.parse(browser("eval", "Array.from(document.querySelectorAll('.split-member-menu input[name=splitGuest]')).map(input=>input.value)"));
       assert(splits.includes(named.id));
       browser("eval", "document.documentElement.classList.remove('dark')");
       browser("screenshot", `/tmp/bn-companions-${screenshot}-light.png`);
+      if (screenshot === "stay") {
+        browser("fill", ".people-sheet-footer input", "เพิ่มชื่อจาก sheet ซ้อน");
+        browser("click", ".people-sheet-footer .split-guest-add button");
+        browser("wait", "--fn", "document.querySelector('.people-sheet-list').textContent.includes('เพิ่มชื่อจาก sheet ซ้อน')");
+        assert.equal(JSON.parse(browser("eval", "document.querySelector('.people-sheet-footer input').value")), "");
+        browser("press", "Escape");
+        assert.equal(JSON.parse(browser("eval", "!!document.querySelector('.expense-people-backdrop')")), false);
+        assert.equal(JSON.parse(browser("eval", "!!document.querySelector('#expense-paid-by')")), true);
+      }
     }
     console.log("PASS: identical mobile accommodation/expense pickers; guest available for split and payer; no horizontal overflow");
   }

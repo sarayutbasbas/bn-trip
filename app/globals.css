@@ -9545,10 +9545,6 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .expense-title-row input,
 .expense-title-row select { width: 100%; min-width: 0; }
 .expense-people-row select { width: 100%; min-width: 0; text-overflow: ellipsis; }
-.expense-people-row .split-member-menu { left: 0; right: auto; width: calc(200% + 10px); }
-.expense-people-row .payer-member-menu { left: auto; right: 0; }
-.expense-people-row .people-menu-up .split-member-menu { top: auto; bottom: calc(100% + 6px); }
-.expense-people-row .split-member-menu { overscroll-behavior: contain; }
 .participant-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 16px; }
 .participant-modes button { display: flex; align-items: center; gap: 9px; padding: 12px 10px; border-radius: 16px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); text-align: left; }
 .participant-modes button.active { color: var(--orange); border-color: var(--orange); background: var(--brand-soft); }
@@ -9624,19 +9620,22 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   backdrop-filter: blur(24px) saturate(160%);
 }
-.people-menu-grid { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 3px; max-height: 230px; padding: 6px; overflow-y: auto; overscroll-behavior: contain; border-radius: inherit; }
-.people-menu-arrow { position: absolute; top: -6px; left: calc(25% - 2.5px); width: 12px; height: 12px; transform: translateX(-50%) rotate(45deg); border-top: .5px solid var(--line); border-left: .5px solid var(--line); background: var(--surface-solid); pointer-events: none; }
-.payer-member-menu .people-menu-arrow { left: calc(75% + 2.5px); }
-.people-menu-up .people-menu-arrow { top: auto; bottom: -6px; transform: translateX(-50%) rotate(225deg); }
-.people-menu-grid > .split-all-option, .people-menu-grid > .split-guest-add { grid-column: 1 / -1; }
-.people-menu-grid label { min-width: 0; min-height: 48px; margin: 0; padding: 6px 4px; gap: 5px; }
-.people-menu-grid .split-checkmark { width: 18px; height: 18px; flex-basis: 18px; border-radius: 6px; }
-.people-menu-grid .split-member-avatar { width: 24px; height: 24px; flex-basis: 24px; }
-.people-menu-grid .people-person-copy { min-width: 0; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.people-menu-grid .split-guest-option { grid-template-columns: minmax(0, 1fr) auto; }
-.split-member-menu .people-menu-grid .split-guest-option .people-person-copy { white-space: normal; }
-.people-menu-grid .split-guest-delete { width: 24px; }
 .form-row.accommodation-check-times .native-picker-value { font-size: 16px; }
+.modal-backdrop.expense-people-backdrop { z-index: 80; bottom: auto; }
+.modal-backdrop > .modal.bottom-sheet.expense-people-sheet { height: auto; max-height: min(78dvh, 100%); padding-bottom: 0; }
+.expense-people-sheet > .expense-people-sheet-body { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.expense-people-sheet .people-sheet-list { position: static; width: 100%; min-height: 0; overflow-y: auto; overscroll-behavior: contain; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; flex: 1 1 auto; }
+.expense-people-sheet .people-sheet-list label { min-height: 60px; gap: 12px; padding: 10px 4px; margin: 0; font-size: 16px; }
+.expense-people-sheet .people-person-copy { min-width: 0; overflow-wrap: anywhere; white-space: normal !important; line-height: 1.5; }
+.expense-people-sheet .split-member-avatar { width: 38px; height: 38px; flex-basis: 38px; }
+.expense-people-sheet .split-checkmark { width: 24px; height: 24px; flex-basis: 24px; }
+.expense-people-sheet .split-guest-option { grid-template-columns: minmax(0, 1fr) auto; }
+.expense-people-sheet .split-guest-delete { width: 44px; height: 44px; }
+.people-sheet-footer { flex: 0 0 auto; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface-solid); }
+.people-sheet-footer .split-guest-add { display: grid; grid-template-columns: 22px minmax(0, 1fr) 48px; gap: 8px; padding: 0; margin: 0; border: 0; }
+.people-sheet-footer .split-guest-add input { position: static; width: 100%; height: 48px; min-width: 0; padding: 0 12px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface-2); font: inherit; font-size: 16px; }
+.people-sheet-footer .split-guest-add button { width: 48px; height: 48px; border-radius: 50%; }
+.people-sheet-footer > .primary-btn { width: 100%; margin-top: 12px; }
 .split-member-menu label {
   min-height: 42px;
   padding: 6px 8px;
