@@ -186,7 +186,7 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
       <footer className={styles.controls} inert={controlsHidden}>
         <div className={styles.navigation}>
           <button type="button" className={styles.iconButton} disabled={page === 0} onClick={() => engine.current?.flipPrev()} aria-label="หน้าก่อนหน้า"><ChevronLeft/></button>
-          <div><strong>{page === 0 ? "หน้าปก" : `แพลน ${page} / ${trips.length}`}</strong><span>{page === trips.length ? "หน้าสุดท้ายของเล่ม" : "ปัดซ้าย–ขวาเพื่อพลิกหน้า"}</span></div>
+          <div><strong>{page === 0 ? "หน้าปก" : `แพลน ${page} / ${trips.length}`}</strong><span>{immersive ? "ปัดเพื่อพลิก · จีบสองนิ้วเพื่อซูม" : page === trips.length ? "หน้าสุดท้ายของเล่ม" : "ปัดซ้าย–ขวาเพื่อพลิกหน้า"}</span></div>
           <button type="button" className={styles.iconButton} disabled={page === trips.length} onClick={() => engine.current?.flipNext()} aria-label="หน้าถัดไป"><ChevronRight/></button>
         </div>
         <div className={styles.progress}><span style={{ width: `${page / trips.length * 100}%` }}/></div>

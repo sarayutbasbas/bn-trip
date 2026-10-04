@@ -101,6 +101,23 @@ try {
   browser('click', '[aria-label="ออกจากเต็มจอ"]');
   assert.equal(evaluate('document.body.style.overflow'), 'hidden');
   assert.equal(evaluate('document.querySelector("[data-book-page]").dataset.bookPage'), '1');
+  // Pinch directly on the book: zoom, pan without flipping, then resume curls.
+  browser('click', '[aria-label="อ่านเต็มจอ"]'); browser('wait', '[data-book-fullscreen="true"]');
+  const pinchBook = (from, to) => evaluate(`(()=>{const b=document.querySelector('.stf__block'),r=document.querySelector('[data-book-base]').getBoundingClientRect();for(const [type,gap] of [['touchstart',${from}],['touchmove',${to}],['touchend',${to}]]){const ts=[-1,1].map((sign,i)=>new Touch({identifier:i+1,target:b,clientX:r.left+r.width/2+sign*gap/2,clientY:r.top+r.height/2}));b.dispatchEvent(new TouchEvent(type,{bubbles:true,cancelable:true,touches:type==='touchend'?[]:ts,changedTouches:ts}));}return Number(document.querySelector('[data-book-zoom]').dataset.bookZoom)})()`);
+  assert.equal(pinchBook(80,160), 2, 'pinch zooms directly without opening separate viewer');
+  touch('touchstart',.6); touch('touchmove',.35); touch('touchend',.35);
+  atPage(1);
+  assert(evaluate(`document.querySelector('[data-book-zoom]').firstElementChild.style.transform.includes('translate(-')`), 'one finger pans while zoomed');
+  assert.equal(pinchBook(160,80), 1, 'pinch back restores page flipping');
+  assert.equal(pinchBook(40,400), 4, 'zoom is bounded');
+  touch('touchcancel',.5); atPage(1);
+  assert.equal(pinchBook(400,40), 1);
+  touch('touchstart',.7); touch('touchmove',.6);
+  assert.equal(pinchBook(80,160), 2, 'second finger switches a held curl to zoom');
+  settled(); atPage(1);
+  assert.equal(pinchBook(160,80), 1);
+  assert(!evaluate('Boolean(document.querySelector(".attachment-preview-overlay"))'));
+  evaluate(`document.querySelector('[aria-label="ออกจากเต็มจอ"]').click(); true`);
   // All three events in one task exercise fast swipes, not only slow held drags.
   evaluate(`(()=>{const b=document.querySelector('.stf__block'),r=document.querySelector('[data-book-base]').getBoundingClientRect();for(const [type,f] of [['touchstart',.95],['touchmove',.25],['touchend',.25]]){const t=new Touch({identifier:1,target:b,clientX:r.left+r.width*f,clientY:r.top+r.height/2});b.dispatchEvent(new TouchEvent(type,{bubbles:true,cancelable:true,touches:type==='touchend'?[]:[t],changedTouches:[t]}));}return true})()`);
   atPage(2); settled(); browser('click',prev); atPage(1); settled();

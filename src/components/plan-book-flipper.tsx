@@ -14,6 +14,7 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
 }) {
   const initialPage = useRef(startPage);
   const host = useRef<HTMLDivElement>(null);
+  const paper = useRef<HTMLDivElement>(null);
   const ownedEngine = useRef<ReturnType<BookEngine["pageFlip"]>>(undefined);
   const bindEngine = useCallback((handle: BookEngine | null) => {
     engine.current = handle;
@@ -37,7 +38,45 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
     let settleFrame = 0;
     let settling = false;
     let mouseStartedHere = false;
-    const mouseDown = () => { mouseStartedHere = true; };
+    let scale = 1, offsetX = 0, offsetY = 0;
+    let pinch: { distance: number; scale: number; x: number; y: number; offsetX: number; offsetY: number } | null = null;
+    let pan: { x: number; y: number } | null = null;
+    let zoomGesture = false;
+    let suppressClickUntil = 0;
+    const drawZoom = () => {
+      const maxX = element.clientWidth * (scale - 1) / 2;
+      const maxY = element.clientHeight * (scale - 1) / 2;
+      offsetX = Math.max(-maxX, Math.min(maxX, offsetX));
+      offsetY = Math.max(-maxY, Math.min(maxY, offsetY));
+      if (paper.current) paper.current.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+      element.dataset.bookZoom = scale.toFixed(2);
+    };
+    const resetZoom = () => { scale = 1; offsetX = offsetY = 0; pinch = null; pan = null; zoomGesture = false; drawZoom(); };
+    const base = element.closest('[data-book-base]');
+    const shell = element.closest('[data-book-fullscreen]');
+    const observer = new MutationObserver(resetZoom);
+    if (base) observer.observe(base, { attributes: true, attributeFilter: ['data-book-page'] });
+    if (shell) observer.observe(shell, { attributes: true, attributeFilter: ['data-book-fullscreen'] });
+    const zoomAllowed = () => shell?.getAttribute('data-book-fullscreen') === 'true';
+    const center = (event: TouchEvent) => {
+      const a = event.touches[0], b = event.touches[1];
+      const rect = element.getBoundingClientRect();
+      return { x: (a.clientX + b.clientX) / 2 - rect.left - rect.width / 2, y: (a.clientY + b.clientY) / 2 - rect.top - rect.height / 2,
+        distance: Math.max(1, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)) };
+    };
+    const click = (event: MouseEvent) => {
+      if (performance.now() < suppressClickUntil) { event.preventDefault(); event.stopImmediatePropagation(); }
+    };
+    const doubleClick = (event: MouseEvent) => {
+      if (!zoomAllowed()) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (scale > 1) resetZoom();
+      else { scale = 2; drawZoom(); }
+    };
+    const mouseDown = (event: MouseEvent) => {
+      if (scale > 1) { event.stopImmediatePropagation(); return; }
+      mouseStartedHere = true;
+    };
     const mouseUp = (event: MouseEvent) => {
       const core = engine.current?.pageFlip();
       if (mouseStartedHere && core && core.getState() === "read") {
@@ -59,6 +98,20 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
     const start = (event: TouchEvent) => {
       event.stopImmediatePropagation();
       if (settling) return;
+      if (zoomAllowed() && (event.touches.length >= 2 || scale > 1)) {
+        if (event.cancelable) event.preventDefault();
+        if (dragging) {
+          const core = engine.current?.pageFlip();
+          core?.userStop(lastFold, true);
+          core?.getFlipController().fold(anchor);
+          core?.getFlipController().stopMove();
+        }
+        origin = null; dragging = false; zoomGesture = true;
+        suppressClickUntil = performance.now() + 700;
+        if (event.touches.length >= 2) pinch = { ...center(event), scale, offsetX, offsetY };
+        else pan = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+        return;
+      }
       if (dragging && origin) engine.current?.pageFlip()?.userStop(origin);
       origin = event.touches.length === 1 ? point(event) : null;
       dragging = false;
@@ -66,6 +119,23 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
     };
     const move = (event: TouchEvent) => {
       event.stopImmediatePropagation();
+      if (zoomGesture) {
+        if (event.cancelable) event.preventDefault();
+        suppressClickUntil = performance.now() + 700;
+        if (pinch && event.touches.length >= 2) {
+          const next = center(event);
+          scale = Math.max(1, Math.min(4, pinch.scale * next.distance / pinch.distance));
+          const ratio = scale / pinch.scale;
+          offsetX = next.x - (pinch.x - pinch.offsetX) * ratio;
+          offsetY = next.y - (pinch.y - pinch.offsetY) * ratio;
+          drawZoom();
+        } else if (pan && event.touches.length === 1) {
+          const next = event.touches[0];
+          offsetX += next.clientX - pan.x; offsetY += next.clientY - pan.y;
+          pan = { x: next.clientX, y: next.clientY }; drawZoom();
+        }
+        return;
+      }
       const current = point(event), core = engine.current?.pageFlip();
       if (!origin || !current || !core) return;
       const dx = Math.abs(current.x - origin.x), dy = Math.abs(current.y - origin.y);
@@ -87,6 +157,16 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
     };
     const end = (event: TouchEvent) => {
       event.stopImmediatePropagation();
+      if (zoomGesture) {
+        suppressClickUntil = performance.now() + 700;
+        pinch = null;
+        pan = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+        if (!event.touches.length || event.type === 'touchcancel') {
+          zoomGesture = false; pan = null;
+          if (scale < 1.05) resetZoom();
+        }
+        return;
+      }
       const current = point(event);
       const core = engine.current?.pageFlip();
       if (dragging && current && core && origin) {
@@ -112,7 +192,9 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
       origin = null;
       dragging = false;
     };
-    element.addEventListener("touchstart", start, { capture: true, passive: true });
+    element.addEventListener("touchstart", start, { capture: true, passive: false });
+    element.addEventListener("click", click, true);
+    element.addEventListener("dblclick", doubleClick, true);
     element.addEventListener("touchmove", move, { capture: true, passive: false });
     element.addEventListener("touchend", end, true);
     element.addEventListener("touchcancel", end, true);
@@ -120,6 +202,9 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
     window.addEventListener("mouseup", mouseUp, true);
     return () => {
       element.removeEventListener("touchstart", start, true);
+      element.removeEventListener("click", click, true);
+      element.removeEventListener("dblclick", doubleClick, true);
+      observer.disconnect();
       element.removeEventListener("touchmove", move, true);
       element.removeEventListener("touchend", end, true);
       element.removeEventListener("touchcancel", end, true);
@@ -129,7 +214,7 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
       ownedEngine.current?.destroy();
     };
   }, [engine]);
-  return <div ref={host} data-book-state="read" style={{ width: "100%", height: "100%" }}><ReactFlipBook ref={bindEngine} width={450} height={800} size="stretch"
+  return <div ref={host} data-book-state="read" data-book-zoom="1.00" style={{ width: "100%", height: "100%", overflow: "hidden", touchAction: "none" }}><div ref={paper} style={{ width: "100%", height: "100%", transformOrigin: "center" }}><ReactFlipBook ref={bindEngine} width={450} height={800} size="stretch"
     minWidth={900} maxWidth={900} minHeight={100} maxHeight={1600}
     startPage={initialPage.current} autoSize={false} usePortrait
     showCover={false} flippingTime={650} maxShadowOpacity={0.35}
@@ -137,5 +222,5 @@ export const PlanBookFlipper = memo(function PlanBookFlipper({ children, engine,
     enableKeyboardNav={false} renderOnlyPageLengthChange
     onPageChange={onPageChange} style={{ width: "100%", height: "100%" }}>
     {children}
-  </ReactFlipBook></div>;
+  </ReactFlipBook></div></div>;
 });
