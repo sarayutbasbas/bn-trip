@@ -14,7 +14,7 @@ type Props = {
  splitGuestIds: string[]; setSplitGuestIds: Setter<string[]>;
  splitMembers: Person[]; expenseGuests: Guest[];
  guestName: string; setGuestName: Setter<string>; addingGuest: boolean;
- addExpenseGuest: () => Promise<void>;
+ addExpenseGuest: () => Promise<{ guest: Guest; created: boolean } | undefined>;
  requestDeleteExpenseGuest?: (guest: Guest) => void;
  deletingGuestId?: string | null;
  payerKey: string; setPayerKey: Setter<string>;
@@ -69,7 +69,18 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
  const orderedMembers = [...splitMembers].sort((a, b) => Number(b.role === "owner") - Number(a.role === "owner"));
  const allSplitMemberIds = orderedMembers.map(member => member.id);
  const [payerOpen, setPayerOpen] = useState(false);
- const people = [...orderedMembers.map(member => ({ key: `member:${member.id}`, label: member.display_name || member.email || "-", avatar: member.avatar_url })), ...expenseGuests.map(guest => ({ key: `guest:${guest.id}`, label: guest.name, avatar: null }))];
+ const [newGuestIds, setNewGuestIds] = useState<string[]>([]);
+ const pickerSession = useRef(0);
+ const orderedGuests = [...expenseGuests.filter(guest => newGuestIds.includes(guest.id)), ...expenseGuests.filter(guest => !newGuestIds.includes(guest.id))];
+ const people = [...orderedMembers.map(member => ({ key: `member:${member.id}`, label: member.display_name || member.email || "-", avatar: member.avatar_url })), ...orderedGuests.map(guest => ({ key: `guest:${guest.id}`, label: guest.name, avatar: null }))];
+ const startSession = () => { pickerSession.current += 1; setNewGuestIds([]); };
+ async function addPerson() {
+   const session = pickerSession.current;
+   const result = await addExpenseGuest();
+   if (result?.created && pickerSession.current === session) {
+     setNewGuestIds(current => [...new Set([...current, result.guest.id])]);
+   }
+ }
  const selectedPayer = people.find(person => person.key === payerKey);
  const closeSplit = useCallback(() => setSplitPickerOpen(false), [setSplitPickerOpen]);
  const closePayer = useCallback(() => setPayerOpen(false), [setPayerOpen]);
@@ -84,14 +95,14 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
                       onKeyDown={(event) => {
                         if (event.key !== "Enter") return;
                         event.preventDefault();
-                        void addExpenseGuest();
+                        void addPerson();
                       }}
                       placeholder={t("เพิ่มชื่อ เช่น พ่อ แม่")}
                       aria-label={t("ชื่อผู้ร่วมทริป")}
                     />
                     <button
                       type="button"
-                      onClick={() => void addExpenseGuest()}
+                      onClick={() => void addPerson()}
                       disabled={!guestName.trim() || addingGuest}
                       aria-label={t(addingGuest ? "กำลังเพิ่ม…" : "เพิ่มคนนอกทริป")}
                       aria-busy={addingGuest}
@@ -107,7 +118,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
               <button
                 type="button"
                 className={`split-member-trigger ${splitPickerOpen ? "is-open" : ""}`}
-                onClick={() => { setPayerOpen(false); setSplitPickerOpen((value) => !value); }}
+                onClick={() => { startSession(); setPayerOpen(false); setSplitPickerOpen((value) => !value); }}
                 aria-expanded={splitPickerOpen}
               >
                 <span>
@@ -121,7 +132,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
                 <ChevronDown size={16} />
               </button>
               {splitPickerOpen && (
-                <PeopleSheet title={t("หารค่าใช้จ่ายกับ")} onClose={closeSplit} footer={<>{addPersonFooter}<button type="button" className="primary-btn" onClick={closeSplit}>{t("เสร็จสิ้น")}</button></>}>
+                <PeopleSheet title={t("หารค่าใช้จ่ายกับ")} onClose={closeSplit} footer={addPersonFooter}>
                   <label className="split-all-option">
                     <input
                       type="checkbox"
@@ -178,7 +189,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
                       </label>
                     );
                   })}
-                  {expenseGuests.map((guest) => (
+                  {orderedGuests.map((guest) => (
                     <div className="split-guest-option" key={guest.id}>
                       <label>
                         <input
@@ -198,7 +209,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
                         <span className="split-member-avatar is-guest">
                           <UserRound size={22} aria-hidden="true" />
                         </span>
-                        <span className="people-person-copy" title={guest.name}>{guest.name}</span>
+                        <span className="people-person-copy" title={guest.name}>{guest.name}{newGuestIds.includes(guest.id) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span>
                       </label>
                       {requestDeleteExpenseGuest && <button
                         type="button"
@@ -220,10 +231,10 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
             <div className="field expense-payer-field split-member-field">
               <label htmlFor="expense-paid-by">{t("จ่ายโดย")}</label>
               <input type="hidden" name="paidBy" value={payerKey}/>
-              <button id="expense-paid-by" type="button" className={`split-member-trigger ${payerOpen ? "is-open" : ""}`} disabled={people.length <= 1} aria-expanded={payerOpen} onClick={() => { setSplitPickerOpen(false); setPayerOpen(open => !open); }}><span>{selectedPayer?.label || t("เลือกผู้จ่าย")}</span><ChevronDown size={16}/></button>
+              <button id="expense-paid-by" type="button" className={`split-member-trigger ${payerOpen ? "is-open" : ""}`} disabled={people.length <= 1} aria-expanded={payerOpen} onClick={() => { startSession(); setSplitPickerOpen(false); setPayerOpen(open => !open); }}><span>{selectedPayer?.label || t("เลือกผู้จ่าย")}</span><ChevronDown size={16}/></button>
               {payerOpen && <PeopleSheet title={t("จ่ายโดย")} onClose={closePayer} footer={addPersonFooter} payer>
                 {people.map(person => <div className="split-guest-option" key={person.key}>
-                  <label><input type="radio" name="expensePayerChoice" value={person.key} checked={payerKey === person.key} onChange={() => { setPayerKey(person.key); setPayerOpen(false); }}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}</span></label>
+                  <label><input type="radio" name="expensePayerChoice" value={person.key} checked={payerKey === person.key} onChange={() => { setPayerKey(person.key); setPayerOpen(false); }}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}{person.key.startsWith("guest:") && newGuestIds.includes(person.key.slice(6)) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span></label>
                   {person.key.startsWith("guest:") && requestDeleteExpenseGuest && <button type="button" className="split-guest-delete" disabled={Boolean(deletingGuestId)} aria-label={`${t("ลบ")} ${person.label}`} onClick={() => { setPayerOpen(false); requestDeleteExpenseGuest({ id: person.key.slice(6), name: person.label }); }}><Trash2 size={20}/></button>}
                 </div>)}
               </PeopleSheet>}

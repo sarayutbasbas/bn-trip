@@ -8784,6 +8784,7 @@ function CostSheet({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "เพิ่มคนนอกทริปไม่สำเร็จ");
       const guest = data as ExpenseGuest;
+      notify(response.status === 201 ? `เพิ่ม ${guest.name} แล้ว` : `เลือก ${guest.name} แล้ว`);
       setExpenseGuests((current) =>
         current.some((item) => item.id === guest.id)
           ? current
@@ -8796,6 +8797,7 @@ function CostSheet({
           detail: { tripId: trip.id },
         }),
       );
+      return { guest, created: response.status === 201 };
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "เพิ่มคนนอกทริปไม่สำเร็จ",

@@ -135,7 +135,7 @@ try {
       const scrollLayout = JSON.parse(browser("eval", "(()=>{const list=document.querySelector('.people-sheet-list');const input=document.querySelector('.people-sheet-footer input');const top=input.getBoundingClientRect().top;list.scrollTop=10000;return {scrolled:list.scrollTop>0,fixed:input.getBoundingClientRect().top===top,visible:input.getBoundingClientRect().bottom<=innerHeight}})()"));
       assert.deepEqual(scrollLayout, {scrolled:true,fixed:true,visible:true});
       if(screenshot==="stay") assert.deepEqual(JSON.parse(browser("eval", "[...document.querySelectorAll('.accommodation-check-times .native-picker-value')].map(el=>getComputedStyle(el).fontSize)")), ["16px","16px"]);
-      const choices = JSON.parse(browser("eval", "Array.from(document.querySelectorAll('.payer-member-menu label')).map(label=>label.textContent).sort()"));
+      const choices = JSON.parse(browser("eval", "Array.from(document.querySelectorAll('.payer-member-menu label')).map(label=>label.textContent).filter(text=>!text.includes('เพิ่มชื่อจาก sheet')).sort()"));
       assert(choices.some(label => label.includes("แม่")));
       if (expectedPayers) assert.deepEqual(choices, expectedPayers); else expectedPayers = choices;
       assert.equal(JSON.parse(browser("eval", "(()=>{const r=document.querySelector('.payer-member-menu').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})()")), true);
@@ -149,14 +149,32 @@ try {
       assert(splits.includes(named.id));
       browser("eval", "document.documentElement.classList.remove('dark')");
       browser("screenshot", `/tmp/bn-companions-${screenshot}-light.png`);
-      if (screenshot === "stay") {
-        browser("fill", ".people-sheet-footer input", "เพิ่มชื่อจาก sheet ซ้อน");
+      {
+        assert.equal(JSON.parse(browser('eval', "!!document.querySelector('.people-sheet-footer > .primary-btn')")),false);
+        const newName = `เพิ่มชื่อจาก sheet ${screenshot}`;
+        browser("fill", ".people-sheet-footer input", newName);
         browser("click", ".people-sheet-footer .split-guest-add button");
-        browser("wait", "--fn", "document.querySelector('.people-sheet-list').textContent.includes('เพิ่มชื่อจาก sheet ซ้อน')");
+        browser("wait", ".people-new-tag");
+        assert(browser('get','text','.toast').includes(newName));
+        assert.equal(JSON.parse(browser('eval', "document.querySelector('.split-guest-option .people-person-copy').textContent")),newName+'เพิ่งเพิ่ม');
+        browser("fill", ".people-sheet-footer input", newName + ' 2');
+        browser("click", ".people-sheet-footer .split-guest-add button");
+        browser('wait','--fn',"document.querySelectorAll('.people-new-tag').length===2");
+        const order = JSON.parse(browser('eval', "[...document.querySelectorAll('.people-sheet-list > *')].map(el=>el.querySelector('input')?.name)"));
+        assert(order.lastIndexOf('splitMember') < order.indexOf('splitGuest'));
+        browser('eval',"document.querySelector('.people-sheet-list').scrollTop=0");
+        browser('screenshot',`/tmp/bn-new-companions-${screenshot}.png`);
         assert.equal(JSON.parse(browser("eval", "document.querySelector('.people-sheet-footer input').value")), "");
         browser("press", "Escape");
         assert.equal(JSON.parse(browser("eval", "!!document.querySelector('.expense-people-backdrop')")), false);
         assert.equal(JSON.parse(browser("eval", "!!document.querySelector('#expense-paid-by')")), true);
+        browser('click','.expense-people-row > .field:first-child .split-member-trigger');
+        assert.equal(JSON.parse(browser('eval',"document.querySelectorAll('.people-new-tag').length")),0);
+        browser('fill','.people-sheet-footer input',newName);
+        browser('click','.people-sheet-footer .split-guest-add button');
+        browser('wait','--fn',"document.querySelector('.people-sheet-footer input').value===''");
+        assert.equal(JSON.parse(browser('eval',"document.querySelectorAll('.people-new-tag').length")),0);
+        browser('press','Escape');
       }
     }
     console.log("PASS: identical mobile accommodation/expense pickers; guest available for split and payer; no horizontal overflow");

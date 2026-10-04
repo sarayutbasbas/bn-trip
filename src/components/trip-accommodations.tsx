@@ -500,13 +500,18 @@ export function TripAccommodations({
     if (!guestName.trim() || addingGuest) return;
     setAddingGuest(true);
     try {
-      const guest = await json<{ id: string; name: string }>(`/api/trips/${tripId}/expense-guests`, {
+      const response = await fetch(`/api/trips/${tripId}/expense-guests`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: guestName.trim() }),
       });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "เพิ่มผู้ร่วมทริปไม่สำเร็จ");
+      const guest = data as { id: string; name: string };
       setExpenseGuests(current => current.some(item => item.id === guest.id) ? current : [...current, guest]);
       setSplitGuestIds(current => [...new Set([...current, guest.id])]);
       setGuestName("");
       window.dispatchEvent(new CustomEvent(EXPENSE_GUESTS_CHANGED_EVENT, { detail: { tripId } }));
+      notify(response.status === 201 ? `เพิ่ม ${guest.name} แล้ว` : `เลือก ${guest.name} แล้ว`);
+      return { guest, created: response.status === 201 };
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "เพิ่มคนนอกทริปไม่สำเร็จ");
     } finally { setAddingGuest(false); }
