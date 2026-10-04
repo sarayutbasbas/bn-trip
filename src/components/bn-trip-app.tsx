@@ -16,7 +16,7 @@ import { CollaboratorsSkeleton } from "@/src/components/collaborators-skeleton";
 import { AutoLoadMore } from "@/src/components/auto-load-more";
 import { LoginScreen as RedesignedLoginScreen } from "@/src/components/login-screen";
 
-import { costSplitCount } from "@/src/lib/personal-expenses";
+import { costSplitCount, memberExpenseValue } from "@/src/lib/personal-expenses";
 import { expenseParticipants } from "@/src/lib/expense-participants";
 import { hasSubmittedReview } from "@/src/lib/review-visibility";
 import { type ExpensePayer } from "@/src/lib/expense-settlement";
@@ -284,6 +284,7 @@ type ExpenseGuest = {
   name: string;
 };
 export type Trip = {
+  owner_id?: string;
   companions?: { id: string; name: string }[];
   favorite_total?: number;
   is_favorite?: boolean;
@@ -6645,16 +6646,18 @@ function PlanExpensesContent({
     () => new Set(),
   );
   const allCosts = items.flatMap((item) => item.cost_items || []);
+  const budgetMemberIds = trip.members?.length ? trip.members.map(member => member.id) : [trip.owner_id || "owner"];
+  const budgetValue = (cost: CostItem) => memberExpenseValue(cost, budgetMemberIds);
   const isShopping = (cost: CostItem) =>
-    (cost.category || "").toLowerCase() === "shopping";
+    (cost.category || "").trim().toLowerCase() === "shopping";
   const tripCosts = allCosts.filter((cost) => !isShopping(cost));
   const shoppingCosts = allCosts.filter(isShopping);
   const tripTotal = tripCosts.reduce(
-    (sum, cost) => sum + Number(cost.value || 0),
+    (sum, cost) => sum + budgetValue(cost),
     0,
   );
   const shoppingTotal = shoppingCosts.reduce(
-    (sum, cost) => sum + Number(cost.value || 0),
+    (sum, cost) => sum + budgetValue(cost),
     0,
   );
   const categories = Array.from(
@@ -6662,7 +6665,7 @@ function PlanExpensesContent({
       (map, cost) =>
         map.set(
           cost.category || "อื่น ๆ",
-          (map.get(cost.category || "อื่น ๆ") || 0) + Number(cost.value || 0),
+          (map.get(cost.category || "อื่น ๆ") || 0) + budgetValue(cost),
         ),
       new Map<string, number>(),
     ),
@@ -6687,7 +6690,7 @@ function PlanExpensesContent({
       <TripSectionHeading
         className="expense-page-heading"
         title={t("ค่าใช้จ่าย")}
-        subtitle={t("สรุปค่าใช้จ่ายทั้งหมดของทริป")}
+        subtitle={t("ยอดเทียบงบนับเฉพาะส่วนของสมาชิก ไม่รวมผู้ร่วมทริปแบบเพิ่มชื่อ")}
         actions={<button
           type="button"
           className="trip-section-add"
@@ -6717,6 +6720,7 @@ function PlanExpensesContent({
           <ChevronDown size={17} />
         </summary>
         <div>
+          <p className="expense-member-pending">{t("ยอดตามช่องทางชำระและยอดเคลียร์เงินใช้ยอดจ่ายจริง รวมส่วนที่ออกให้ผู้ร่วมทริปแบบเพิ่มชื่อ")}</p>
           <PaymentMethodSummary costs={allCosts} cards={cards} />
           <ExpenseMemberSummary
             costs={allCosts}
@@ -6747,12 +6751,12 @@ function PlanExpensesContent({
               : dayCosts;
             const dayTripTotal = dayCosts
               .filter((cost) => !isShopping(cost))
-              .reduce((sum, cost) => sum + Number(cost.value || 0), 0);
+              .reduce((sum, cost) => sum + budgetValue(cost), 0);
             const dayShoppingTotal = dayCosts
               .filter(isShopping)
-              .reduce((sum, cost) => sum + Number(cost.value || 0), 0);
+              .reduce((sum, cost) => sum + budgetValue(cost), 0);
             const selectedDayTotal = visibleDayCosts.reduce(
-              (sum, cost) => sum + Number(cost.value || 0),
+              (sum, cost) => sum + budgetValue(cost),
               0,
             );
             const count = visibleDayCosts.length;
@@ -6784,7 +6788,7 @@ function PlanExpensesContent({
                     ) : (
                       <div className="day-split-total">
                         <span>
-                          {t("รวมค่าใช้จ่าย")}{" "}
+                          {t("ส่วนของสมาชิก")}{" "}
                           <strong>฿{bahtFormat(dayGrandTotal)}</strong>
                         </span>
                         <small>{t("ค่าใช้จ่ายทริป")} ฿{bahtFormat(dayTripTotal)} · {t("ค่า Shopping")} ฿{bahtFormat(dayShoppingTotal)}</small>
@@ -6864,6 +6868,7 @@ function PlanExpensesContent({
                               <b>
                                 {isBaht ? "" : "≈ "}฿{bahtFormat(cost.value)}
                               </b>
+                              {Math.abs(budgetValue(cost) - Number(cost.value || 0)) > 0.001 && <small>{t("ส่วนสมาชิก")} ฿{bahtFormat(budgetValue(cost))}</small>}
                               {!isBaht && (
                                 <small>{costSourceLabel(cost)}</small>
                               )}

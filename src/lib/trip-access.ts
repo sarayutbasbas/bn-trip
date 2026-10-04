@@ -64,11 +64,34 @@ export const tripReviewSummarySql=(alias="trips")=>`COALESCE((SELECT round(avg(r
       WHERE review_member.trip_id=${alias}.id AND review_member.user_id=review.user_id
     ))) AS review_count`;
 export const tripActualExpenseSql=(alias="trips")=>`COALESCE((
-    SELECT sum((cost.item->>'value')::numeric)
+    WITH budget_members AS (
+      SELECT ${alias}.owner_id::text AS id
+      UNION
+      SELECT member.user_id::text FROM trip_collaborators member
+      WHERE member.trip_id=${alias}.id AND member.user_id IS NOT NULL
+    )
+    SELECT sum(COALESCE((cost.item->>'value')::numeric,0) * LEAST(1::numeric,
+      selected.member_count::numeric / GREATEST(1, CASE
+        WHEN jsonb_typeof(cost.item->'splitGuestIds')='array'
+          THEN jsonb_array_length(CASE WHEN jsonb_typeof(cost.item->'splitMemberIds')='array' THEN cost.item->'splitMemberIds' ELSE '[]'::jsonb END)
+            + jsonb_array_length(cost.item->'splitGuestIds')
+        WHEN COALESCE(cost.item->>'splitCount','') ~ '^[0-9]+$'
+          AND (cost.item->>'splitCount')::numeric BETWEEN 1 AND 100
+          THEN (cost.item->>'splitCount')::numeric
+        WHEN jsonb_typeof(cost.item->'splitMemberIds')='array'
+          AND jsonb_array_length(cost.item->'splitMemberIds')>0
+          THEN jsonb_array_length(cost.item->'splitMemberIds')
+        ELSE LEAST(100,(SELECT count(*) FROM budget_members))
+      END)))
     FROM itineraries itinerary
     CROSS JOIN LATERAL jsonb_array_elements(COALESCE(itinerary.cost_items,'[]'::jsonb)) AS cost(item)
+    CROSS JOIN LATERAL (
+      SELECT count(*) AS member_count FROM budget_members member
+      WHERE jsonb_typeof(cost.item->'splitMemberIds') IS DISTINCT FROM 'array'
+        OR cost.item->'splitMemberIds' ? member.id
+    ) selected
     WHERE itinerary.trip_id=${alias}.id
-      AND lower(COALESCE(cost.item->>'category',''))<>'shopping'
+      AND lower(btrim(COALESCE(cost.item->>'category','')))<>'shopping'
   ),0)::float AS actual_spent_thb`;
 export const tripFlightSummariesSql=(alias="trips")=>`COALESCE((
     SELECT jsonb_agg(

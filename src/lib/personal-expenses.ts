@@ -32,3 +32,16 @@ export function personalExpenseTotals(costs: SplitExpense[], userId: string, mem
   }
   return { travelExpense, shoppingExpense };
 }
+
+// Budget usage is the responsibility of account members, not money advanced
+// for named guests. Keep the original expense untouched for settlement.
+export function memberExpenseValue(cost: SplitExpense, memberIds: string[]) {
+  const members = new Set(memberIds);
+  const selected = Array.isArray(cost.splitMemberIds)
+    ? new Set(cost.splitMemberIds.filter(id => members.has(id))).size
+    : members.size;
+  const value = Number(cost.value || 0);
+  if (!selected || !Number.isFinite(value)) return 0;
+  const divisor = costSplitCount(cost, members.size);
+  return value * Math.min(1, selected / divisor);
+}
