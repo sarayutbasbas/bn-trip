@@ -7339,9 +7339,53 @@ html.dark .trip-section-nav button.active {
   align-content: start;
   gap: 2px;
 }
-.expense-overview-stats article > svg {
-  margin-bottom: 2px;
-}
+.expense-overview-stats article { min-height:64px;padding:8px 6px;grid-template-columns:minmax(0,1fr) auto;align-content:center;gap:6px 3px; }
+.expense-overview-stats article header { grid-column:1/-1;display:flex;align-items:center;gap:4px;min-width:0; }
+.expense-overview-stats article header svg { flex-shrink:0; }
+.expense-overview-stats article strong,.expense-overview-stats article small { font-size:clamp(10px,2.8vw,16px);line-height:1.4;font-variant-numeric:tabular-nums; }
+.expense-overview-stats article small { align-self:center;text-align:right; }
+.expense-overview-stats .is-budget strong { grid-column:1/-1; }
+.expense-category-summary { margin:16px 0; }
+.expense-category-heading { display:flex;align-items:center;justify-content:space-between;gap:8px; }
+.expense-category-heading h3,.expense-member-disclosure .expense-member-summary-head h3 { display:flex;align-items:center;gap:7px;font-size:17px;font-weight:750;margin:0; }
+.expense-category-heading h3 svg,.expense-member-disclosure h3 svg { color:var(--orange);flex-shrink:0; }
+.expense-category-heading > button { min-height:36px;color:var(--orange);font-size:12px;background:transparent; }
+.expense-category-bar { display:flex;align-items:center;height:44px;margin:6px 0;background:transparent; }
+.expense-category-bar:empty { background:var(--surface-2);height:20px;border-radius:99px;margin:18px 0; }
+.expense-category-bar button { height:24px;min-width:0;padding:0;border:0;transition:height .18s ease,filter .18s ease; }
+.expense-category-bar button:first-child { border-radius:99px 0 0 99px; }
+.expense-category-bar button:last-child { border-radius:0 99px 99px 0; }
+.expense-category-bar button:only-child { border-radius:99px; }
+.expense-category-bar button.active { height:38px;box-shadow:0 3px 10px var(--line);border-radius:6px; }
+.expense-category-bar button:focus-visible { outline:2px solid var(--ink);outline-offset:3px;z-index:1; }
+.expense-category-legend { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 8px; }
+.expense-category-legend button { display:flex;align-items:center;gap:6px;min-width:0;min-height:44px;padding:5px 7px;text-align:left;border:1px solid transparent;border-radius:10px;background:var(--surface-2);color:var(--ink); }
+.expense-category-legend button.active { border-color:var(--orange);background:var(--brand-soft); }
+.expense-category-legend i { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.expense-category-legend span { flex:1;min-width:0; }
+.expense-category-legend b,.expense-category-legend strong { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.5; }
+.expense-category-legend b { font-size:11px;font-weight:550; }
+.expense-category-legend strong { font-size:12px; }
+.expense-category-legend small { font-size:10px;color:var(--muted); }
+.expense-category-empty { font-size:12px;color:var(--muted); }
+.redesigned-plan-expenses .expense-member-disclosure { border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible; }
+.expense-member-disclosure .expense-member-summary-head { display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;list-style:none;border:0;cursor:pointer; }
+.expense-member-disclosure summary::-webkit-details-marker { display:none; }
+.expense-member-disclosure[open] summary > svg { transform:rotate(180deg); }
+.expense-member-disclosure article { padding:8px 0;gap:6px; }
+.expense-member-disclosure .expense-member-clearing { padding-top:3px; }
+.expense-member-disclosure .expense-member-clearing > div > span { padding:3px 2px; }
+.expense-member-disclosure .expense-member-clearing b { font-size:clamp(13px,3.6vw,17px);margin-top:0; }
+.redesigned-plan-expenses .expense-day-card:nth-child(odd) { background:color-mix(in srgb,var(--orange) 5%,var(--surface-solid)); }
+.redesigned-plan-expenses .expense-day-card:nth-child(even) { background:var(--surface-solid); }
+html.dark .redesigned-plan-expenses .expense-day-card:nth-child(odd) { --card-glass-accent-layer:linear-gradient(rgba(255,145,60,.1),rgba(255,145,60,.1)); }
+html.dark .redesigned-plan-expenses .expense-member-disclosure { background:transparent !important;box-shadow:none !important; }
+.redesigned-plan-expenses .expense-day-card .expense-day-head { background:transparent; }
+.redesigned-plan-expenses .expense-day-list .expense-plan-row { min-height:52px;padding:6px 0;grid-template-columns:28px minmax(0,1fr) auto;gap:6px; }
+.redesigned-plan-expenses .expense-plan-row .expense-category-icon { width:28px;height:28px;min-width:28px; }
+.redesigned-plan-expenses .expense-plan-row .expense-category-icon svg { width:16px;height:16px; }
+.redesigned-plan-expenses .expense-plan-row .expense-category-pill { display:none; }
+@media(prefers-reduced-motion:reduce) { .expense-category-bar button { transition:none; } }
 .expense-overview-stats .is-budget {
   color: #ee5a16;
   background: linear-gradient(145deg, #fff4ed, #fffaf7);

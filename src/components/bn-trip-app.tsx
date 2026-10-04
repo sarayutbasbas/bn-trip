@@ -18,7 +18,7 @@ import { AutoLoadMore } from "@/src/components/auto-load-more";
 import { LoginScreen as RedesignedLoginScreen } from "@/src/components/login-screen";
 
 import { costSplitCount, memberExpenseValue } from "@/src/lib/personal-expenses";
-import { expenseParticipants } from "@/src/lib/expense-participants";
+import { ExpenseCategoryBar } from "./expense-category-bar";
 import { hasSubmittedReview } from "@/src/lib/review-visibility";
 import { type ExpensePayer } from "@/src/lib/expense-settlement";
 import { expenseSettlement } from "@/src/lib/expense-settlement";
@@ -5794,195 +5794,6 @@ function TimelineScreen({
   );
 }
 
-function CategoryDonut({
-  categories,
-  total,
-  selectedCategory,
-  onSelectedCategoryChange,
-}: {
-  categories: Array<[string, number]>;
-  total: number;
-  selectedCategory: string | null;
-  onSelectedCategoryChange: (category: string | null) => void;
-}) {
-  const t = useT();
-  const [previewCategory, setPreviewCategory] = useState<string | null>(null);
-  const colors = [
-    "#ff4f0a",
-    "#ff9f2d",
-    "#ffcc4d",
-    "#34c759",
-    "#0a84ff",
-    "#8e5cff",
-    "#ff5c8a",
-  ];
-  const segments = categories.reduce(
-    (result, [category, amount], index) => {
-      const percent = total ? (amount / total) * 100 : 0;
-      return {
-        cursor: result.cursor + percent,
-        items: [
-          ...result.items,
-          {
-            category,
-            amount,
-            index,
-            percent,
-            offset: result.cursor,
-            color: colors[index % colors.length],
-          },
-        ],
-      };
-    },
-    {
-      cursor: 0,
-      items: [] as Array<{
-        category: string;
-        amount: number;
-        index: number;
-        percent: number;
-        offset: number;
-        color: string;
-      }>,
-    },
-  ).items;
-  const selectedIndex = selectedCategory
-    ? segments.findIndex((segment) => segment.category === selectedCategory)
-    : null;
-  const active = previewCategory
-    ? segments.find((segment) => segment.category === previewCategory) || null
-    : selectedCategory
-      ? segments.find((segment) => segment.category === selectedCategory) || null
-      : null;
-  const money = (amount: number) => bahtFormat(amount);
-  const selectCategory = (category: string) =>
-    onSelectedCategoryChange(selectedCategory === category ? null : category);
-  return (
-    <section className="budget-donut-summary">
-      <div className="expense-total-banner">
-        <span>{t("รวมค่าใช้จ่าย")}</span>
-        <strong>฿{money(total)}</strong>
-        <small>{t("สัดส่วนค่าใช้จ่ายตามประเภท")}</small>
-      </div>
-      <div className="donut-layout">
-        <div className="donut-stage">
-          <svg
-            className="interactive-donut"
-            viewBox="0 0 160 160"
-            role="group"
-            aria-label={t("สัดส่วนค่าใช้จ่ายตามประเภท")}
-          >
-            <circle
-              className="donut-track"
-              cx="80"
-              cy="80"
-              r="54"
-              pathLength="100"
-            />
-            {segments.map((segment) => (
-              <circle
-                key={segment.category}
-                className={`donut-segment ${selectedIndex === segment.index ? "active" : ""}`}
-                cx="80"
-                cy="80"
-                r="54"
-                pathLength="100"
-                fill="none"
-                stroke={segment.color}
-                strokeWidth="28"
-                strokeDasharray={`${segment.percent} ${100 - segment.percent}`}
-                strokeDashoffset={-segment.offset}
-                transform="rotate(-90 80 80)"
-                role="button"
-                tabIndex={0}
-                aria-label={`${t(segment.category)} ฿${money(segment.amount)} ${segment.percent.toFixed(1)}%`}
-                aria-pressed={selectedIndex === segment.index}
-                onMouseEnter={() => setPreviewCategory(segment.category)}
-                onMouseLeave={() => setPreviewCategory(null)}
-                onFocus={() => setPreviewCategory(segment.category)}
-                onBlur={() => setPreviewCategory(null)}
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  selectCategory(segment.category);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    selectCategory(segment.category);
-                  }
-                }}
-              >
-                <title>{`${t(segment.category)} · ฿${money(segment.amount)} · ${segment.percent.toFixed(1)}%`}</title>
-              </circle>
-            ))}
-          </svg>
-          <div className="donut-tooltip" role="status" aria-live="polite">
-            {active ? (
-              <>
-                <i style={{ background: active.color }} />
-                <span>{t(active.category)}</span>
-                <strong>฿{money(active.amount)}</strong>
-                <small>{active.percent.toFixed(1)}%</small>
-              </>
-            ) : (
-              <>
-                <span>{t(segments.length ? "ทั้งหมด" : "ยังไม่มีค่าใช้จ่าย")}</span>
-                <strong>฿{money(total)}</strong>
-                {segments.length > 0 && <small>100%</small>}
-              </>
-            )}
-          </div>
-        </div>
-        <div className="donut-legend">
-          {segments.length ? (
-            <>
-              <button
-                type="button"
-                className={`donut-legend-all ${selectedCategory === null ? "active" : ""}`}
-                onMouseEnter={() => setPreviewCategory(null)}
-                onFocus={() => setPreviewCategory(null)}
-                onClick={() => onSelectedCategoryChange(null)}
-                aria-pressed={selectedCategory === null}
-              >
-                <i />
-                <span>
-                  <b>{t("ทั้งหมด")}</b>
-                  <small>100%</small>
-                </span>
-                <strong>฿{money(total)}</strong>
-              </button>
-              {segments.map((segment) => (
-                <button
-                  type="button"
-                  key={segment.category}
-                  className={selectedIndex === segment.index ? "active" : ""}
-                  onMouseEnter={() => setPreviewCategory(segment.category)}
-                  onMouseLeave={() => setPreviewCategory(null)}
-                  onFocus={() => setPreviewCategory(segment.category)}
-                  onBlur={() => setPreviewCategory(null)}
-                  onClick={() => selectCategory(segment.category)}
-                  aria-pressed={selectedIndex === segment.index}
-                >
-                  <i style={{ background: segment.color }} />
-                  <span>
-                    <b>{t(segment.category)}</b>
-                    <small>{segment.percent.toFixed(1)}%</small>
-                  </span>
-                  <strong>฿{money(segment.amount)}</strong>
-                </button>
-              ))}
-            </>
-          ) : (
-            <div className="donut-empty">
-              <span>{t("ยังไม่มีค่าใช้จ่าย")}</span>
-              <strong>฿0.00</strong>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 export function LegacyPlanExpensesContent({
   trip,
@@ -6057,7 +5868,7 @@ export function LegacyPlanExpensesContent({
           {t("เพิ่มค่าใช้จ่าย")}
         </button>
       </div>
-      <CategoryDonut
+      <ExpenseCategoryBar t={t}
         categories={categories}
         total={total}
         selectedCategory={selectedCategory}
@@ -6263,19 +6074,16 @@ function ExpenseSplitSummary({
     <section className={`expense-overview ${remaining < 0 ? "is-over-budget" : ""}`}>
       <div className="expense-overview-stats">
         <article className="is-budget">
-          <WalletCards size={18} />
-          <span>{t("งบประมาณรวม")}</span>
+          <header><WalletCards size={14} /><span>{t("งบประมาณรวม")}</span></header>
           <strong>฿{bahtFormat(totalBudget)}</strong>
         </article>
         <article className="is-spent">
-          <WalletCards size={18} />
-          <span>{t("ใช้ไปแล้ว")}</span>
+          <header><WalletCards size={14} /><span>{t("ใช้ไปแล้ว")}</span></header>
           <strong>฿{bahtFormat(totalSpent)}</strong>
           <small>{totalPercent.toFixed(0)}%</small>
         </article>
         <article className="is-remaining">
-          <ChartNoAxesColumnIncreasing size={18} />
-          <span>{t(remaining < 0 ? "เกินงบ" : "คงเหลือ")}</span>
+          <header><ChartNoAxesColumnIncreasing size={14} /><span>{t(remaining < 0 ? "เกินงบ" : "คงเหลือ")}</span></header>
           <strong>฿{bahtFormat(Math.abs(remaining))}</strong>
           <small>{totalBudget > 0 ? Math.abs(100 - totalPercent).toFixed(0) : "0"}%</small>
         </article>
@@ -6284,82 +6092,6 @@ function ExpenseSplitSummary({
   );
 }
 
-function PaymentMethodSummary({
-  costs,
-  cards,
-}: {
-  costs: CostItem[];
-  cards: PaymentCard[];
-}) {
-  const t = useT();
-  const money = (value: number) => bahtFormat(value);
-  const rows = Array.from(
-    costs.reduce((map, cost) => {
-      const method = cost.paymentMethod || "เงินสด";
-      const key = cost.creditCardId
-        ? `card:${cost.creditCardId}`
-        : `method:${method}`;
-      const current = map.get(key) || {
-        method,
-        creditCardId: cost.creditCardId,
-        trip: 0,
-        shopping: 0,
-      };
-      if ((cost.category || "").toLowerCase() === "shopping")
-        current.shopping += Number(cost.value || 0);
-      else current.trip += Number(cost.value || 0);
-      map.set(key, current);
-      return map;
-    }, new Map<string, { method: string; creditCardId?: string; trip: number; shopping: number }>()),
-  ).sort((a, b) => b[1].trip + b[1].shopping - (a[1].trip + a[1].shopping));
-  return (
-    <section className="payment-summary">
-      <h3>{t("แยกตามช่องทางชำระ")}</h3>
-      {rows.length ? (
-        <div>
-          {rows.map(([key, amounts]) => {
-            const card = findPaymentCard(cards, {
-              key: "",
-              value: 0,
-              paymentMethod: amounts.method,
-              creditCardId: amounts.creditCardId,
-            });
-            return (
-              <article key={key}>
-                {card ? (
-                  <CardBrandLogo
-                    brand={card.brand}
-                    className="payment-summary-brand"
-                  />
-                ) : (
-                  <CashPaymentIcon className="payment-summary-icon" />
-                )}
-                <div className="payment-summary-copy">
-                  <strong>{card ? cardPaymentLabel(card) : t("เงินสด")}</strong>
-                  <small>
-                    {card
-                      ? `${t("เจ้าของ")}: ${card.owner_name || card.owner_email || "-"}`
-                      : t("ใช้ร่วมกันในทริป")}
-                  </small>
-                </div>
-                <div className="payment-method-totals">
-                  <span>
-                    {t("ค่าใช้จ่ายทริป")} <b>฿{money(amounts.trip)}</b>
-                  </span>
-                  <span>
-                    {t("ค่า Shopping")} <b>฿{money(amounts.shopping)}</b>
-                  </span>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <p>{t("ยังไม่มีข้อมูลช่องทางชำระ")}</p>
-      )}
-    </section>
-  );
-}
 
 function ExpenseMemberSummary({
   costs,
@@ -6433,11 +6165,8 @@ function ExpenseMemberSummary({
     })),
   ];
   return (
-    <section className="expense-member-summary">
-      <div className="expense-member-summary-head">
-        <h3>{t("สรุปค่าใช้จ่ายแยกตามคน")}</h3>
-        <p>{t("ค่าใช้จ่ายที่รับผิดชอบ เงินที่ออกให้ก่อน และยอดเคลียร์เงินในที่เดียว")}</p>
-      </div>
+    <details className="expense-member-summary expense-member-disclosure">
+      <summary className="expense-member-summary-head"><h3><UserRound size={18} />{t("สรุปค่าใช้จ่ายแยกตามคน")}</h3><ChevronDown size={17} /></summary>
       {settlement.pendingCount > 0 && <p className="expense-member-pending" role="status">ยังสรุปไม่ครบ: {settlement.pendingCount} รายการ (฿{bahtFormat(settlement.pendingAmount / 100)}) ยังไม่ระบุผู้จ่ายหรือผู้หารไม่ครบ ยอดเคลียร์เงินด้านล่างคิดเฉพาะรายการที่ข้อมูลครบแล้ว</p>}
       <div>
         {rows.map((row) => {
@@ -6483,14 +6212,13 @@ function ExpenseMemberSummary({
           );
         })}
       </div>
-    </section>
+    </details>
   );
 }
 
 function PlanExpensesContent({
   trip,
   items,
-  cards,
   openCost,
 }: {
   trip: Trip;
@@ -6567,27 +6295,13 @@ function PlanExpensesContent({
         tripTotal={tripTotal}
         shoppingTotal={shoppingTotal}
       />
-      <CategoryDonut
+      <ExpenseCategoryBar t={t}
         categories={categories}
         total={grandTotal}
         selectedCategory={selectedCategory}
         onSelectedCategoryChange={setSelectedCategory}
       />
-      <details className="expense-insight-details">
-        <summary>
-          <span><ChartNoAxesColumnIncreasing size={17} />{t("ดูรายละเอียด")}</span>
-          <ChevronDown size={17} />
-        </summary>
-        <div>
-          <p className="expense-member-pending">{t("ยอดตามช่องทางชำระและยอดเคลียร์เงินใช้ยอดจ่ายจริง รวมส่วนที่ออกให้ผู้ร่วมทริปแบบเพิ่มชื่อ")}</p>
-          <PaymentMethodSummary costs={allCosts} cards={cards} />
-          <ExpenseMemberSummary
-            costs={allCosts}
-            members={trip.members || []}
-            guests={expenseGuests}
-          />
-        </div>
-      </details>
+      <ExpenseMemberSummary costs={allCosts} members={trip.members || []} guests={expenseGuests} />
       <div className="expense-list-heading">
         <span><CalendarDays size={18} /></span>
         <h2>{t("รายการค่าใช้จ่าย")}</h2>
@@ -6704,7 +6418,7 @@ function PlanExpensesContent({
                         )
                           return null;
                         const isBaht = (cost.currency || "THB") === "THB";
-                        const participants = expenseParticipants(cost, trip.members || [], expenseGuests);
+
                         const splitLabel = costSplitLabel(cost, trip.traveller_count);
                         return (
                           <button
@@ -6732,16 +6446,7 @@ function PlanExpensesContent({
                                 <small>{costSourceLabel(cost)}</small>
                               )}
                               {splitLabel ? <small className="expense-row-split">{splitLabel}</small> : null}
-                              {participants.length > 0 && (
-                                <span className="expense-participant-stack" role="img" aria-label={`${t("หารค่าใช้จ่ายกับ")}: ${participants.map(person => person.name).join(", ")}`}>
-                                  {participants.slice(0, 3).map(person => (
-                                    <span key={person.id} className="expense-participant-avatar" title={person.name} style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>
-                                      {!person.avatar && person.name.trim().charAt(0).toUpperCase()}
-                                    </span>
-                                  ))}
-                                  {participants.length > 3 && <span className="expense-participant-avatar expense-participant-more" title={participants.slice(3).map(person => person.name).join(", ")}>+{participants.length - 3}</span>}
-                                </span>
-                              )}
+
                             </span>
                           </button>
                         );
