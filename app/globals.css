@@ -6173,6 +6173,11 @@ html.dark .trip-section-nav button.active {
 .timeline-document-badge svg { flex: 0 0 auto; }
 .timeline-document-badge span {
   min-width: 0;
+  /* Thai vowels/tone marks extend beyond a 1em line box. Keep the
+     ellipsis for long filenames without clipping marks above/below. */
+  display: block;
+  line-height: 1.65;
+  padding-block: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
