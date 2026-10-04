@@ -6054,10 +6054,10 @@ html.dark .trip-section-nav button.active {
   -webkit-line-clamp: 2;
   max-height: 2.7em;
 }
-.timeline-expense-summary {
+.timeline-expense-tag {
   position: relative;
   z-index: 1;
-  width: fit-content;
+  width: max-content;
   max-width: 100%;
   min-height: 22px;
   margin: 0;
@@ -6072,10 +6072,18 @@ html.dark .trip-section-nav button.active {
   background: color-mix(in srgb,#27b5a5 10%,var(--surface-solid));
   font-size: 9px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.timeline-expense-tags { position:relative;width:100%;min-width:0;display:flex;flex-direction:column;gap:5px; }
+.timeline-expense-tag-row { display:flex;align-items:center;flex-wrap:wrap;gap:5px;min-width:0; }
+.timeline-expense-tag { flex:0 1 auto;font-family:inherit;cursor:pointer; }
+.timeline-expense-tag-name { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.timeline-expense-tag-amount { flex-shrink:0;white-space:nowrap; }
+.timeline-expense-tag-measure { position:absolute;inset:0 0 auto;height:0;overflow:hidden;visibility:hidden;pointer-events:none;display:flex;flex-direction:column;align-items:flex-start;gap:5px; }
+.timeline-expense-tag:focus-visible { outline:2px solid var(--orange);outline-offset:2px; }
+.timeline-expense-tag:active { filter:brightness(.95); }
 .timeline-card-badges {
   min-width: 0;
   margin-top: 8px;
@@ -6120,10 +6128,7 @@ html.dark .trip-section-nav button.active {
   color: #9db8ff;
   background: color-mix(in srgb,#547fea 16%,#1c1c1e);
 }
-.timeline-expense-summary svg {
-  flex: 0 0 auto;
-}
-.dark .timeline-expense-summary {
+.dark .timeline-expense-tag {
   color: #75d9ce;
   background: color-mix(in srgb,#27b5a5 14%,#1c1c1e);
 }

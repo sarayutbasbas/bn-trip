@@ -49,6 +49,7 @@ import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
 import { TripFavoriteButton } from "@/src/components/trip-favorite-button";
 import { ArrowDownUp, BookOpen } from "lucide-react";
+import { TimelineExpenseTags } from "./timeline-expense-tags";
 import { TRIP_SORT_OPTIONS, normalizeTripSort } from "@/src/lib/trip-sort";
 import { tripDaysUntilLabel } from "@/src/lib/trip-countdown";
 import { tripWeekdayLabel } from "@/src/lib/trip-weekday";
@@ -4500,133 +4501,6 @@ function TripSectionNav({
   );
 }
 
-function TimelineExpenseMenu({
-  item,
-  openCost,
-  deleteCost,
-  canDelete,
-  open,
-  onOpen,
-  onClose,
-}: {
-  item: Itinerary;
-  openCost: (
-    item: Itinerary,
-    index?: number,
-    defaultDay?: number,
-    returnToExpenseList?: () => void,
-  ) => void;
-  deleteCost: (item: Itinerary, index: number) => Promise<void>;
-  canDelete: boolean;
-  open: boolean;
-  onOpen: () => void;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const costs = item.cost_items || [];
-  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
-  const [deleteError, setDeleteError] = useState("");
-  useEffect(() => {
-    if (!open) return;
-    const body = document.body;
-    const scrollY = window.scrollY;
-    const previousPosition = body.style.position;
-    const previousTop = body.style.top;
-    const previousWidth = body.style.width;
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.width = "100%";
-    return () => {
-      body.style.position = previousPosition;
-      body.style.top = previousTop;
-      body.style.width = previousWidth;
-      window.scrollTo(0, scrollY);
-    };
-  }, [open]);
-  return (
-    <div className="timeline-expense-menu">
-      <button
-        type="button"
-        className="timeline-expense-trigger"
-        onClick={() => {
-          onClose();
-          openCost(item);
-        }}
-        aria-label={t("เพิ่มค่าใช้จ่าย")}
-        title={t("เพิ่มค่าใช้จ่าย")}
-      >
-        <WalletCards size={17} />
-      </button>
-      {open && typeof document !== "undefined" && createPortal(<>
-        <BottomSheet
-          title={t("รายการค่าใช้จ่าย")}
-          subtitle={item.place_name}
-          closeLabel={t("ปิด")}
-          onClose={onClose}
-          className="timeline-expense-sheet"
-          bodyClassName="bottom-sheet-body timeline-expense-sheet-body"
-        >
-          <div className="timeline-expense-list">
-            {costs.length ? costs.map((cost, index) => (
-              <div className="timeline-expense-row" key={cost.id || `${cost.key}-${index}`}>
-                <button
-                  type="button"
-                  className="timeline-expense-row-main"
-                  onClick={() => {
-                    onClose();
-                    openCost(item, index, undefined, onOpen);
-                  }}
-                >
-                  <ExpenseCategoryIcon category={cost.category} />
-                  <span><b>{cost.key}</b><small>{costSourceLabel(cost)}</small></span>
-                  <em>฿{bahtFormat(cost.value)}</em>
-                </button>
-                {canDelete && !isLinkedExpense(item, cost) && <button
-                  type="button"
-                  className="timeline-expense-row-delete"
-                  onClick={() => setDeleteIndex(index)}
-                  aria-label={`${t("ลบค่าใช้จ่ายนี้")} ${cost.key}`}
-                  title={t("ลบค่าใช้จ่ายนี้")}
-                ><Trash2 size={16} /></button>}
-              </div>
-            )) : <div className="timeline-expense-empty"><WalletCards size={24} /><strong>{t("ยังไม่มีค่าใช้จ่าย")}</strong><small>{t("เพิ่มค่าใช้จ่ายของสถานที่นี้ได้เลย")}</small></div>}
-          </div>
-          <button
-            type="button"
-            className="timeline-expense-add"
-            onClick={() => {
-              onClose();
-              openCost(item, undefined, undefined, onOpen);
-            }}
-          >
-            <Plus size={17} />
-            {t("เพิ่มค่าใช้จ่าย")}
-          </button>
-        </BottomSheet>
-        {deleteIndex !== null && costs[deleteIndex] && !isLinkedExpense(item, costs[deleteIndex]) && <ConfirmDialog
-          confirmation={{
-            title: `ลบ “${costs[deleteIndex].key}”?`,
-            description: "ค่าใช้จ่ายนี้จะถูกลบออกจาก Timeline และหน้าสรุป",
-            confirmLabel: "ลบค่าใช้จ่าย",
-            onConfirm: async () => {
-              try {
-                await deleteCost(item, deleteIndex);
-                setDeleteIndex(null);
-              } catch (error) {
-                setDeleteError(error instanceof Error ? error.message : "ลบค่าใช้จ่ายไม่สำเร็จ");
-                throw error;
-              }
-            },
-          }}
-          close={() => setDeleteIndex(null)}
-        />}
-        {deleteError && <FormErrorDialog title={t("ลบค่าใช้จ่ายไม่สำเร็จ")} description={deleteError} onClose={() => setDeleteError("")} />}
-        </>,
-        document.body,
-      )}
-    </div>
-  );
-}
 
 function TransportModeIcon({ mode }: { mode: string }) {
   if (mode.includes("เดิน")) return <Footprints size={12} />;
@@ -5172,7 +5046,6 @@ function TripHub({
   addPlace,
   editPlace,
   openCost,
-  deleteCost,
   onFlightChanged,
   notify,
   initialWorkspaceTab,
@@ -5199,7 +5072,6 @@ function TripHub({
     defaultDay?: number,
     returnToExpenseList?: () => void,
   ) => void;
-  deleteCost: (item: Itinerary, index: number) => Promise<void>;
   onFlightChanged: () => void | Promise<void>;
   notify: (message: string) => void;
   initialWorkspaceTab?: WorkspaceTab;
@@ -5227,7 +5099,6 @@ function TripHub({
   const [openAccommodationDay, setOpenAccommodationDay] = useState<
     number | null
   >(null);
-  const [openTimelineExpenseId, setOpenTimelineExpenseId] = useState<string | null>(null);
   const now = useMinuteClock();
   const membersKey = (trip.members || []).map((member) => member.id).join(":");
   const tripDay = tripDayAt(trip, now);
@@ -5378,10 +5249,6 @@ function TripHub({
                 {dayItems.map((item, index) => {
                   const itemCosts = item.cost_items || [];
                   const imageUsage = timelineImageUsage(item, items);
-                  const itemExpenseTotal = itemCosts.reduce(
-                    (total, cost) => total + Number(cost.value || 0),
-                    0,
-                  );
                   const openTimelineItem = () => {
                     if (item.accommodation_id) {
                       setOpenAccommodationDay(item.day_number);
@@ -5519,15 +5386,7 @@ function TripHub({
                               {(itemCosts.length > 0 || Boolean(item.documents?.length)) && (
                                 <div className="timeline-card-badges">
                                   {itemCosts.length > 0 && (
-                                    <button
-                                      type="button"
-                                      className="timeline-expense-summary"
-                                      onClick={() => setOpenTimelineExpenseId(item.id)}
-                                      aria-label={`${t("เปิดรายการค่าใช้จ่าย")} · ฿${bahtFormat(itemExpenseTotal)}`}
-                                    >
-                                      <WalletCards size={12} aria-hidden="true" />
-                                      {t("ค่าใช้จ่ายรวม")} ฿{bahtFormat(itemExpenseTotal)}
-                                    </button>
+                                    <TimelineExpenseTags costs={itemCosts} onOpen={costIndex => openCost(item, costIndex)} />
                                   )}
                                   <TimelineDocumentBadges tripId={trip.id} documents={item.documents} />
                                 </div>
@@ -5559,15 +5418,9 @@ function TripHub({
                             </a>
                           </div>
                         </article>
-                        <TimelineExpenseMenu
-                          item={item}
-                          openCost={openCost}
-                          deleteCost={deleteCost}
-                          canDelete={trip.access_role !== "view"}
-                          open={openTimelineExpenseId === item.id}
-                          onOpen={() => setOpenTimelineExpenseId(item.id)}
-                          onClose={() => setOpenTimelineExpenseId(null)}
-                        />
+                        <div className="timeline-expense-menu">
+                          <button type="button" className="timeline-expense-trigger" onClick={() => openCost(item)} aria-label={t("เพิ่มค่าใช้จ่าย")} title={t("เพิ่มค่าใช้จ่าย")}><WalletCards size={17}/></button>
+                        </div>
                       </div>
                       {index === dayItems.length - 1 && (
                         <TimelineInsertPlaceButton
@@ -11155,7 +11008,6 @@ export function BNTripApp({
         setModal({ type: "place", item });
       })}
       openCost={protect(openCost)}
-      deleteCost={deleteCost}
       onFlightChanged={async () => {
         const response = await fetch(`/api/trips/${selected.id}/itineraries`, {
           cache: "no-store",
