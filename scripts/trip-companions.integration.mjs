@@ -59,6 +59,13 @@ try {
     browser("open", `${base}/trip-ideas`);
     browser("wait", ".trip-idea-invite");
     checkAvatars('.trip-idea-avatars');
+    for (const width of [320, 375, 390]) {
+      browser('set', 'viewport', String(width), '844');
+      const result = JSON.parse(browser('eval', `(()=>{const button=document.querySelector('.trip-idea-convert');const box=button.getBoundingClientRect();const card=button.closest('article').getBoundingClientRect();const invite=document.querySelector('.trip-idea-invite').getBoundingClientRect();return {label:button.getAttribute('aria-label'),text:button.textContent.trim(),round:getComputedStyle(button).borderRadius,square:box.width===box.height,inside:box.left>=card.left&&invite.right<=card.right&&invite.right<=innerWidth,icon:!!button.querySelector('svg')}})()`));
+      assert.deepEqual(result, {label:'สร้างทริป',text:'',round:'50%',square:true,inside:true,icon:true});
+      browser('screenshot', `/tmp/bn-idea-create-${width}.png`);
+    }
+    console.log('PASS: icon-only circular create button fits 320/375/390px screens');
     assert.equal(JSON.parse(browser("eval", "(()=>{const invite=document.querySelector('.trip-idea-invite').getBoundingClientRect();const create=document.querySelector('.trip-idea-convert').getBoundingClientRect();return invite.left>=create.right})()")), true);
     browser("click", ".trip-idea-invite");
     browser("wait", ".participant-invite-actions");

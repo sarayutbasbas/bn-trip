@@ -69,7 +69,7 @@ function IdeaCard({idea,edit,convert,share,toggleFavorite,favoriteBusy}:{idea:Tr
       <div className="trip-idea-card-footer">
         <IdeaAvatars members={idea.members||[]} companions={idea.companions} open={share}/>
         <div className="trip-idea-footer-actions">
-          {idea.kind==="planned"&&convert&&idea.access_level!=="view"?<button className="trip-idea-convert" type="button" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={15}/> สร้างทริป</button>:null}
+          {idea.kind==="planned"&&convert&&idea.access_level!=="view"?<button className="trip-idea-convert" type="button" aria-label="สร้างทริป" title="สร้างทริป" onClick={event=>{stop(event);convert()}}><PlaneTakeoff size={16} aria-hidden="true"/></button>:null}
           {(idea.access_role === "owner"||idea.access_level === "admin") && <button className="trip-idea-invite" type="button" onClick={event=>{stop(event);share()}} aria-label="เชิญเพื่อนร่วมวางแผน" title="เชิญเพื่อนร่วมวางแผน"><UserPlus size={16}/></button>}
         </div>
       </div>
