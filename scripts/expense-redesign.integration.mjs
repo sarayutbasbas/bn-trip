@@ -19,6 +19,8 @@ let uploadedDocumentPath;
 try {
   await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Expense design test')", [id,email]);
   const trip=await api('/api/trips',{name:'Expense design',countryCode:'JP',locationIds:['JP:kyoto'],outboundDate:'2026-01-01',outboundTime:'08:00',returnDate:'2026-01-03',returnTime:'18:00',budgetThb:190000,shoppingBudgetThb:10000});
+  browser('open',base);browser('cookies','set','bn_trip_session',token,'--url',base);browser('open',base+'/trips/'+trip.id+'/expenses');browser('wait','.redesigned-plan-expenses');
+  assert(evaluate("!document.querySelector('.expense-category-summary')"), 'no chart before priced expenses');
   for(const dayNumber of [1,2,3]) await api('/api/trips/'+trip.id+'/itineraries',{dayNumber,timeSlot:'morning',startTime:'08:00',placeName:'รายการทดสอบชื่อยาวในแต่ละวัน',costItems:[{id:randomUUID(),key:'อาหารกลางวัน',value:1000,category:'อาหาร',paidBy:{type:'member',id},splitMemberIds:[id]},{id:randomUUID(),key:'เดินทาง',value:500,category:'เดินทาง',paidBy:{type:'member',id},splitMemberIds:[id]}]});
   await api('/api/trips/'+trip.id+'/expense-guests',{name:'ผู้ร่วมทริปทดสอบ'});
   browser('open',base);browser('cookies','set','bn_trip_session',token,'--url',base);browser('set','viewport','390','844');browser('open',base+'/trips/'+trip.id+'/expenses');browser('wait','.expense-category-bar button');
@@ -95,6 +97,11 @@ try {
   browser('open',base+'/trips/'+trip.id+'?view=stays');
   browser('wait','.accommodation-card-copy');
   assert(evaluate("!document.querySelector('.accommodation-guest-avatars') && !!document.querySelector('.accommodation-booking-badge') && !!document.querySelector('.accommodation-breakfast-icon')"));
+  for(const width of [320,390,430]) {
+    browser('set','viewport',String(width),'844');
+    assert(evaluate("(()=>{const i=document.querySelector('.accommodation-card-icons').getBoundingClientRect(),p=document.querySelector('.accommodation-total-price').getBoundingClientRect();return Math.abs(i.top+i.height/2-p.top-p.height/2)<1&&i.right<=p.left})()"), 'booking and breakfast left; price right, vertically centered');
+  }
+  browser('screenshot','/tmp/bn-stay-price-row.png');
   const documentForm=new FormData();documentForm.set('title','Search scroll fixture');documentForm.set('file',new Blob(['%PDF-1.4\n%%EOF'],{type:'application/pdf'}),'search.pdf');
   const documentResponse=await fetch(base+'/api/trips/'+trip.id+'/documents',{method:'POST',headers:{cookie:'bn_trip_session='+token},body:documentForm});
   assert(documentResponse.ok,await documentResponse.clone().text());uploadedDocumentPath='/api/trips/'+trip.id+'/documents/'+(await documentResponse.json()).id;

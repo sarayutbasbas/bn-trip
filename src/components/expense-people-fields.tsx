@@ -235,7 +235,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
               {payerOpen && <PeopleSheet title={t("จ่ายโดย")} onClose={closePayer} footer={addPersonFooter} payer>
                 {people.map(person => <div className="split-guest-option" key={person.key}>
                   <label><input type="radio" name="expensePayerChoice" value={person.key} checked={payerKey === person.key} onChange={() => { setPayerKey(person.key); setPayerOpen(false); }}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}{person.key.startsWith("guest:") && newGuestIds.includes(person.key.slice(6)) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span></label>
-                  {person.key.startsWith("guest:") && requestDeleteExpenseGuest && <button type="button" className="split-guest-delete" disabled={Boolean(deletingGuestId)} aria-label={`${t("ลบ")} ${person.label}`} onClick={() => { setPayerOpen(false); requestDeleteExpenseGuest({ id: person.key.slice(6), name: person.label }); }}><Trash2 size={20}/></button>}
+                  {person.key.startsWith("guest:") && requestDeleteExpenseGuest && <button type="button" className="split-guest-delete" disabled={Boolean(deletingGuestId)} aria-label={`${t("ลบ")} ${person.label}`} onClick={() => { requestDeleteExpenseGuest({ id: person.key.slice(6), name: person.label }); }}><Trash2 size={20}/></button>}
                 </div>)}
               </PeopleSheet>}
               <small>{t("ผู้ที่ออกเงินเต็มจำนวนให้ก่อน")}</small>

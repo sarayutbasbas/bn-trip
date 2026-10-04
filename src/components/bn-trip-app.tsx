@@ -4413,7 +4413,7 @@ function TripSectionNav({
     { id: "checklist", label: "Checklist", Icon: ClipboardList, hasNotification: completion.checklistIncomplete, active: active === "workspace" && workspaceTab === "checklist", action: () => select("workspace", "checklist") },
     {
       id: "photos",
-      label: "รูปภาพ / Link",
+      label: "อัลบั้ม",
       Icon: Images,
       disabled: !trip.google_photos_url,
       availableInTrip: Boolean(trip.google_photos_url),
@@ -7484,7 +7484,7 @@ export function CoverImagePicker({
             <div className="trip-crop-guide-copy">
               <TripCountdownBadge label="อีก 105 วัน" />
               <strong>ทดสอบชื่อทริปยาวสองบรรทัด เพื่อทดสอบการแสดงรูป</strong>
-              <div><span className="trip-crop-guide-flag">🇯🇵</span> โตเกียว, ญี่ปุ่น</div>
+              <div><CountryFlagImage code="JP" label="ญี่ปุ่น" className="trip-crop-guide-flag" /> โตเกียว, ญี่ปุ่น</div>
               <small>19 ก.ย. 69 - 2 ต.ค. 69 (14 วัน)</small>
             </div>
             <div className="trip-crop-guide-members">
@@ -8266,6 +8266,7 @@ function CostSheet({
   useEffect(() => {
     if (!splitPickerOpen) return;
     const closeOnOutside = (event: PointerEvent) => {
+      if (document.querySelector(".confirm-backdrop")) return;
       if (
         event.target instanceof Node &&
         !(event.target instanceof Element && event.target.closest('.expense-people-backdrop')) &&
@@ -8274,7 +8275,7 @@ function CostSheet({
         setSplitPickerOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSplitPickerOpen(false);
+      if (event.key === "Escape" && !document.querySelector(".confirm-backdrop")) setSplitPickerOpen(false);
     };
     document.addEventListener("pointerdown", closeOnOutside);
     document.addEventListener("keydown", closeOnEscape);
@@ -8358,7 +8359,6 @@ function CostSheet({
     const linkedCosts = items
       .flatMap((item) => item.cost_items || [])
       .filter((cost) => cost.splitGuestIds?.includes(guest.id));
-    setSplitPickerOpen(false);
     setGuestDeleteTarget({
       guest,
       affectedCosts: linkedCosts.length,
@@ -9450,8 +9450,8 @@ function ModalForm({
                 <label className="trip-flight-checkbox">
                   <input name="hasFlights" type="checkbox" value="true" defaultChecked={Boolean(modal.trip?.has_flights)} />
                   <span className="split-checkmark" aria-hidden="true" />
-                  <Plane size={18} aria-hidden="true" />
-                  <strong>{t("เดินทางแบบมีเที่ยวบิน")}</strong>
+                  <span className="trip-flight-option-icon" aria-hidden="true"><Plane size={23} /></span>
+                  <strong>{t("มีเที่ยวบิน")}</strong>
                 </label>
               </div>
               </div>

@@ -636,6 +636,7 @@ export function TripAccommodations({
   useEffect(() => {
     if (!splitPickerOpen) return;
     const close = (event: PointerEvent) => {
+      if (document.querySelector(".confirm-backdrop")) return;
       if (
         event.target instanceof Node &&
         !(event.target instanceof Element && event.target.closest('.expense-people-backdrop')) &&
@@ -1285,7 +1286,7 @@ export function TripAccommodations({
                     splitGuestIds={splitGuestIds} setSplitGuestIds={setSplitGuestIds}
                     payerKey={payerKey} setPayerKey={setPayerKey} guestName={guestName} setGuestName={setGuestName}
                     addingGuest={addingGuest} addExpenseGuest={addExpenseGuest}
-                    requestDeleteExpenseGuest={canDelete ? guest => { setSplitPickerOpen(false); guestRemoval.requestRemoval(guest); } : undefined}
+                    requestDeleteExpenseGuest={canDelete ? guest => guestRemoval.requestRemoval(guest) : undefined}
                     deletingGuestId={guestRemoval.deletingId} />
                   <fieldset className="expense-payment-picker accommodation-payment-picker">
                     <legend>ช่องทางชำระ</legend>

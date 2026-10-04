@@ -14794,7 +14794,7 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-stay-dates b { color:var(--ink);font-size:10px;line-height:1.2; }
 .accommodation-stay-dates > span:last-child { display:flex;align-items:center;justify-content:center;align-self:stretch;gap:4px;text-align:center; }
 .accommodation-stay-dates > span:last-child svg { grid-row:auto; }
-.accommodation-card-copy footer { min-width:0;display:flex;flex-direction:column;align-items:stretch;gap:4px; }
+.accommodation-card-copy footer { min-width:0;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:4px; }
 .accommodation-card-icons { min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px; }
 .accommodation-guest-avatars { min-width:0;display:inline-flex;align-items:center;flex:0 0 auto;gap:4px; }
 .accommodation-guest-avatar { width:36px;height:36px;flex:0 0 36px;overflow:hidden;border:0;border-radius:50%;display:grid;place-items:center;color:#fff;background-color:#8e8e93;background-position:center;background-size:cover;background-repeat:no-repeat;box-shadow:0 3px 10px rgba(0,0,0,.3);font-size:10px;font-weight:750; }
@@ -14806,7 +14806,7 @@ html.dark .trip-ideas-page-shell .flow-header { background: transparent; }
 .accommodation-booking-badge img { width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:center;transform:scale(1.2); }
 .accommodation-booking-badge svg { color:#ff6718; }
 .accommodation-payment-badge { width:fit-content;max-width:100%;padding:3px 6px;border-radius:999px;color:#188568;background:#e7f8f1;font-size:6px; }
-.accommodation-total-price { align-self:flex-end;margin:0;text-align:right;color:var(--ink);font-size:24px;line-height:1;white-space:nowrap; }
+.accommodation-total-price { align-self:center;margin:0 0 0 auto;text-align:right;color:var(--ink);font-size:24px;line-height:1;white-space:nowrap; }
 .accommodation-total-price small { margin:0;display:block;color:var(--muted);font-size:12px;font-weight:600;line-height:1; }
 .accommodation-total-price .accommodation-nightly-price { font-size:9px;font-weight:500;line-height:1.2; }
 .accommodation-more-card { width:100%;min-height:62px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line-strong);border-radius:16px;display:grid;grid-template-columns:35px minmax(0,1fr) 20px;align-items:center;gap:9px;color:var(--ink);background:transparent;text-align:left; }
@@ -16129,8 +16129,10 @@ html.dark .dashboard-memory-stats button:nth-child(3) {
 .trip-photos-flight-row > .field { min-width: 0; }
 .trip-photos-flight-row > .field > label:first-child { min-height: 30px; font-size: 11px; line-height: 1.4; }
 .trip-photos-flight-row .trip-flight-checkbox { padding: 6px 8px; gap: 5px; }
-.trip-photos-flight-row .trip-flight-checkbox strong { font-size: 11px; line-height: 1.4; }
+.trip-photos-flight-row .trip-flight-checkbox strong { font-size: 16px; line-height: 1.4; font-weight:400; }
 .trip-photos-flight-row .trip-flight-checkbox svg { color: var(--orange); flex-shrink: 0; }
+.trip-flight-option-icon { width:36px;height:36px;flex:0 0 36px;border-radius:50%;display:grid;place-items:center;background:var(--orange);box-shadow:0 4px 11px rgba(20,30,50,.18); }
+.trip-photos-flight-row .trip-flight-option-icon svg { color:#fff; }
 .trip-photos-flight-row .split-checkmark { width: 18px; height: 18px; flex: 0 0 18px; }
 .trip-detail-head.has-cover .trip-cover-copy .page-title { white-space: pre-line; }
 .trip-body h3,

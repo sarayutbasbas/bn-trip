@@ -5,6 +5,7 @@ export function ExpenseCategoryBar({ categories, total, selectedCategory, onSele
   categories: Array<[string, number]>; total: number; selectedCategory: string | null;
   onSelectedCategoryChange: (category: string | null) => void; t: (text: string) => string;
 }) {
+  if (!(total > 0)) return null;
   const segments = categories.map(([category, amount]) => ({ category, amount, percent: total > 0 ? amount / total * 100 : 0, color: expenseCategoryColor(category) }));
   const select = (category: string) => onSelectedCategoryChange(selectedCategory === category ? null : category);
   const money = (amount: number) => amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

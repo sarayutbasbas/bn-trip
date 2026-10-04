@@ -134,7 +134,7 @@ try {
     assert(browser("get", "text", ".companion-chips").includes("แม่"));
     console.log("PASS: mobile participant forms on both trip types");
     browser("open", `${base}/trips/${trip.id}/expenses`);
-    browser("wait", ".expense-insight-details summary"); browser("click", ".expense-insight-details summary");
+    browser("wait", ".expense-member-disclosure summary"); browser("click", ".expense-member-disclosure summary");
     browser("wait", ".expense-member-clearing");
     assert.equal(JSON.parse(browser("eval", "document.querySelectorAll('.expense-settlement-summary').length")), 0);
     const merged = browser("get", "text", ".expense-member-summary");
@@ -184,6 +184,14 @@ try {
         browser('eval',"document.querySelector('.people-sheet-list').scrollTop=0");
         browser('screenshot',`/tmp/bn-new-companions-${screenshot}.png`);
         assert.equal(JSON.parse(browser("eval", "document.querySelector('.people-sheet-footer input').value")), "");
+        browser('click', `[aria-label="ลบ ${newName} 2"]`);
+        browser('wait', '.confirm-backdrop');
+        assert.equal(JSON.parse(browser('eval', "!!document.querySelector('.expense-people-backdrop')")), true);
+        browser('click', '.confirm-delete');
+        browser('wait', '--fn', "!document.querySelector('.confirm-backdrop')");
+        assert.equal(JSON.parse(browser('eval', "!!document.querySelector('.expense-people-backdrop')")), true);
+        assert(browser('get','text','.toast').includes('ลบ ' + newName + ' 2'));
+        assert.equal(JSON.parse(browser('eval', "document.querySelectorAll('.people-new-tag').length")), 1);
         browser("press", "Escape");
         assert.equal(JSON.parse(browser("eval", "!!document.querySelector('.expense-people-backdrop')")), false);
         assert.equal(JSON.parse(browser("eval", "!!document.querySelector('#expense-paid-by')")), true);
