@@ -3526,6 +3526,7 @@ button:disabled {
 .route-skeleton-featured { width:100%;aspect-ratio:16/9;border-radius:20px; }
 .route-skeleton-quick-actions,.route-skeleton-filters { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
 .route-skeleton-quick-actions .route-skeleton-block { min-height:64px;border-radius:14px; }
+.route-skeleton-quick-actions { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .route-skeleton-filters .route-skeleton-block { min-height:52px;border-radius:13px; }
 .route-skeleton-section-title { width:155px;height:21px;border-radius:8px; }
 .route-skeleton-home-cards,.route-skeleton-analytics-cards { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }
@@ -15357,7 +15358,7 @@ html.dark .home-upcoming-grid .trip-card-flights {
   padding-top: 12px;
   padding-bottom: 0;
   display: grid;
-  grid-template-columns: repeat(3,minmax(0,1fr));
+  grid-template-columns: repeat(4,minmax(0,1fr));
   gap: 8px;
 }
 .dashboard-quick-actions > button {
@@ -15382,6 +15383,9 @@ html.dark .home-upcoming-grid .trip-card-flights {
 .dashboard-quick-actions > button:nth-child(3) {
   background: color-mix(in srgb, #ff6998 8%, var(--surface-solid));
 }
+.dashboard-quick-actions > button:nth-child(4) {
+  background: color-mix(in srgb, #8f78d7 10%, var(--surface-solid));
+}
 .dashboard-quick-actions > button > svg {
   width: 28px;
   height: 28px;
@@ -15393,6 +15397,7 @@ html.dark .home-upcoming-grid .trip-card-flights {
 }
 .dashboard-quick-actions > button:nth-child(2) > svg { background: #38bfa2; }
 .dashboard-quick-actions > button:nth-child(3) > svg { background: #ef5d8e; }
+.dashboard-quick-actions > button:nth-child(4) > svg { background: #8e75cb; }
 .dashboard-quick-actions span,
 .dashboard-quick-actions strong,
 .dashboard-quick-actions small {

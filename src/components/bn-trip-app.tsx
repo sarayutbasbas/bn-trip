@@ -48,7 +48,7 @@ import { TripSectionHeading } from "@/src/components/trip-section-heading";
 import { TripSectionSkeleton } from "@/src/components/trip-section-skeleton";
 import { TripCountdownBadge } from "@/src/components/trip-countdown-badge";
 import { TripFavoriteButton } from "@/src/components/trip-favorite-button";
-import { ArrowDownUp } from "lucide-react";
+import { ArrowDownUp, BookOpen } from "lucide-react";
 import { TRIP_SORT_OPTIONS, normalizeTripSort } from "@/src/lib/trip-sort";
 import { tripDaysUntilLabel } from "@/src/lib/trip-countdown";
 import { tripWeekdayLabel } from "@/src/lib/trip-weekday";
@@ -1000,6 +1000,7 @@ Object.assign(EN_TEXT, {
   ไม่พบทริปที่ตรงกับตัวกรอง: "No trips match these filters",
   ลองเปลี่ยนคำค้นหาหรือตัวกรอง: "Try changing the search or filters",
   สร้างทริป: "Create trip",
+  สมุดแพลน: "Plan book",
   "เข้าสู่ระบบด้วย Google Account ของคุณ": "Sign in with your Google Account",
   "ทุกบัญชี Google สามารถเริ่มสร้างทริปได้":
     "Any Google Account can start creating trips",
@@ -3190,6 +3191,10 @@ function Dashboard({
         <button type="button" onClick={viewTripIdeas}>
           <Telescope size={19} />
           <strong>{t("ทริปที่เล็งไว้")}</strong>
+        </button>
+        <button type="button" onClick={() => router.push("/plan-book")}>
+          <BookOpen size={19} />
+          <strong>{t("สมุดแพลน")}</strong>
         </button>
       </section>
 

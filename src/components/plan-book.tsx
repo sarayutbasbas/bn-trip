@@ -1,0 +1,171 @@
+"use client";
+
+import Link from "next/link";
+import Image from "next/image";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, BookOpen, ChevronLeft, ChevronRight, Compass, List, MapPin, Maximize2, Minimize2, Search, Sparkles, X, ZoomIn } from "lucide-react";
+import { AttachmentPreviewOverlay } from "./attachment-preview-overlay";
+import type { PlanBookTrip } from "@/src/lib/plan-book";
+import styles from "./plan-book.module.css";
+
+const dateLabel = (date: string) => date ? new Intl.DateTimeFormat("th-TH", {
+  day: "numeric", month: "short", year: "2-digit", timeZone: "Asia/Bangkok",
+}).format(new Date(`${date}T12:00:00+07:00`)) : "";
+
+function FantasyCover({ count }: { count: number }) {
+  const id = useId();
+  return <div className={styles.cover}>
+    <div className={styles.coverBorder} />
+    <div className={styles.coverBrand}><Sparkles size={13} /> ROUTERAO COLLECTION</div>
+    <div className={styles.coverTitle}><span>บันทึกการผจญภัย</span><h2>ทุกแพลน<br />ทุกความฝัน</h2><p>เปิดโลกของเรา ทีละหน้า</p></div>
+    <svg className={styles.landscape} viewBox="0 0 400 430" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={`${id}-sky`} x1="200" y1="0" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#19464c"/><stop offset="1" stopColor="#081e31"/></linearGradient>
+        <linearGradient id={`${id}-road`} x1="200" y1="190" x2="200" y2="430" gradientUnits="userSpaceOnUse"><stop stopColor="#fff0c2"/><stop offset="1" stopColor="#cf8750"/></linearGradient>
+      </defs>
+      <ellipse cx="200" cy="170" rx="128" ry="144" stroke="#d8b975" strokeOpacity=".5"/>
+      <ellipse cx="200" cy="170" rx="115" ry="131" stroke="#d8b975" strokeOpacity=".2"/>
+      <circle cx="200" cy="124" r="43" fill="#efcf8f"/>
+      <circle cx="217" cy="107" r="39" fill="#153e45"/>
+      <path d="M0 240 55 186 99 229 173 131 247 239 308 166 400 243V430H0Z" fill="#39615e"/>
+      <path d="m173 131-30 40 30-13 19 21Z" fill="#e8d4a7" opacity=".85"/>
+      <path d="M0 285 80 231 150 280 259 210 400 289V430H0Z" fill="#23494c"/>
+      <path d="M0 322Q80 264 200 287T400 294V430H0Z" fill={`url(#${id}-sky)`}/>
+      <path d="M207 264c-90 53 108 45 7 101-28 15-28 39 33 65h-90c-42-45-13-62 31-80 102-40-68-29 19-86Z" fill={`url(#${id}-road)`}/>
+      <g fill="#d7bd87"><path d="M256 237v-39h8v-15l5-10 5 10v15h8v39zm-6 0h37v4h-37z"/><path d="m77 119 3 9 9 3-9 3-3 9-3-9-9-3 9-3zm232-37 2 7 7 2-7 2-2 7-2-7-7-2 7-2z"/><circle cx="120" cy="78" r="2"/><circle cx="286" cy="133" r="2"/><circle cx="234" cy="51" r="2"/><circle cx="100" cy="191" r="1.5"/></g>
+      <g stroke="#d9bd87" strokeWidth="1.5" opacity=".7"><path d="m39 350 0-55m-12 31 12-19 12 19m-17 11 5-8 9 10m305-7v-65m-13 34 13-22 13 22m-20 10 7-10 12 13"/></g>
+      <path d="M20 404h360" stroke="#d8b975" strokeOpacity=".35"/>
+    </svg>
+    <div className={styles.coverFoot}><Compass size={17}/><span>{count} การเดินทาง · เรื่องราวที่รอเปิดอ่าน</span></div>
+  </div>;
+}
+
+function PlanImage({ trip, open }: { trip: PlanBookTrip; open?: () => void }) {
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  if (failed) return <div className={styles.imageError}><BookOpen/><p>โหลดรูปแพลนไม่สำเร็จ</p><button type="button" onClick={() => { setFailed(false); setLoaded(false); }}>ลองใหม่</button><Link href={`/trips/${trip.id}`}>ไปที่ทริป</Link></div>;
+  return <button type="button" className={styles.planImage} onClick={open} disabled={!open} aria-label={`ดูแพลน ${trip.name} ขนาดเต็ม`}>
+    {!loaded && <span className={styles.imageLoading}>กำลังเปิดแพลน…</span>}
+    <Image src={trip.summary_image_url} alt={`แพลนเที่ยว ${trip.name}`} fill unoptimized sizes="(max-width: 600px) 94vw, 520px" draggable={false} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
+    <span className={styles.zoomHint}><ZoomIn size={13}/> แตะเพื่อขยาย</span>
+  </button>;
+}
+
+export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
+  const [page, setPage] = useState(0);
+  const [turn, setTurn] = useState<{ from: number; to: number } | null>(null);
+  const [immersive, setImmersive] = useState(false);
+  const [preview, setPreview] = useState<PlanBookTrip | null>(null);
+  const [search, setSearch] = useState("");
+  const [contentsOpen, setContentsOpen] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const contentsButton = useRef<HTMLButtonElement>(null);
+  const book = useRef<HTMLDivElement>(null);
+  const busy = useRef(false);
+  const gesture = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const current = page ? trips[page - 1] : null;
+
+  const changePage = useCallback((next: number) => {
+    if (busy.current || next === page || next < 0 || next > trips.length) return;
+    gesture.current = null;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      busy.current = true;
+      setTurn({ from: page, to: next });
+    }
+    setPage(next);
+  }, [page, trips.length]);
+
+  useEffect(() => {
+    if (!turn) return;
+    const timer = window.setTimeout(() => { setTurn(null); busy.current = false; }, 580);
+    return () => window.clearTimeout(timer);
+  }, [turn]);
+
+  useEffect(() => {
+    if (!immersive) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [immersive]);
+
+  const closePreview = useCallback(() => {
+    setPreview(null);
+    requestAnimationFrame(() => book.current?.querySelector<HTMLButtonElement>("[data-book-base] button")?.focus({ preventScroll: true }));
+  }, []);
+  const closeContents = () => { dialog.current?.close(); setContentsOpen(false); contentsButton.current?.focus(); };
+  const matching = useMemo(() => trips.map((trip, index) => ({ trip, page: index + 1 })).filter(({ trip }) => `${trip.name} ${trip.destination}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())), [trips, search]);
+
+  const renderPage = (index: number, interactive: boolean) => index === 0
+    ? <FantasyCover count={trips.length}/>
+    : <PlanImage key={trips[index - 1].id} trip={trips[index - 1]} open={interactive ? () => { if (!busy.current && !gesture.current?.moved) setPreview(trips[index - 1]); } : undefined}/>;
+
+  return <main className={`${styles.shell} ${immersive ? styles.immersive : ""}`} onKeyDown={event => {
+    if (preview || contentsOpen || /INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName)) return;
+    if (event.key === "ArrowRight") { event.preventDefault(); changePage(page + 1); }
+    if (event.key === "ArrowLeft") { event.preventDefault(); changePage(page - 1); }
+    if (event.key === "Escape") setImmersive(false);
+  }}>
+    <header className={styles.header}>
+      <Link href="/" className={styles.iconButton} aria-label="กลับหน้าหลัก"><ArrowLeft size={20}/></Link>
+      <div><h1>สมุดแพลน</h1><span>ทุกการเดินทางในเล่มเดียว</span></div>
+      <button type="button" className={styles.iconButton} onClick={() => setImmersive(value => !value)} aria-label={immersive ? "ออกจากเต็มจอ" : "อ่านเต็มจอ"}>{immersive ? <Minimize2 size={19}/> : <Maximize2 size={19}/>}</button>
+    </header>
+
+    {!trips.length ? <section className={styles.empty}><BookOpen size={42}/><h2>การผจญภัยหน้าแรก รอคุณอยู่</h2><p>เพิ่มรูปแพลนรวมในหน้าแก้ไขทริป<br/>แล้วกลับมาเปิดอ่านทุกแพลนในเล่มนี้ได้เลย</p><Link href="/trips">เลือกทริปเพื่อเพิ่มแพลน <ArrowRight size={17}/></Link></section> : <>
+      <div className={styles.intro}><span><Sparkles size={14}/> {trips.length} แพลนพร้อมออกเดินทาง</span><small>วันเดินทางใหม่ → เก่า</small></div>
+      <section className={styles.stage} aria-label="หนังสือรวมแพลนเที่ยว">
+        <div ref={book} className={styles.book} onPointerDown={event => {
+          if (!event.isPrimary) { gesture.current = null; return; }
+          gesture.current = { x: event.clientX, y: event.clientY, moved: false };
+        }} onPointerMove={event => {
+          const start = gesture.current;
+          if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) start.moved = true;
+        }} onPointerCancel={() => { if (gesture.current) gesture.current.moved = true; }} onPointerUp={event => {
+          const start = gesture.current;
+          if (!start) return;
+          const dx = event.clientX - start.x, dy = event.clientY - start.y;
+          if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+            changePage(page + (dx < 0 ? 1 : -1));
+            gesture.current = { ...start, moved: true };
+          }
+        }}>
+          <div className={styles.paper} data-book-base>{renderPage(turn && turn.to < turn.from ? turn.from : page, !turn)}</div>
+          {turn && <div className={`${styles.turning} ${turn.to > turn.from ? styles.forward : styles.backward}`} aria-hidden="true" inert>
+            {renderPage(turn.to > turn.from ? turn.from : turn.to, false)}
+          </div>}
+          {page === 0 && !turn && <button type="button" className={styles.openBook} onClick={() => changePage(1)}>เปิดสมุดแพลน <ArrowRight size={17}/></button>}
+        </div>
+      </section>
+      <div className={styles.caption} aria-live="polite" aria-atomic="true">
+        <strong>{current?.name || "เรื่องราวของเรา เริ่มตรงนี้"}</strong>
+        <span>{current ? <><MapPin size={12}/>{current.destination} · {dateLabel(current.travel_date)}</> : "ปัดซ้ายเพื่อเปิดอ่าน หรือเลือกทริปจากสารบัญ"}</span>
+      </div>
+      <footer className={styles.controls}>
+        <div className={styles.navigation}>
+          <button type="button" className={styles.iconButton} disabled={page === 0 || !!turn} onClick={() => changePage(page - 1)} aria-label="หน้าก่อนหน้า"><ChevronLeft/></button>
+          <div><strong>{page === 0 ? "หน้าปก" : `แพลน ${page} / ${trips.length}`}</strong><span>{page === trips.length ? "หน้าสุดท้ายของเล่ม" : "ปัดซ้าย–ขวาเพื่อพลิกหน้า"}</span></div>
+          <button type="button" className={styles.iconButton} disabled={page === trips.length || !!turn} onClick={() => changePage(page + 1)} aria-label="หน้าถัดไป"><ChevronRight/></button>
+        </div>
+        <div className={styles.progress}><span style={{ width: `${page / trips.length * 100}%` }}/></div>
+        <div className={styles.tools}>
+          <button ref={contentsButton} type="button" aria-haspopup="dialog" onClick={() => { setSearch(""); setContentsOpen(true); dialog.current?.showModal(); }}><List size={18}/> เลือกทริป</button>
+          <button type="button" onClick={() => changePage(0)} disabled={page === 0 || !!turn}><BookOpen size={17}/> หน้าปก</button>
+          {current && <Link href={`/trips/${current.id}`}>ไปที่ทริป <ArrowRight size={15}/></Link>}
+        </div>
+      </footer>
+    </>}
+
+    <dialog ref={dialog} className={styles.contents} aria-labelledby="plan-book-contents-title" onClose={() => setContentsOpen(false)} onClick={event => { if (event.target === event.currentTarget) closeContents(); }}>
+      {contentsOpen && <div className={styles.contentsInner}>
+        <header><div><span>YOUR TRAVEL CHAPTERS</span><h2 id="plan-book-contents-title">เลือกการเดินทาง</h2></div><button type="button" className={styles.iconButton} onClick={closeContents} aria-label="ปิดสารบัญ"><X size={20}/></button></header>
+        <label className={styles.search}><Search size={18}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="ค้นหาทริปหรือจุดหมาย" aria-label="ค้นหาแพลน"/></label>
+        <p className={styles.contentsCount}>{trips.length} แพลน · เรียงตามวันเดินทางใหม่ไปเก่า</p>
+        <div className={styles.chapters}>{matching.map(({ trip, page: target }) => <button type="button" key={trip.id} className={page === target ? styles.selected : ""} aria-current={page === target ? "page" : undefined} onClick={() => { changePage(target); closeContents(); }}>
+          <div className={styles.thumbnail}><Image src={trip.summary_image_url} alt="" fill unoptimized sizes="46px" loading="lazy"/></div>
+          <span><strong>{trip.name}</strong><small>{trip.destination}</small><small>{dateLabel(trip.travel_date)}</small></span><em>{String(target).padStart(2, "0")}</em>
+        </button>)}{!matching.length && <p>ไม่พบแพลนที่ค้นหา ลองใช้ชื่อทริปหรือจุดหมายอื่น</p>}</div>
+      </div>}
+    </dialog>
+    {preview && <AttachmentPreviewOverlay preview={{ url: preview.summary_image_url, title: preview.name, mimeType: "image/jpeg" }} onClose={closePreview} closeLabel="ปิดรูป"/>}
+  </main>;
+}

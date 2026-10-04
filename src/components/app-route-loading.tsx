@@ -39,7 +39,7 @@ export function HomeLoading() {
   return <div className="route-skeleton-screen route-skeleton-home">
     <Intro page="home" />
     <Block className="route-skeleton-featured" />
-    <div className="route-skeleton-quick-actions">{[0, 1, 2].map(index => <Block key={index} />)}</div>
+    <div className="route-skeleton-quick-actions">{[0, 1, 2, 3].map(index => <Block key={index} />)}</div>
     <Block className="route-skeleton-section-title" />
     <div className="route-skeleton-home-cards">{[0, 1].map(index => <Block key={index} />)}</div>
     <Block className="route-skeleton-progress" />
