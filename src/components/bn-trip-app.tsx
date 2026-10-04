@@ -1,5 +1,6 @@
 "use client";
 import { ParticipantMode, TripCompanions } from "./trip-companions";
+import { ParticipantAccess, ParticipantInviteActions } from "./participant-access";
 import { tripDurationDays } from "@/src/lib/trip-duration";
 import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
 import { TripCoverArt, TripCoverCarousel } from "./trip-cover-gallery";
@@ -16,7 +17,7 @@ import { costSplitCount } from "@/src/lib/personal-expenses";
 import { expenseParticipants } from "@/src/lib/expense-participants";
 import { hasSubmittedReview } from "@/src/lib/review-visibility";
 import { type ExpensePayer } from "@/src/lib/expense-settlement";
-import { ExpenseSettlementSummary } from "@/src/components/expense-settlement-summary";
+import { expenseSettlement } from "@/src/lib/expense-settlement";
 import {
   createContext,
   Fragment,
@@ -6519,6 +6520,7 @@ function ExpenseMemberSummary({
   const orderedMembers = ownerLastTripMembers(members);
   const memberIds = new Set(orderedMembers.map((member) => member.id));
   const guestIds = new Set(guests.map((guest) => guest.id));
+  const settlement = expenseSettlement(costs, orderedMembers.map(member => member.id), guests.map(guest => guest.id));
   const memberTotals = new Map(
     orderedMembers.map((member) => [
       member.id,
@@ -6580,10 +6582,12 @@ function ExpenseMemberSummary({
     <section className="expense-member-summary">
       <div className="expense-member-summary-head">
         <h3>{t("สรุปค่าใช้จ่ายแยกตามคน")}</h3>
-        <p>{t("รวมทั้งสมาชิกในทริปและคนนอกที่เลือกหาร")}</p>
+        <p>{t("ค่าใช้จ่ายที่รับผิดชอบ เงินที่ออกให้ก่อน และยอดเคลียร์เงินในที่เดียว")}</p>
       </div>
+      {settlement.pendingCount > 0 && <p className="expense-member-pending" role="status">ยังสรุปไม่ครบ: {settlement.pendingCount} รายการ (฿{bahtFormat(settlement.pendingAmount / 100)}) ยังไม่ระบุผู้จ่ายหรือผู้หารไม่ครบ ยอดเคลียร์เงินด้านล่างคิดเฉพาะรายการที่ข้อมูลครบแล้ว</p>}
       <div>
         {rows.map((row) => {
+          const balance = settlement.rows.get(row.id)!;
           return (
             <article key={row.id}>
               <span
@@ -6602,7 +6606,7 @@ function ExpenseMemberSummary({
               </span>
               <div className="expense-member-copy">
                 <strong>{row.label}</strong>
-                <small>{t(row.guest ? "คนนอกทริป" : "รวมที่ต้องรับผิดชอบ")}</small>
+                <small>{t(row.guest ? "ผู้ร่วมทริปแบบเพิ่มชื่อ" : "รวมที่ต้องรับผิดชอบ")}</small>
               </div>
               <div className="expense-member-totals">
                 <span>
@@ -6611,6 +6615,12 @@ function ExpenseMemberSummary({
                 <span>
                   {t("ค่า Shopping")} <b>฿{bahtFormat(row.total.shopping)}</b>
                 </span>
+              </div>
+              <div className="expense-member-clearing">
+                <div><span>ออกเงินให้ก่อน <b>฿{bahtFormat(balance.paid / 100)}</b></span><span>ส่วนหารที่สรุปแล้ว <b>฿{bahtFormat(balance.share / 100)}</b></span></div>
+                <p className={balance.balance > 0 ? "is-receivable" : balance.balance < 0 ? "is-payable" : "is-balanced"}>
+                  <span>{balance.balance > 0 ? "ต้องได้รับคืน" : balance.balance < 0 ? "ต้องจ่ายเพิ่ม" : settlement.pendingCount ? "ยอดสุทธิที่สรุปแล้ว" : "ยอดสมดุล"}</span><b>฿{bahtFormat(Math.abs(balance.balance) / 100)}</b>
+                </p>
               </div>
             </article>
           );
@@ -6716,7 +6726,6 @@ function PlanExpensesContent({
             members={trip.members || []}
             guests={expenseGuests}
           />
-          <ExpenseSettlementSummary costs={allCosts} members={trip.members || []} guests={expenseGuests} />
         </div>
       </details>
       <div className="expense-list-heading">
@@ -8371,7 +8380,7 @@ function CollaboratorsSheet({
   const canManage = trip.access_role === "owner";
   const canInvite = trip.access_role === "owner" || trip.access_role === "admin";
   const [participantMode, setParticipantMode] = useState<"email" | "name">("email");
-  const [inviteAccess, setInviteAccess] = useState<"view" | "admin">("view");
+  const [inviteAccess, setInviteAccess] = useState<"view" | "admin">(canManage ? "admin" : "view");
   const [items, setItems] = useState<Collaborator[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
   const [email, setEmail] = useState("");
@@ -8537,14 +8546,7 @@ function CollaboratorsSheet({
                 required
               />
             </div>
-            <button
-              className="primary-btn"
-              disabled={saving || !email.trim()}
-            >
-              <UserPlus size={16} />
-              {t(saving ? "กำลังเพิ่ม…" : "ส่งคำเชิญ")}
-            </button>
-            {canManage && <label className="participant-access">สิทธิ์เข้าถึง<select value={inviteAccess} onChange={event => setInviteAccess(event.target.value as "view" | "admin")}><option value="view">View · ดูและแก้ไข</option><option value="admin">Admin · ช่วยจัดการ</option></select></label>}
+            <ParticipantInviteActions value={inviteAccess} onChange={setInviteAccess} allowAdmin={canManage} busy={saving} disabled={!email.trim()}/>
             {suggestions.length > 0 && (
               <div className="recent-collaborators">
                 <small>{t("เลือกจากคนที่เพิ่มล่าสุด")}</small>
@@ -8583,24 +8585,7 @@ function CollaboratorsSheet({
                   </small>
                 </div>
                 {canManage ? (
-                  <div className={`collaborator-access-control is-${item.access_level || "view"}`}>
-                    <select
-                      className="collaborator-access-select"
-                      value={item.access_level || "view"}
-                      onChange={(event) =>
-                        void updateAccess(
-                          item,
-                          event.target.value as "view" | "admin",
-                        )
-                      }
-                      disabled={saving}
-                      aria-label={t(`กำหนดสิทธิ์ ${item.email}`)}
-                    >
-                      <option value="view">View</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <ChevronDown size={14} aria-hidden="true" />
-                  </div>
+                  <ParticipantAccess value={item.access_level || "view"} onChange={access => void updateAccess(item, access)} disabled={saving} label={t(`กำหนดสิทธิ์ ${item.email}`)}/>
                 ) : (
                   <span className={`collaborator-access-badge is-${item.access_level}`}>
                     {item.access_level === "admin" ? "Admin" : "View"}

@@ -37,21 +37,21 @@ try {
   browser("set", "viewport", "390", "844");
   browser("open", `${base}/trips/${trip}/expenses`);
   browser("click", '[aria-label="เพิ่มค่าใช้จ่าย"]');browser("wait", "#expense-paid-by");
-  assert.equal(evaluate('document.querySelector("#expense-paid-by").value'), `member:${owner}`);
+  assert.equal(evaluate('document.querySelector("input[name=paidBy]").value'), `member:${owner}`);
   assert.equal(evaluate('document.querySelector("#expense-paid-by").disabled'), false);
   browser("open", `${base}/trips/${trip}/expenses`);
   browser("click", ".expense-insight-details > summary");
-  const summary = evaluate('document.querySelector(".expense-settlement-summary").textContent');
+  const summary = evaluate('document.querySelector(".expense-member-summary").textContent');
   assert.ok(summary.includes("ต้องได้รับคืน"));
   assert.ok(summary.includes("ต้องจ่ายเพิ่ม"));
   browser("click", ".expense-plan-row");
-  assert.equal(evaluate('document.querySelector("#expense-paid-by").value'), `member:${member}`);
+  assert.equal(evaluate('document.querySelector("input[name=paidBy]").value'), `member:${member}`);
   const widths = evaluate('Array.from(document.querySelectorAll(".expense-people-row > .field")).map(e=>e.getBoundingClientRect().width)');
   assert.equal(widths.length, 2);
   assert.ok(Math.abs(widths[0] - widths[1]) < 1);
   for (const width of [320, 390, 768]) {
     browser("set", "viewport", String(width), "844");
-    browser("click", ".split-member-trigger");
+    browser("click", ".expense-people-row > .field:first-child .split-member-trigger");
     const layout = evaluate(`(() => {
       const menu = document.querySelector('.split-member-menu').getBoundingClientRect();
       const fields = [...document.querySelectorAll('.expense-title-row > .field')].map(e => e.getBoundingClientRect());
@@ -64,11 +64,12 @@ try {
     assert.equal(layout.round, "50%");
     assert.equal(layout.icon, true);
     if (width === 390) browser("screenshot", "/tmp/expense-dropdown.png");
-    browser("click", ".split-member-trigger");
+    browser("click", ".expense-people-row > .field:first-child .split-member-trigger");
   }
   browser("set", "viewport", "390", "844");
   console.log("PASS: dropdown inside viewport at 320/390/768px, title/category 50-50, round add icon");
-  browser("select", "#expense-paid-by", `member:${owner}`);
+  browser("click", "#expense-paid-by");
+  browser("eval", `Array.from(document.querySelectorAll(".payer-member-menu label")).find(label=>label.textContent.includes("Payer A")).click()`);
   browser("screenshot", "/tmp/expense-payer-form.png");
   browser("eval", 'document.querySelector("#expense-paid-by").closest("form").requestSubmit()');
   browser("wait", ".expense-plan-row");
@@ -110,10 +111,10 @@ try {
   await db.query("INSERT INTO trips(id,owner_id,name,destination,start_date,total_days) VALUES($1,$2,'Solo payer','Bangkok','2026-01-01',2)",[single,owner]);
   await api(`/api/trips/${single}/itineraries`,'POST',{dayNumber:1,timeSlot:'morning',startTime:'08:00',placeName:'Solo',costItems:[]});
   browser('open',`${base}/trips/${single}/expenses`);browser('click','[aria-label="เพิ่มค่าใช้จ่าย"]');browser('wait','#expense-paid-by');
-  assert.equal(evaluate('document.querySelector("#expense-paid-by").value'),`member:${owner}`);
+  assert.equal(evaluate('document.querySelector("input[name=paidBy]").value'),`member:${owner}`);
   assert.equal(evaluate('document.querySelector("#expense-paid-by").disabled'),true);
   browser('open',`${base}/trips/${single}?view=stays`);browser('find','role','button','click','--name','เพิ่มที่พัก');browser('wait','#expense-paid-by');
-  assert.equal(evaluate('document.querySelector("#expense-paid-by").value'),`member:${owner}`);
+  assert.equal(evaluate('document.querySelector("input[name=paidBy]").value'),`member:${owner}`);
   assert.equal(evaluate('document.querySelector("#expense-paid-by").disabled'),true);
   await db.query('DELETE FROM trips WHERE id=$1',[single]);
   console.log('PASS new payer defaults to owner; solo expense and accommodation payer disabled');

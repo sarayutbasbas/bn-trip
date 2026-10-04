@@ -38,7 +38,18 @@ try {
     browser("set", "viewport", "390", "844");
     browser("cookies", "set", "bn_trip_session", tokens.get(owner.id), "--url", base);
     browser("open", `${base}/trip-ideas`);
-    browser("wait", ".trip-idea-invite"); browser("click", ".trip-idea-invite");
+    browser("wait", ".trip-idea-invite");
+    assert.equal(JSON.parse(browser("eval", "(()=>{const invite=document.querySelector('.trip-idea-invite').getBoundingClientRect();const create=document.querySelector('.trip-idea-convert').getBoundingClientRect();return invite.left>=create.right})()")), true);
+    browser("click", ".trip-idea-invite");
+    browser("wait", ".participant-invite-actions");
+    assert.equal(browser("get", "text", '.participant-invite-actions button[aria-pressed="true"]').trim(), "Admin");
+    browser("fill", '.collaborator-form input[type="email"]', `ui-${randomUUID()}@example.invalid`);
+    browser("click", '.participant-send');
+    browser("wait", "--fn", "document.querySelectorAll('.collaborator-row').length===4");
+    browser("wait", '.collaborator-row:last-child .participant-access-buttons button:not([disabled])');
+    browser("click", '.collaborator-row:last-child .participant-access-buttons button:nth-child(2)');
+    browser("wait", '.collaborator-row:last-child .participant-access-buttons button:nth-child(2)[aria-pressed="true"]');
+    browser("screenshot", "/tmp/bn-idea-access-buttons.png");
     browser("wait", ".participant-modes"); browser("click", ".participant-modes button:nth-child(2)");
     browser("wait", ".companion-form"); browser("fill", "#companion-name", "เพื่อนทดสอบ");
     browser("click", '.companion-form button[type="submit"]');
@@ -60,10 +71,22 @@ try {
   if (process.env.COMPANIONS_BROWSER === "1") {
     browser("open", `${base}/trips/${trip.id}`);
     browser("wait", 'button[aria-label="เชิญเพื่อนร่วมทริป"]'); browser("click", 'button[aria-label="เชิญเพื่อนร่วมทริป"]');
+    browser("wait", ".participant-invite-actions");
+    assert.equal(browser("get", "text", '.participant-invite-actions button[aria-pressed="true"]').trim(), "Admin");
+    browser("wait", '.collaborator-row .participant-access-buttons');
+    browser("screenshot", "/tmp/bn-trip-access-buttons.png");
     browser("wait", ".participant-modes"); browser("click", ".participant-modes button:nth-child(2)");
     browser("wait", ".companion-chips"); browser("screenshot", "/tmp/bn-companions-trip.png");
     assert(browser("get", "text", ".companion-chips").includes("แม่"));
     console.log("PASS: mobile participant forms on both trip types");
+    browser("open", `${base}/trips/${trip.id}/expenses`);
+    browser("wait", ".expense-insight-details summary"); browser("click", ".expense-insight-details summary");
+    browser("wait", ".expense-member-clearing");
+    assert.equal(JSON.parse(browser("eval", "document.querySelectorAll('.expense-settlement-summary').length")), 0);
+    const merged = browser("get", "text", ".expense-member-summary");
+    assert(merged.includes("750.00") && merged.includes("ต้องได้รับคืน") && merged.includes("ต้องจ่ายเพิ่ม"));
+    browser("scrollintoview", ".expense-member-summary"); browser("screenshot", "/tmp/bn-merged-expense-summary.png");
+    console.log("PASS: one avatar-based summary includes paid/share/balance and category totals");
     let expectedPayers;
     for (const [url, addLabel, screenshot] of [[`${base}/trips/${trip.id}/expenses`, "เพิ่มค่าใช้จ่าย", "expense"], [`${base}/trips/${trip.id}?view=stays`, "เพิ่มที่พัก", "stay"]]) {
       browser("open", url); browser("wait", `button[aria-label="${addLabel}"]`); browser("click", `button[aria-label="${addLabel}"]`);

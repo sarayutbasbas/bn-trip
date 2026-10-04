@@ -6675,6 +6675,15 @@ html.dark .trip-section-nav button.active {
 .expense-member-summary article:last-child {
   border-bottom: 0;
 }
+.expense-member-pending { margin: 0; padding: 10px 14px; font-size: 11px; line-height: 1.7; background: var(--brand-soft); color: var(--orange); }
+.expense-member-clearing { grid-column: 1 / -1; border-top: .5px solid var(--line); padding-top: 9px; }
+.expense-member-clearing > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.expense-member-clearing > div span { font-size: 10px; color: var(--muted); }
+.expense-member-clearing > div b { display: block; color: var(--ink); font-size: 12px; margin-top: 2px; }
+.expense-member-clearing > p { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 9px 0 0; padding: 8px 10px; border-radius: 10px; font-size: 12px; background: var(--surface-2); }
+.expense-member-clearing .is-receivable { color: #16966a; }
+.expense-member-clearing .is-payable { color: #e35b39; }
+.expense-member-clearing .is-balanced { color: var(--muted); }
 .expense-member-avatar,
 .split-member-avatar {
   overflow: hidden;
@@ -10567,7 +10576,7 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 
 .collaborator-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
   gap: 10px;
 }
@@ -10583,6 +10592,18 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .collaborator-form .recent-collaborators {
   grid-column: 1 / -1;
 }
+.participant-invite-actions { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.participant-access-buttons { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--surface-solid); }
+.participant-access-buttons button { flex: 1; min-height: 36px; padding: 6px 9px; border-radius: 9px; border: 1px solid transparent; color: var(--muted); background: transparent; font-size: 11px; font-weight: 600; }
+.participant-access-buttons button[aria-pressed="true"] { color: var(--orange); background: var(--brand-soft); border-color: color-mix(in srgb, var(--orange) 45%, transparent); }
+.participant-access-buttons button:disabled { opacity: .45; }
+.participant-access-buttons button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.participant-invite-actions .participant-access-buttons { flex: 1; }
+.participant-invite-actions .participant-access-buttons button { min-height: 40px; font-size: 13px; }
+.collaborator-form .participant-send { width: 48px; height: 48px; min-width: 48px; padding: 0; border-radius: 50%; }
+.participant-send-spinner { animation: participant-sending 1s linear infinite; }
+@keyframes participant-sending { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .participant-send-spinner { animation: none; } }
 .collaborator-list {
   margin-top: 18px;
   overflow: hidden;
@@ -10594,7 +10615,7 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
   min-height: 64px;
   padding: 9px 12px 9px 10px;
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 88px 42px;
+  grid-template-columns: 36px minmax(0, 1fr) 116px 32px;
   align-items: center;
   gap: 8px;
   border-bottom: 0.5px solid var(--line);
@@ -10607,10 +10628,10 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .collaborator-skeleton-line { width: 65%; height: 14px; border-radius: 6px; }
 .dashboard-home .shared-trip-avatars { pointer-events: none; }
 .collaborator-row .delete-record-btn {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  min-height: 40px;
+  width: 32px;
+  min-width: 32px;
+  height: 36px;
+  min-height: 36px;
   justify-self: center;
 }
 .collaborator-row.is-readonly {
@@ -12467,7 +12488,7 @@ html.dark .badge-recent-highlight :is(.badge-recent-copy small, .badge-recent-it
 .trip-idea-submit-actions .primary-btn { min-width: 0; flex: 1 1 auto; }
 .trip-idea-submit-actions > .delete-record-btn { width: 48px; height: 48px; border-radius: 50%; }
 .trip-idea-form-grid { padding:2px 2px 4px; }
-.collaborator-row.idea-collaborator-row:not(.is-readonly) { grid-template-columns: 34px minmax(0,1fr) 70px 32px; }
+.collaborator-row.idea-collaborator-row:not(.is-readonly) { grid-template-columns: 36px minmax(0,1fr) 116px 32px; }
 .idea-collaborator-row select { min-width: 0; width: 70px; padding: 8px 4px; font-size: 12px; }
 .collaborator-row.idea-collaborator-row .delete-record-btn { justify-self: end; }
 .trip-idea-card.compact-trip-card { min-height: 142px; padding: 0; grid-template-columns: minmax(120px,36%) minmax(0,1fr); align-items: stretch; gap: 0; overflow: hidden; }
