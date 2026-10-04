@@ -170,7 +170,7 @@ try {
   browser('open', base); browser('wait', '.dashboard-quick-actions');
   assert.notEqual(evaluate('document.body.style.overflow'), 'hidden');
   assert.equal(evaluate('document.querySelectorAll(".dashboard-quick-actions > button").length'), 4);
-  assert.deepEqual(evaluate('Array.from(document.querySelectorAll(".dashboard-memory-stats small"),el=>el.textContent)'), ['ทริป','ประเทศ','จังหวัด']);
+  assert.deepEqual(evaluate('Array.from(document.querySelectorAll(".dashboard-memory-stats small"),el=>el.textContent)'), ['ทริปทั้งหมด','ประเทศที่เคยไป','จังหวัดที่เคยไป']);
   browser('open', base + '/settings'); browser('wait', '.trip-import-actions');
   for (const width of [320,390]) {
     browser('set','viewport',String(width),'844');

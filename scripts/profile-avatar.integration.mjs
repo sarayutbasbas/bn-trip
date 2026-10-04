@@ -38,7 +38,20 @@ try {
  browser('open',base);browser('cookies','set','bn_trip_session',auth,'--url',base);browser('set','viewport','390','844');browser('open',base+'/settings');browser('wait','.profile-avatar-upload');
  assert(evaluate("!document.querySelector('.home-profile-btn')"));
  browser('wait','.nav-profile-avatar img');
- assert.equal(evaluate("getComputedStyle(document.querySelector('.nav-profile-avatar')).outlineWidth"),'2px');
+ assert.equal(evaluate("getComputedStyle(document.querySelector('.nav-profile-avatar')).outlineStyle"),'none');
+ browser('click','[aria-label="ดูรูปโปรไฟล์"]'); browser('wait','.attachment-preview-overlay');
+ assert(evaluate(`!!document.querySelector('.attachment-preview-overlay img[src="${first.avatar_url}"]')`),'viewer uses saved original URL');
+ assert(!evaluate("!!document.querySelector('.crop-apply')"));
+ browser('click','[aria-label="ปิดรูป"]');
+ browser('click','[aria-label="ดาวน์โหลดเทมเพลต"]'); browser('wait','[role=alertdialog]');
+ browser('click','.confirm-cancel');
+ assert(!evaluate("!!document.querySelector('[role=alertdialog]')"));
+ browser('click','[aria-label="ดาวน์โหลดเทมเพลต"]'); browser('click','.confirm-delete');
+ browser('wait','--fn',"document.querySelector('#confirm-title')?.textContent==='เทมเพลตพร้อมดาวน์โหลด'");
+ evaluate("window.sharedTemplate=null;Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});Object.defineProperty(navigator,'share',{configurable:true,value:async data=>{window.sharedTemplate=data.files[0].name}});true");
+ browser('click','.confirm-delete');
+ assert.equal(evaluate('window.sharedTemplate'),'RouteRao-trip-template.xlsx');
+ assert.equal(browser('get','url').trim(),base+'/settings');
  browser('upload','.profile-avatar-editor input[type=file]',process.cwd()+'/public/travel-postcard-background.jpg');
  browser('wait','.is-profile-circle canvas');
  browser('wait','--fn',"!document.querySelector('.crop-apply').disabled");
@@ -59,7 +72,16 @@ try {
  browser('click','.app-bottom-navigation-item[aria-label="หน้าแรก"]');browser('wait','.dashboard-quick-actions');
  browser('wait','--fn',"getComputedStyle(document.querySelector('.nav-profile-avatar')).outlineStyle==='none'");
  assert(evaluate("!document.querySelector('.home-profile-btn')"));
- console.log('PASS upload validation/auth, 512px WebP, shared member avatar, Google preservation, circle crop/cancel/save, live navbar, selected-only border, old image cleanup');
+ browser('wait','.dashboard-memory-stats');
+ assert.deepEqual(evaluate('Array.from(document.querySelectorAll(".dashboard-memory-stats small"),el=>el.textContent)'),['ทริปทั้งหมด','ประเทศที่เคยไป','จังหวัดที่เคยไป']);
+ for(const width of [320,390]) {
+   browser('set','viewport',String(width),'844');
+   assert(evaluate(`Array.from(document.querySelectorAll('.dashboard-memory-stats small')).every(el=>{const r=el.getBoundingClientRect(),b=el.closest('button').getBoundingClientRect();return r.right<=b.right&&r.left>=b.left&&el.scrollWidth<=el.clientWidth+1})`),'home labels fit small cards');
+ }
+ await db.query("UPDATE trips SET start_date='2025-01-01',outbound_departure_at='2025-01-01 08:00',return_departure_at='2025-01-02 18:00' WHERE id=$1",[trip.id]);
+ browser('open',base+'/analytics');browser('wait','.analytics-memory-kpis article');
+ assert(evaluate(`Array.from(document.querySelectorAll('.analytics-memory-kpis article')).every(el=>el.getBoundingClientRect().height===64)`));
+ console.log('PASS profile preview/edit, download confirmation/native share, borderless navbar, compact home labels and analytics, upload validation and shared avatar');
 } finally {
  try{browser('close');}catch{}
  const current=await db.query('SELECT avatar_url FROM users WHERE id=$1',[id]);if(current.rows[0]?.avatar_url)files.add(current.rows[0].avatar_url);

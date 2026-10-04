@@ -3265,15 +3265,15 @@ function Dashboard({
         <div>
           <button type="button" onClick={viewAnalytics}>
             <i><Luggage size={16} /></i>
-            <span><strong>{counts.total}</strong><small>{t("ทริป")}</small></span>
+            <span><strong>{counts.total}</strong><small>{t("ทริปทั้งหมด")}</small></span>
           </button>
           <button type="button" onClick={viewAnalytics}>
             <i><Globe2 size={16} /></i>
-            <span><strong>{visitedCountries}</strong><small>{t("ประเทศ")}</small></span>
+            <span><strong>{visitedCountries}</strong><small>{t("ประเทศที่เคยไป")}</small></span>
           </button>
           <button type="button" onClick={viewAnalytics}>
             <i><MapPin size={16} /></i>
-            <span><strong>{visitedDestinations}</strong><small>{t("จังหวัด")}</small></span>
+            <span><strong>{visitedDestinations}</strong><small>{t("จังหวัดที่เคยไป")}</small></span>
           </button>
         </div>
       </section>}
@@ -6749,7 +6749,7 @@ function ProfileSettingsCard({
   return (
     <SettingsGlass>
     <article className="card account-settings-card">
-      <ProfileAvatarEditor save={saveAvatar}><AccountAvatar profile={profile} size="large" /></ProfileAvatarEditor>
+      <ProfileAvatarEditor save={saveAvatar} imageUrl={profile?.avatar_url}><AccountAvatar profile={profile} size="large" /></ProfileAvatarEditor>
       <div className="account-settings-copy">
         <form className="account-name-editor" onSubmit={submit}>
           {editing ? <input aria-label={t("ชื่อที่แสดง")} value={name} disabled={saving} onChange={event => setName(event.target.value)} minLength={2} maxLength={120} autoFocus required /> : <strong className="account-name-display" title={name}>{name || t("กำลังโหลด…")}</strong>}
