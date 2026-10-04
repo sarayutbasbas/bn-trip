@@ -1,4 +1,5 @@
 "use client";
+import { tripAvatarOrder } from "@/src/lib/trip-avatar-order";
 import { ParticipantMode, TripCompanions } from "./trip-companions";
 import { ParticipantAccess, ParticipantInviteActions } from "./participant-access";
 import { UserRound } from "lucide-react";
@@ -46,14 +47,10 @@ async function readResponse(response:Response){const data=await response.json().
 function stop(event:{stopPropagation:()=>void}){event.stopPropagation()}
 function IdeaAvatars({members:accounts,companions=[],open}:{members:TripIdeaMember[];companions?:{id:string;name:string}[];open:()=>void}){
   const members:TripIdeaMember[]=[...accounts,...companions.map(person=>({id:`guest:${person.id}`,display_name:person.name,email:"",avatar_url:null,role:"collaborator" as const}))];
-  const owner=members.find(member=>member.role==="owner");
-  const others=members.filter(member=>member.role!=="owner");
-  const hasOverflow=members.length>3;
-  const visible=[...others.slice(0,owner?(hasOverflow?1:2):(hasOverflow?2:3)),...(owner?[owner]:[])];
-  const hidden=Math.max(0,members.length-visible.length);
+  const {visible,hidden}=tripAvatarOrder(members);
   return <button type="button" className="trip-idea-avatars" onClick={event=>{stop(event);open()}} aria-label={`ผู้ร่วมวางแผน ${members.length} คน`} title="ผู้ร่วมวางแผน">
-    {visible.map(member=><span key={member.id} className={member.role==="owner"?"is-owner":""} style={member.avatar_url?{backgroundImage:`url("${member.avatar_url}")`}:undefined} title={member.display_name||member.email}>{!member.avatar_url&&(member.id.startsWith("guest:")?<UserRound size={18}/>:(member.display_name||member.email||"?").charAt(0).toUpperCase())}</span>)}
     {hidden>0?<span className="is-more">+{hidden}</span>:null}
+    {visible.map(member=><span key={member.id} data-person-kind={member.role==="owner"?"owner":member.id.startsWith("guest:")?"guest":"email"} className={member.role==="owner"?"is-owner":""} style={member.avatar_url?{backgroundImage:`url("${member.avatar_url}")`}:undefined} title={member.display_name||member.email}>{!member.avatar_url&&(member.id.startsWith("guest:")?<UserRound size={18}/>:(member.display_name||member.email||"?").charAt(0).toUpperCase())}</span>)}
   </button>;
 }
 

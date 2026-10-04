@@ -4684,6 +4684,9 @@ html.dark .trip-section-nav button.active {
 .shared-trip-avatar:first-child {
   margin-left: 0;
 }
+.shared-trip-avatars > .shared-trip-avatar { position: relative; flex-shrink: 0; margin-left: -5px; isolation: isolate; }
+.shared-trip-avatars > .shared-trip-avatar:first-child { margin-left: 0; }
+.shared-trip-avatar > svg, .trip-idea-avatars > span > svg { position: static; width: 18px; height: 18px; margin: 0; transform: none; }
 .shared-trip-avatars-compact .shared-trip-avatar {
   width: 28px;
   height: 28px;
@@ -10587,7 +10590,7 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 
 .collaborator-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 10px;
 }
@@ -10603,14 +10606,14 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .collaborator-form .recent-collaborators {
   grid-column: 1 / -1;
 }
-.participant-invite-actions { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.participant-invite-actions { display: flex; align-items: center; gap: 6px; height: 48px; }
 .participant-access-buttons { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--surface-solid); }
 .participant-access-buttons button { flex: 1; min-height: 36px; padding: 6px 9px; border-radius: 9px; border: 1px solid transparent; color: var(--muted); background: transparent; font-size: 11px; font-weight: 600; }
 .participant-access-buttons button[aria-pressed="true"] { color: var(--orange); background: var(--brand-soft); border-color: color-mix(in srgb, var(--orange) 45%, transparent); }
 .participant-access-buttons button:disabled { opacity: .45; }
 .participant-access-buttons button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
-.participant-invite-actions .participant-access-buttons { flex: 1; }
-.participant-invite-actions .participant-access-buttons button { min-height: 40px; font-size: 13px; }
+.participant-access-buttons { width: 110px; flex: 0 0 110px; box-sizing: border-box; }
+.participant-access-buttons button { padding-inline: 6px; }
 .collaborator-form .participant-send { width: 48px; height: 48px; min-width: 48px; padding: 0; border-radius: 50%; }
 .participant-send-spinner { animation: participant-sending 1s linear infinite; }
 @keyframes participant-sending { to { transform: rotate(360deg); } }
@@ -10626,7 +10629,7 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
   min-height: 64px;
   padding: 9px 12px 9px 10px;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 116px 32px;
+  grid-template-columns: 36px minmax(0, 1fr) 110px 44px;
   align-items: center;
   gap: 8px;
   border-bottom: 0.5px solid var(--line);
@@ -10639,10 +10642,11 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .collaborator-skeleton-line { width: 65%; height: 14px; border-radius: 6px; }
 .dashboard-home .shared-trip-avatars { pointer-events: none; }
 .collaborator-row .delete-record-btn {
-  width: 32px;
-  min-width: 32px;
-  height: 36px;
-  min-height: 36px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border-radius: 50%;
   justify-self: center;
 }
 .collaborator-row.is-readonly {
@@ -12467,7 +12471,13 @@ html.dark .badge-recent-highlight :is(.badge-recent-copy small, .badge-recent-it
 .trip-idea-convert,.trip-idea-promote { min-height: 31px; padding: 0 11px; border: .5px solid rgba(255,107,0,.12); grid-column: 2/3; justify-self: start; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; color: var(--orange); background: #fff0e9; font-size: 10px; font-weight: 700; box-shadow: none; }
 .dark .trip-idea-convert,.dark .trip-idea-promote { background: color-mix(in srgb,var(--orange) 16%,var(--surface-solid)); }
 .trip-idea-avatars { position: absolute; right: 12px; bottom: 12px; min-width: 38px; height: 32px; padding: 0 6px; display: flex; align-items: center; justify-content: flex-end; color: var(--muted); background: transparent; }
-.trip-idea-avatars > span { width: 27px; height: 27px; margin-left: -8px; border: 2px solid var(--surface-solid); border-radius: 50%; display: grid; place-items: center; flex: 0 0 27px; color: #fff; background-color: #8e8e93; background-position: center; background-size: cover; box-shadow: 0 2px 7px rgba(0,0,0,.12); font-size: 9px; font-weight: 750; }
+.trip-idea-avatars > span { position: relative; isolation: isolate; overflow: hidden; width: 27px; height: 27px; margin-left: -5px; border: 2px solid var(--surface-solid); border-radius: 50%; display: grid; place-items: center; flex: 0 0 27px; color: #fff; background-color: #8e8e93; background-position: center; background-size: cover; box-shadow: 0 2px 7px rgba(0,0,0,.12); font-size: 9px; font-weight: 750; }
+.collaborator-row .delete-record-btn > svg { width: 20px; height: 20px; }
+@media (max-width: 360px) {
+  .collaborator-form { gap: 6px; }
+  .collaborator-row, .collaborator-row.idea-collaborator-row:not(.is-readonly) { padding-inline: 6px; gap: 5px; grid-template-columns: 28px minmax(0, 1fr) 110px 44px; }
+  .collaborator-row .collaborator-avatar { width: 28px; height: 28px; }
+}
 .trip-idea-avatars > span:first-child { margin-left: 0; }
 .trip-idea-avatars > span.is-owner { border-color: var(--orange); }
 .trip-idea-avatars > span.is-more { color: var(--orange); background: var(--brand-soft); }
@@ -12499,7 +12509,7 @@ html.dark .badge-recent-highlight :is(.badge-recent-copy small, .badge-recent-it
 .trip-idea-submit-actions .primary-btn { min-width: 0; flex: 1 1 auto; }
 .trip-idea-submit-actions > .delete-record-btn { width: 48px; height: 48px; border-radius: 50%; }
 .trip-idea-form-grid { padding:2px 2px 4px; }
-.collaborator-row.idea-collaborator-row:not(.is-readonly) { grid-template-columns: 36px minmax(0,1fr) 116px 32px; }
+.collaborator-row.idea-collaborator-row:not(.is-readonly) { grid-template-columns: 36px minmax(0,1fr) 110px 44px; }
 .idea-collaborator-row select { min-width: 0; width: 70px; padding: 8px 4px; font-size: 12px; }
 .collaborator-row.idea-collaborator-row .delete-record-btn { justify-self: end; }
 .trip-idea-card.compact-trip-card { min-height: 142px; padding: 0; grid-template-columns: minmax(120px,36%) minmax(0,1fr); align-items: stretch; gap: 0; overflow: hidden; }

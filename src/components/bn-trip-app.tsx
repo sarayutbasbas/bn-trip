@@ -1,4 +1,5 @@
 "use client";
+import { tripAvatarOrder } from "@/src/lib/trip-avatar-order";
 import { ParticipantMode, TripCompanions } from "./trip-companions";
 import { ParticipantAccess, ParticipantInviteActions } from "./participant-access";
 import { tripDurationDays } from "@/src/lib/trip-duration";
@@ -1704,21 +1705,13 @@ function SharedTripAvatars({
   const t = useT();
   const members: TripMember[] = [...accountMembers, ...companions.map(person => ({ id: `guest:${person.id}`, display_name: person.name, email: null, avatar_url: null, role: "collaborator" as const }))];
   if (!members.length) return null;
-  const owner = members.find((member) => member.role === "owner");
-  const collaborators = members.filter((member) => member.role !== "owner");
-  const visibleCollaborators = collaborators.slice(
-    0,
-    owner ? Math.max(0, limit - 1) : limit,
-  );
-  const hidden = Math.max(
-    0,
-    collaborators.length - visibleCollaborators.length,
-  );
+  const { visible, hidden } = tripAvatarOrder(members, limit);
   const avatar = (member: TripMember) => {
     const label = (member.display_name || member.email || "?").trim();
     return (
       <span
         key={member.id}
+        data-person-kind={member.role === "owner" ? "owner" : member.id.startsWith("guest:") ? "guest" : "email"}
         className={`shared-trip-avatar ${member.role === "owner" ? "shared-trip-avatar-owner" : "shared-trip-avatar-collaborator"}`}
         title={label}
         style={
@@ -1733,11 +1726,10 @@ function SharedTripAvatars({
   };
   const content = (
     <>
-      {visibleCollaborators.map(avatar)}
       {hidden > 0 && (
         <span className="shared-trip-avatar shared-trip-more">+{hidden}</span>
       )}
-      {owner && avatar(owner)}
+      {visible.map(avatar)}
     </>
   );
   const label =

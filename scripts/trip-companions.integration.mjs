@@ -15,6 +15,25 @@ const tokens = new Map(await Promise.all(people.map(async person => [person.id, 
 const api = (person, path, method = "GET", body) => fetch(base + path, { method, headers: { cookie: `bn_trip_session=${tokens.get(person.id)}`, "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
 async function ok(response, status = 200) { const data = await response.json(); assert.equal(response.status, status, JSON.stringify(data)); return data; }
 const browser = (...args) => execFileSync("npx", ["--yes", "agent-browser", "--session", "companions", ...args], { encoding: "utf8", timeout: 45000 });
+function checkInviteLayout() {
+  for (const width of [320, 390]) {
+    browser("set", "viewport", String(width), "844");
+    const result = JSON.parse(browser("eval", `(()=>{
+      const input=document.querySelector('.collaborator-form input[type=email]').getBoundingClientRect();
+      const access=document.querySelector('.participant-invite-actions .participant-access-buttons').getBoundingClientRect();
+      const existing=document.querySelector('.collaborator-row .participant-access-buttons').getBoundingClientRect();
+      const send=document.querySelector('.participant-send').getBoundingClientRect();
+      const remove=document.querySelector('.collaborator-row .delete-record-btn');
+      const box=remove.getBoundingClientRect();
+      return {aligned:Math.abs(input.top+input.height/2-access.top-access.height/2)<1&&input.top===send.top,sameSize:access.width===existing.width&&access.height===existing.height,inside:input.left>=0&&send.right<=innerWidth,round:getComputedStyle(remove).borderRadius,size:box.width===44&&box.height===44};
+    })()`));
+    assert.deepEqual(result,{aligned:true,sameSize:true,inside:true,round:'50%',size:true});
+  }
+}
+function checkAvatars(selector) {
+  const result=JSON.parse(browser('eval', `(()=>{const stack=document.querySelector(${JSON.stringify(selector)});const people=[...stack.querySelectorAll('[data-person-kind]')];const ranks={guest:0,email:1,owner:2};return {ownerRight:people.at(-1)?.dataset.personKind==='owner',ordered:people.every((p,i)=>!i||ranks[p.dataset.personKind]>=ranks[people[i-1].dataset.personKind]),spaced:[...stack.children].every((p,i)=>!i||p.getBoundingClientRect().left>stack.children[i-1].getBoundingClientRect().left)}})()`));
+  assert.deepEqual(result,{ownerRight:true,ordered:true,spaced:true});
+}
 try {
   for (const person of people) await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Companion fixture')", [person.id, person.email]);
   // Boot the versioned migration in the isolated local database.
@@ -39,6 +58,7 @@ try {
     browser("cookies", "set", "bn_trip_session", tokens.get(owner.id), "--url", base);
     browser("open", `${base}/trip-ideas`);
     browser("wait", ".trip-idea-invite");
+    checkAvatars('.trip-idea-avatars');
     assert.equal(JSON.parse(browser("eval", "(()=>{const invite=document.querySelector('.trip-idea-invite').getBoundingClientRect();const create=document.querySelector('.trip-idea-convert').getBoundingClientRect();return invite.left>=create.right})()")), true);
     browser("click", ".trip-idea-invite");
     browser("wait", ".participant-invite-actions");
@@ -47,6 +67,7 @@ try {
     browser("click", '.participant-send');
     browser("wait", "--fn", "document.querySelectorAll('.collaborator-row').length===4");
     browser("wait", '.collaborator-row:last-child .participant-access-buttons button:not([disabled])');
+    checkInviteLayout();
     browser("click", '.collaborator-row:last-child .participant-access-buttons button:nth-child(2)');
     browser("wait", '.collaborator-row:last-child .participant-access-buttons button:nth-child(2)[aria-pressed="true"]');
     browser("screenshot", "/tmp/bn-idea-access-buttons.png");
@@ -70,10 +91,13 @@ try {
   console.log("PASS: conversion preserves guest IDs and roles; accommodation and itinerary share guest payer/splits");
   if (process.env.COMPANIONS_BROWSER === "1") {
     browser("open", `${base}/trips/${trip.id}`);
+    browser("wait", '.shared-trip-avatars');
+    checkAvatars('.shared-trip-avatars');
     browser("wait", 'button[aria-label="เชิญเพื่อนร่วมทริป"]'); browser("click", 'button[aria-label="เชิญเพื่อนร่วมทริป"]');
     browser("wait", ".participant-invite-actions");
     assert.equal(browser("get", "text", '.participant-invite-actions button[aria-pressed="true"]').trim(), "Admin");
     browser("wait", '.collaborator-row .participant-access-buttons');
+    checkInviteLayout();
     browser("screenshot", "/tmp/bn-trip-access-buttons.png");
     browser("wait", ".participant-modes"); browser("click", ".participant-modes button:nth-child(2)");
     browser("wait", ".companion-chips"); browser("screenshot", "/tmp/bn-companions-trip.png");
@@ -123,6 +147,16 @@ try {
       }
     }
     console.log("PASS: identical mobile accommodation/expense pickers; guest available for split and payer; no horizontal overflow");
+    // Mixed visible avatars: keep one invited account alongside named companions.
+    await db.query('DELETE FROM trip_collaborators WHERE trip_id=$1 AND user_id IS DISTINCT FROM $2', [trip.id, admin.id]);
+    for (const route of ['/trips', `/trips/${trip.id}`, '/']) {
+      browser('open', base + route);
+      browser('wait', '.shared-trip-avatars [data-person-kind="guest"]');
+      checkAvatars('.shared-trip-avatars');
+      assert.equal(JSON.parse(browser('eval', `(()=>{const avatar=document.querySelector('.shared-trip-avatars [data-person-kind="guest"]');const icon=avatar.querySelector('svg').getBoundingClientRect();const box=avatar.getBoundingClientRect();return icon.left>=box.left&&icon.right<=box.right&&icon.top>=box.top&&icon.bottom<=box.bottom})()`)),true);
+      browser('screenshot', `/tmp/bn-avatar-${route==='/'?'home':route==='/trips'?'list':'cover'}.png`);
+    }
+    console.log('PASS: owner/email/named avatar order and contained profile icons on home, list and cover');
   }
 } finally {
   if (process.env.COMPANIONS_BROWSER === "1") browser("close");
