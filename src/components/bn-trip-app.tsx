@@ -3502,9 +3502,9 @@ function AnalyticsYearTrend({
               <button type="button" popoverTarget={`${chartId}-${point.year}`} popoverTargetAction="hide" aria-label={t("ปิด")}><X size={18} /></button>
               <div className="analytics-year-popover-content">
               <h3><CalendarDays size={18} />{point.year}</h3>
-              <p><MapPin size={17} />{t("จุดหมายที่ไป")} <b>{point.destinations} {t("ที่")}</b></p>
-              <p><Luggage size={17} />{t("การเดินทาง")} <b>{point.trips} {tripLabel}</b></p>
-              <p><WalletCards size={17} />{t("ค่าใช้จ่ายรวม")} <b>{money(point.totalExpense)}</b></p>
+              <p className="is-mint"><i><MapPin size={17} /></i><span>{t("จุดหมายที่ไป")}</span><b>{point.destinations} {t("ที่")}</b></p>
+              <p className="is-blue"><i><Luggage size={17} /></i><span>{t("การเดินทาง")}</span><b>{point.trips} {tripLabel}</b></p>
+              <p className="is-orange"><i><WalletCards size={17} /></i><span>{t("ค่าใช้จ่ายรวม")}</span><b>{money(point.totalExpense)}</b></p>
               <small>{t("นับจุดหมายไม่ซ้ำภายในปี จากเมืองหรือจังหวัดของทริป")}</small>
               </div>
             </div>
@@ -3637,10 +3637,10 @@ function TravelAnalyticsDashboard({
       {badgeSection}
 
       <section className="analytics-memory-kpis" aria-label={t("สถิติการเดินทาง")}>
-        <article className="is-orange"><i><Luggage size={24} /></i><div><strong>{data.totals.trips}</strong><b>{t("ทริปทั้งหมด")}</b><small>{lang === "EN" ? "Travel memories" : "ความทรงจำ"}</small></div></article>
-        <article className="is-mint"><i><Globe2 size={24} /></i><div><strong>{locationCount}</strong><b>{t(scope === "domestic" ? "จังหวัดที่เคยไป" : "ประเทศที่เคยไป")}</b><small>{lang === "EN" ? "Visited" : "เดินทางไปแล้ว"}</small></div></article>
-        <article className="is-pink"><i><MapPin size={24} /></i><div><strong>{data.totals.destinations}</strong><b>{lang === "EN" ? "Destinations" : "จุดหมาย"}</b><small>{lang === "EN" ? "Recorded" : "ที่บันทึกไว้"}</small></div></article>
-        <article className="is-blue"><i><WalletCards size={24} /></i><div><strong title={money(data.totals.averageExpense)}>{money(data.totals.averageExpense)}</strong><b title={t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}>{lang === "EN" ? "Avg. / trip" : "เฉลี่ยต่อทริป"}</b><small>{lang === "EN" ? "Your share" : "เฉพาะของเรา"}</small></div></article>
+        <article className="is-orange"><i><Luggage size={24} /></i><div><strong>{data.totals.trips}</strong><b>{t("ทริปทั้งหมด")}</b></div></article>
+        <article className="is-mint"><i><Globe2 size={24} /></i><div><strong>{locationCount}</strong><b>{t(scope === "domestic" ? "จังหวัดที่เคยไป" : "ประเทศที่เคยไป")}</b></div></article>
+        <article className="is-pink"><i><MapPin size={24} /></i><div><strong>{data.totals.destinations}</strong><b>{lang === "EN" ? "Destinations" : "จุดหมาย"}</b></div></article>
+        <article className="is-blue"><i><WalletCards size={24} /></i><div><strong title={money(data.totals.averageExpense)}>{money(data.totals.averageExpense)}</strong><b title={t("ค่าใช้จ่ายเฉลี่ยต่อทริป")}>{lang === "EN" ? "Avg. / trip" : "เฉลี่ยต่อทริป"}</b></div></article>
       </section>
 
       <div className="analytics-memory-grid">
@@ -3661,7 +3661,7 @@ function TravelAnalyticsDashboard({
         <section className="analytics-year-card">
           <div className="analytics-memory-section-head"><h2><ArrowUp size={18} />{t("การเดินทางในแต่ละปี")}</h2></div>
           <AnalyticsYearTrend key={scope} years={data.years} money={money} tripLabel={t("ทริป")} />
-          <div className="analytics-year-summary"><span><Plane size={17} /><b>{flightInsights.totals.segments}</b><small>{t("ช่วงบินทั้งหมด")}</small></span><span><CalendarDays size={17} /><b>{data.years.length}</b><small>{t("ปีที่มีทริป")}</small></span></div>
+          <div className="analytics-year-summary"><span><i><Plane size={18} /></i><b>{flightInsights.totals.segments}</b><small>{t("ช่วงบินทั้งหมด")}</small></span><span><i><CalendarDays size={18} /></i><b>{data.years.length}</b><small>{t("ปีที่มีทริป")}</small></span></div>
         </section>
       </div>
 

@@ -15,7 +15,6 @@ import {
   Grid2X2,
   LockKeyhole,
   Map as MapIcon,
-  MapPinCheck,
   Maximize2,
   Trophy,
   X,
@@ -394,7 +393,7 @@ function BadgeGridCard({
       </button>
       {canRemoveManualBadgeVisit(badge) ? <button type="button" className="badge-manual-manage" disabled={saving} onClick={() => previewBadge(badge)} aria-label={`ยกเลิกเคยไปแล้ว ${badge.nameTh}`}>ยกเลิกเคยไปแล้ว</button> : null}
       {previewReady && !badge.unlocked ? <div className="travel-badge-preview-trigger is-unlock-prompt">
-        <button type="button" disabled={saving} onClick={unlockToday}><MapPinCheck size={16} /> {saving ? "กำลังบันทึก…" : "เคยไปแล้ว"}</button>
+        <button type="button" disabled={saving} onClick={unlockToday}>{saving ? "กำลังบันทึก…" : "เคยไปแล้ว"}</button>
         {error ? <small>{error}</small> : null}
       </div> : null}
     </article>

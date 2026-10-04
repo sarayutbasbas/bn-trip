@@ -16,6 +16,13 @@ try {
     for(const scope of [1,2,3]) {
       browser('click',`.analytics-type-options button:nth-child(${scope})`);
       browser('wait','.analytics-year-column:nth-child(15)');
+      assert(evaluate(`!document.querySelector('.analytics-memory-kpis small')`), 'KPI cards have only value and label');
+      for(const dark of [false,true]) {
+        evaluate(`document.documentElement.classList.toggle('dark',${dark});true`);
+        assert(evaluate(`[...document.querySelectorAll('.analytics-insights article,.analytics-year-summary > span')].every(el=>el.getBoundingClientRect().height===60)`));
+        assert(evaluate(`[...document.querySelectorAll('.analytics-insights article > i,.analytics-year-summary > span > i')].every(el=>el.getBoundingClientRect().width===28&&getComputedStyle(el).color==='rgb(255, 255, 255)'&&getComputedStyle(el).borderRadius==='50%')`));
+        assert(evaluate(`[...document.querySelectorAll('.analytics-ranking-list > div > b,.analytics-ranking-list > div > i')].every(el=>el.getBoundingClientRect().width===28)`));
+      }
       const position=evaluate(`(()=>{const n=document.querySelector('.analytics-year-bars');const last=n.querySelector('.analytics-year-column:last-child').getBoundingClientRect();return {left:n.scrollLeft,max:n.scrollWidth-n.clientWidth,last:last.right,right:n.getBoundingClientRect().right};})()`);
       assert(position.max>0);
       assert(Math.abs(position.left-position.max)<2,JSON.stringify(position));
@@ -24,8 +31,12 @@ try {
       browser('click','.analytics-year-column:first-child button');
       assert.equal(evaluate(`document.querySelector('.analytics-year-bars').scrollLeft`),0);
       assert(evaluate(`Boolean(document.querySelector('.analytics-year-popover:popover-open'))`));
+      assert(evaluate(`(()=>{const p=document.querySelector('.analytics-year-popover:popover-open');return new Set([...p.querySelectorAll('p i')].map(el=>getComputedStyle(el).backgroundColor)).size===3&&[...p.querySelectorAll('p span,p b')].every(el=>getComputedStyle(el).fontSize==='12px')&&p.scrollWidth<=p.clientWidth})()`));
+      if(width===390&&scope===3) browser('screenshot','/tmp/bn-analytics-popover.png');
       evaluate(`document.querySelector('.analytics-year-popover:popover-open').hidePopover();true`);
     }
   }
+  browser('scrollintoview','.analytics-insights');
+  browser('screenshot','/tmp/bn-analytics-compact-insights.png');
   console.log('PASS: latest year fully visible at 320/390/430px in all filters; scroll back and popover retain position');
 } finally { browser('close'); }
