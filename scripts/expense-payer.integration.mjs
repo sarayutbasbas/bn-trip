@@ -42,8 +42,20 @@ try {
   browser("open", `${base}/trips/${trip}/expenses`);
   browser("click", ".expense-insight-details > summary");
   const summary = evaluate('document.querySelector(".expense-member-summary").textContent');
-  assert.ok(summary.includes("ต้องได้รับคืน"));
-  assert.ok(summary.includes("ต้องจ่ายเพิ่ม"));
+  assert.ok(summary.includes("รับคืน"));
+  assert.ok(summary.includes("จ่ายเพิ่ม"));
+  for (const width of [320, 390]) {
+    browser('set', 'viewport', String(width), '844');
+    for (const dark of [true, false]) {
+      browser('eval', `document.documentElement.classList.toggle('dark', ${dark})`);
+      const layout = evaluate(`(()=>{const cells=[...document.querySelector('.expense-member-clearing > div').children];const boxes=cells.map(el=>el.getBoundingClientRect());const payment=getComputedStyle(document.querySelector('.payment-summary'));return {count:cells.length,sameRow:boxes.every(r=>Math.abs(r.top-boxes[0].top)<1),fits:boxes.every(r=>r.left>=0&&r.right<=innerWidth),glass:payment.backgroundImage.includes('radial-gradient')}})()`);
+      assert.deepEqual(layout, {count:3,sameRow:true,fits:true,glass:dark});
+      browser('scrollintoview', '.expense-member-summary');
+      browser('screenshot', `/tmp/bn-expense-summary-${width}-${dark?'dark':'light'}.png`);
+    }
+  }
+  browser('eval', "document.documentElement.classList.add('dark')");
+  console.log('PASS: three-column settlement and payment glass at 320/390px, light/dark');
   browser("click", ".expense-plan-row");
   assert.equal(evaluate('document.querySelector("input[name=paidBy]").value'), `member:${member}`);
   const widths = evaluate('Array.from(document.querySelectorAll(".expense-people-row > .field")).map(e=>e.getBoundingClientRect().width)');

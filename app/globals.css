@@ -6680,10 +6680,11 @@ html.dark .trip-section-nav button.active {
 }
 .expense-member-pending { margin: 0; padding: 10px 14px; font-size: 11px; line-height: 1.7; background: var(--brand-soft); color: var(--orange); }
 .expense-member-clearing { grid-column: 1 / -1; border-top: .5px solid var(--line); padding-top: 9px; }
-.expense-member-clearing > div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.expense-member-clearing > div span { font-size: 10px; color: var(--muted); }
-.expense-member-clearing > div b { display: block; color: var(--ink); font-size: 12px; margin-top: 2px; }
-.expense-member-clearing > p { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 9px 0 0; padding: 8px 10px; border-radius: 10px; font-size: 12px; background: var(--surface-2); }
+.expense-member-clearing > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.expense-member-clearing > div > span { min-width: 0; padding: 6px 2px; font-size: 11px; color: var(--muted); text-align: center; line-height: 1.5; }
+.expense-member-clearing > div > span + span { border-left: .5px solid var(--line); }
+.expense-member-clearing > div b { display: block; color: var(--ink); font-size: 12px; margin-top: 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.expense-member-clearing > div > :is(.is-receivable, .is-payable, .is-balanced) b { color: inherit; }
 .expense-member-clearing .is-receivable { color: #16966a; }
 .expense-member-clearing .is-payable { color: #e35b39; }
 .expense-member-clearing .is-balanced { color: var(--muted); }
@@ -16222,7 +16223,7 @@ html.dark :is(
   .trip-invitation-card, .nearby-flight-card, .invitation-popover-card,
   .event-card, .accommodation-card, .accommodation-more-card,
   .flight-card, .flight-card-compact, .expense-day-card,
-  .expense-member-summary, .review-average-card, .review-member-card,
+  .expense-member-summary, .payment-summary, .review-average-card, .review-member-card,
   .insurance-person-card, .insurance-policy-card, .travel-insurance-card,
   .checklist-category-card, .master-category-card,
   .document-list article, .activity-list article,

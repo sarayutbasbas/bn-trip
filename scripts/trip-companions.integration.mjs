@@ -108,7 +108,7 @@ try {
     browser("wait", ".expense-member-clearing");
     assert.equal(JSON.parse(browser("eval", "document.querySelectorAll('.expense-settlement-summary').length")), 0);
     const merged = browser("get", "text", ".expense-member-summary");
-    assert(merged.includes("750.00") && merged.includes("ต้องได้รับคืน") && merged.includes("ต้องจ่ายเพิ่ม"));
+    assert(merged.includes("750.00") && merged.includes("รับคืน") && merged.includes("จ่ายเพิ่ม"));
     browser("scrollintoview", ".expense-member-summary"); browser("screenshot", "/tmp/bn-merged-expense-summary.png");
     console.log("PASS: one avatar-based summary includes paid/share/balance and category totals");
     let expectedPayers;

@@ -6609,10 +6609,13 @@ function ExpenseMemberSummary({
                 </span>
               </div>
               <div className="expense-member-clearing">
-                <div><span>ออกเงินให้ก่อน <b>฿{bahtFormat(balance.paid / 100)}</b></span><span>ส่วนหารที่สรุปแล้ว <b>฿{bahtFormat(balance.share / 100)}</b></span></div>
-                <p className={balance.balance > 0 ? "is-receivable" : balance.balance < 0 ? "is-payable" : "is-balanced"}>
-                  <span>{balance.balance > 0 ? "ต้องได้รับคืน" : balance.balance < 0 ? "ต้องจ่ายเพิ่ม" : settlement.pendingCount ? "ยอดสุทธิที่สรุปแล้ว" : "ยอดสมดุล"}</span><b>฿{bahtFormat(Math.abs(balance.balance) / 100)}</b>
-                </p>
+                <div>
+                  <span>{t("จ่ายแล้ว")} <b>฿{bahtFormat(balance.paid / 100)}</b></span>
+                  <span title={t("ส่วนหารที่สรุปแล้ว")}>{t("ส่วนหาร")} <b>฿{bahtFormat(balance.share / 100)}</b></span>
+                  <span className={balance.balance > 0 ? "is-receivable" : balance.balance < 0 ? "is-payable" : "is-balanced"}>
+                    {t(balance.balance > 0 ? "รับคืน" : balance.balance < 0 ? "จ่ายเพิ่ม" : settlement.pendingCount ? "สุทธิ" : "พอดี")}<b>฿{bahtFormat(Math.abs(balance.balance) / 100)}</b>
+                  </span>
+                </div>
               </div>
             </article>
           );
