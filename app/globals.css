@@ -164,6 +164,7 @@
   box-shadow: none;
   font-size: 16px;
 }
+.document-search:not(.checklist-search) { position:relative;top:auto;z-index:auto; }
 .document-search input:focus {
   outline: 0;
   box-shadow: none;
@@ -7378,8 +7379,9 @@ html.dark .trip-section-nav button.active {
 .expense-member-disclosure .expense-member-summary-head { display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;list-style:none;border:0;cursor:pointer; }
 .expense-member-disclosure summary::-webkit-details-marker { display:none; }
 .expense-member-disclosure[open] summary > svg { transform:rotate(180deg); }
-.expense-member-disclosure article { padding:8px 10px;gap:6px; }
-.expense-member-disclosure article:nth-child(even) { background:color-mix(in srgb,var(--orange) 6%,transparent); }
+.expense-member-disclosure article { display:block;padding:0;background:var(--surface-solid); }
+.expense-member-identity { display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:6px;padding:8px 10px;background:var(--brand-soft); }
+.expense-member-disclosure .expense-member-clearing { padding:3px 10px 8px;background:var(--surface-solid); }
 .expense-member-disclosure .expense-member-pending { margin:0 10px 8px;padding:10px;border-radius:12px; }
 .expense-member-disclosure .expense-member-clearing { padding-top:3px; }
 .expense-member-disclosure .expense-member-clearing > div > span { padding:3px 2px; }
@@ -7389,12 +7391,6 @@ html.dark .redesigned-plan-expenses .expense-member-disclosure { background:tran
 .redesigned-plan-expenses .expense-day-list .expense-plan-row:nth-child(even) { background:rgba(100,116,139,.065);border-radius:0; }
 html.dark .redesigned-plan-expenses .expense-day-list .expense-plan-row:nth-child(even) { background:rgba(148,163,184,.09); }
 .redesigned-plan-expenses .expense-plan-row .expense-category-icon { width:30px;height:30px;min-width:30px;color:#fff;background:var(--expense-icon-color,#64748b); }
-.redesigned-plan-expenses .expense-category-icon.is-food { --expense-icon-color:#d95718; }
-.redesigned-plan-expenses .expense-category-icon.is-transport { --expense-icon-color:#087f69; }
-.redesigned-plan-expenses .expense-category-icon.is-stay { --expense-icon-color:#ce3553; }
-.redesigned-plan-expenses .expense-category-icon.is-flight { --expense-icon-color:#4269cf; }
-.redesigned-plan-expenses .expense-category-icon.is-activity { --expense-icon-color:#7c3dc8; }
-.redesigned-plan-expenses .expense-category-icon.is-shopping { --expense-icon-color:#a97000; }
 .redesigned-plan-expenses .expense-plan-copy strong { font-size:14px; }
 .redesigned-plan-expenses .expense-plan-copy small { font-size:11px; }
 .redesigned-plan-expenses .expense-plan-row .expense-category-icon svg { width:16px;height:16px; }
@@ -7508,9 +7504,9 @@ html.dark .redesigned-plan-expenses .expense-day-list .expense-plan-row:nth-chil
   min-height: 60px;
   padding: 7px 8px 7px 12px;
   border-bottom-color: var(--line);
-  background: #edf0f4;
+  background: #ffe3ca;
 }
-html.dark .redesigned-plan-expenses .expense-day-head { background:rgba(148,163,184,.16); }
+html.dark .redesigned-plan-expenses .expense-day-head { background:rgba(255,125,35,.22); }
 .expense-day-head-interactive { cursor:pointer; }
 .expense-day-toggle {
   min-width: 0;

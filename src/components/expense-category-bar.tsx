@@ -1,11 +1,11 @@
 import { ChartNoAxesColumnIncreasing, RotateCcw } from "lucide-react";
+import { expenseCategoryColor } from "@/src/lib/expense-category";
 
 export function ExpenseCategoryBar({ categories, total, selectedCategory, onSelectedCategoryChange, t }: {
   categories: Array<[string, number]>; total: number; selectedCategory: string | null;
   onSelectedCategoryChange: (category: string | null) => void; t: (text: string) => string;
 }) {
-  const colors = ["#ff4f0a", "#ff9f2d", "#ffcc4d", "#34c759", "#0a84ff", "#8e5cff", "#ff5c8a"];
-  const segments = categories.map(([category, amount], index) => ({ category, amount, percent: total > 0 ? amount / total * 100 : 0, color: colors[index % colors.length] }));
+  const segments = categories.map(([category, amount]) => ({ category, amount, percent: total > 0 ? amount / total * 100 : 0, color: expenseCategoryColor(category) }));
   const select = (category: string) => onSelectedCategoryChange(selectedCategory === category ? null : category);
   const money = (amount: number) => amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return <section className="expense-category-summary">

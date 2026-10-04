@@ -15,6 +15,7 @@ const api = async (path, body) => {
 };
 const browser = (...args) => execFileSync('npx', ['--yes', 'agent-browser', '--session', 'expense-tags', ...args], { encoding: 'utf8', timeout: 45000 });
 const evaluate = code => JSON.parse(browser('eval', code));
+let uploadedDocumentPath;
 try {
   await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Expense design test')", [id,email]);
   const trip=await api('/api/trips',{name:'Expense design',countryCode:'JP',locationIds:['JP:kyoto'],outboundDate:'2026-01-01',outboundTime:'08:00',returnDate:'2026-01-03',returnTime:'18:00',budgetThb:190000,shoppingBudgetThb:10000});
@@ -74,7 +75,8 @@ try {
   browser('click','.expense-member-disclosure summary');
   assert(evaluate("document.querySelector('.expense-member-disclosure').open"));
   assert(evaluate("parseFloat(getComputedStyle(document.querySelector('.expense-member-disclosure')).borderTopWidth)>=1"));
-  assert(evaluate("getComputedStyle(document.querySelectorAll('.expense-member-disclosure article')[0]).backgroundColor!==getComputedStyle(document.querySelectorAll('.expense-member-disclosure article')[1]).backgroundColor"));
+  assert(evaluate("[...document.querySelectorAll('.expense-member-disclosure article')].every(row=>getComputedStyle(row.querySelector('.expense-member-identity')).backgroundColor!==getComputedStyle(row.querySelector('.expense-member-clearing')).backgroundColor)"));
+  assert(evaluate("[...document.querySelectorAll('.expense-category-legend button')].every(button=>{const name=button.querySelector('b').textContent;const icon=document.querySelector('.expense-category-icon.is-'+(name==='อาหาร'?'food':'transport'));return getComputedStyle(button.querySelector('i')).backgroundColor===getComputedStyle(icon).backgroundColor;})"));
   assert(evaluate("Number(getComputedStyle(document.querySelector('.expense-category-heading button')).fontWeight)>=700"));
   assert(evaluate("getComputedStyle(document.querySelectorAll('.expense-plan-row')[0]).backgroundColor!==getComputedStyle(document.querySelectorAll('.expense-plan-row')[1]).backgroundColor"));
   assert(evaluate("getComputedStyle(document.querySelectorAll('.expense-day-card')[0]).background===getComputedStyle(document.querySelectorAll('.expense-day-card')[1]).background"));
@@ -89,5 +91,19 @@ try {
   browser('click','.expense-day-card:first-child .expense-day-actions > button:not(.expense-day-chevron)');
   browser('wait','.cost-sheet');
   assert(evaluate("!document.querySelector('.expense-day-card').classList.contains('is-collapsed')"));
+  await api('/api/trips/'+trip.id+'/accommodations',{name:'Hotel list fixture',location:'Kyoto',bookingPlatform:'trip.com',includesBreakfast:true,checkInDay:1,checkOutDay:2,checkInTime:'15:00',checkOutTime:'11:00',foreignAmount:1000,currency:'THB',exchangeRate:1,rateDate:'2026-01-01',paymentMethod:'เงินสด',splitMemberIds:[id],splitGuestIds:[],paidBy:{type:'member',id}});
+  browser('open',base+'/trips/'+trip.id+'?view=stays');
+  browser('wait','.accommodation-card-copy');
+  assert(evaluate("!document.querySelector('.accommodation-guest-avatars') && !!document.querySelector('.accommodation-booking-badge') && !!document.querySelector('.accommodation-breakfast-icon')"));
+  const documentForm=new FormData();documentForm.set('title','Search scroll fixture');documentForm.set('file',new Blob(['%PDF-1.4\n%%EOF'],{type:'application/pdf'}),'search.pdf');
+  const documentResponse=await fetch(base+'/api/trips/'+trip.id+'/documents',{method:'POST',headers:{cookie:'bn_trip_session='+token},body:documentForm});
+  assert(documentResponse.ok,await documentResponse.clone().text());uploadedDocumentPath='/api/trips/'+trip.id+'/documents/'+(await documentResponse.json()).id;
+  browser('open',base+'/trips/'+trip.id+'?workspace=documents');
+  browser('wait','.document-search:not(.checklist-search)');
+  assert(evaluate("getComputedStyle(document.querySelector('.document-search:not(.checklist-search)')).position==='relative'"));
+  browser('fill','.document-search input','not-a-document');
+  assert.equal(evaluate("document.querySelectorAll('.document-list article').length"),0);
+  browser('fill','.document-search input','Search scroll');
+  assert.equal(evaluate("document.querySelectorAll('.document-list article').length"),1);
   console.log('PASS full day header/amount toggle, arrows and keyboard without double toggles, add expense without collapsing, responsive budgets, neutral row stripes and category filtering');
-} finally { try { browser('close'); } catch {} await db.query('DELETE FROM users WHERE id=$1',[id]);await db.end(); }
+} finally { try { browser('close'); } catch {} if(uploadedDocumentPath)await fetch(base+uploadedDocumentPath,{method:'DELETE',headers:{cookie:'bn_trip_session='+token}});await db.query('DELETE FROM users WHERE id=$1',[id]);await db.end(); }

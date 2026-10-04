@@ -19,6 +19,7 @@ import { LoginScreen as RedesignedLoginScreen } from "@/src/components/login-scr
 
 import { costSplitCount, memberExpenseValue } from "@/src/lib/personal-expenses";
 import { ExpenseCategoryBar } from "./expense-category-bar";
+import { expenseCategoryTone, expenseCategoryColor } from "@/src/lib/expense-category";
 import { hasSubmittedReview } from "@/src/lib/review-visibility";
 import { type ExpensePayer } from "@/src/lib/expense-settlement";
 import { expenseSettlement } from "@/src/lib/expense-settlement";
@@ -5995,41 +5996,6 @@ export function LegacyPlanExpensesContent({
   );
 }
 
-function expenseCategoryTone(category?: string | null) {
-  const normalized = (category || "อื่น ๆ").trim().toLocaleLowerCase();
-  let tone = "other";
-  if (
-    normalized.includes("อาหาร") ||
-    normalized.includes("กิน") ||
-    normalized.includes("food")
-  ) {
-    tone = "food";
-  } else if (
-    normalized.includes("เดินทาง") ||
-    normalized.includes("transport")
-  ) {
-    tone = "transport";
-  } else if (normalized.includes("ที่พัก") || normalized.includes("hotel")) {
-    tone = "stay";
-  } else if (
-    normalized.includes("เครื่องบิน") ||
-    normalized.includes("flight")
-  ) {
-    tone = "flight";
-  } else if (
-    normalized.includes("กิจกรรม") ||
-    normalized.includes("ticket")
-  ) {
-    tone = "activity";
-  } else if (
-    normalized.includes("shopping") ||
-    normalized.includes("ช้อป") ||
-    normalized.includes("ของฝาก")
-  ) {
-    tone = "shopping";
-  }
-  return tone;
-}
 
 function ExpenseCategoryIcon({ category }: { category?: string | null }) {
   const tone = expenseCategoryTone(category);
@@ -6048,7 +6014,7 @@ function ExpenseCategoryIcon({ category }: { category?: string | null }) {
                 ? ShoppingBag
                 : ReceiptText;
   return (
-    <i className={`expense-category-icon is-${tone}`} aria-hidden="true">
+    <i className={`expense-category-icon is-${tone}`} style={{ "--expense-icon-color": expenseCategoryColor(category) } as CSSProperties} aria-hidden="true">
       <Icon size={20} strokeWidth={2.5} />
     </i>
   );
@@ -6173,6 +6139,7 @@ function ExpenseMemberSummary({
           const balance = settlement.rows.get(row.id)!;
           return (
             <article key={row.id}>
+              <div className="expense-member-identity">
               <span
                 className={`expense-member-avatar ${row.guest ? "is-guest" : ""}`}
                 style={
@@ -6198,6 +6165,7 @@ function ExpenseMemberSummary({
                 <span>
                   {t("ค่า Shopping")} <b>฿{bahtFormat(row.total.shopping)}</b>
                 </span>
+              </div>
               </div>
               <div className="expense-member-clearing">
                 <div>
