@@ -1,7 +1,8 @@
 "use client";
 import Image, { type ImageLoaderProps } from "next/image";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { tripCovers, type CoverRecord } from "@/src/lib/trip-covers";
+import { AttachmentPreviewOverlay } from "./attachment-preview-overlay";
 
 const privateCoverLoader = ({src,width,quality}: ImageLoaderProps) => `${src}${src.includes("?") ? "&" : "?"}w=${width}&q=${quality || 76}`;
 const coverImageProps = (url: string) => ({ loader: url.startsWith("/api/uploads/") ? privateCoverLoader : undefined, unoptimized: !url.startsWith("/api/uploads/") });
@@ -44,19 +45,37 @@ function CardCoverSlider({ urls, name, sizes, priority, className }: { urls: str
 export function TripCoverCarousel({ record }: { record: CoverRecord & { name: string } }) {
   const urls = tripCovers(record);
   const track = useRef<HTMLDivElement>(null);
+  const gesture = useRef({ x: 0, y: 0, moved: false });
+  const previewTrigger = useRef<HTMLButtonElement | null>(null);
   const [active, setActive] = useState(0);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const closePreview = useCallback(() => {
+    setPreviewIndex(null);
+    previewTrigger.current?.focus({ preventScroll: true });
+  }, []);
   return <>
     <div className="trip-detail-image-frame">
-    <div ref={track} className="trip-cover-carousel" role="region" aria-label="รูปปกทริป" onScroll={(event) => {
+    <div ref={track} className="trip-cover-carousel" role="region" aria-label="รูปปกทริป" onPointerDown={(event) => {
+      gesture.current = { x: event.clientX, y: event.clientY, moved: false };
+    }} onPointerMove={(event) => {
+      if (Math.abs(event.clientX - gesture.current.x) > 8 || Math.abs(event.clientY - gesture.current.y) > 8) gesture.current.moved = true;
+    }} onPointerCancel={() => { gesture.current.moved = true; }} onScroll={(event) => {
+      gesture.current.moved = true;
       const node = event.currentTarget;
       const next = Math.max(0,Math.min(urls.length - 1,Math.round(node.scrollLeft / Math.max(1, node.clientWidth))));
       setActive((current) => current === next ? current : next);
     }}>
-      {urls.map((url, index) => <div key={`${index}-${url}`} className="trip-cover-slide" role="group" aria-label={`รูปที่ ${index + 1} จาก ${urls.length}`}><Image src={url} alt={`รูปปก ${record.name} รูปที่ ${index + 1}`} fill sizes="100vw" priority={index === 0} {...coverImageProps(url)} draggable={false} /></div>)}
+      {urls.map((url, index) => <button key={`${index}-${url}`} type="button" className="trip-cover-slide trip-cover-preview-trigger" tabIndex={index === active ? 0 : -1} aria-label={`ดูรูปปก ${record.name} รูปที่ ${index + 1} แบบเต็ม`} aria-haspopup="dialog" onClick={(event) => {
+        event.stopPropagation();
+        if (event.detail !== 0 && gesture.current.moved) { event.preventDefault(); return; }
+        previewTrigger.current = event.currentTarget;
+        setPreviewIndex(index);
+      }}><Image src={url} alt={`รูปปก ${record.name} รูปที่ ${index + 1}`} fill sizes="100vw" priority={index === 0} {...coverImageProps(url)} draggable={false} /></button>)}
     </div>
     </div>
     {urls.length > 1 && <div className="trip-cover-pagination" aria-label={`รูปที่ ${active + 1} จาก ${urls.length}`}>
       {urls.map((_, index) => <button key={index} type="button" aria-label={`ดูรูปที่ ${index + 1}`} aria-current={index === active ? "true" : undefined} onClick={() => track.current?.scrollTo({ left: index * track.current.clientWidth, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" })}><span /></button>)}
     </div>}
+    {previewIndex !== null && <AttachmentPreviewOverlay preview={{ url: urls[previewIndex], title: `รูปปก ${record.name} · ${previewIndex + 1}/${urls.length}`, mimeType: "image/jpeg" }} onClose={closePreview} closeLabel="ปิดรูป" />}
   </>;
 }

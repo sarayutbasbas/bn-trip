@@ -23,6 +23,31 @@ try{
     browser('set','viewport',String(width),'844');
     assert(evaluate(`(()=>{const fav=document.querySelector('.trip-cover-favorite'),edit=document.querySelector('.trip-cover-actions [aria-label="แก้ไข"]'),back=document.querySelector('.trip-cover-back');const p=fav.getBoundingClientRect(),e=edit.getBoundingClientRect(),b=back.getBoundingClientRect();return p.width===b.width&&p.height===b.height&&p.top===e.top&&p.right<=e.left&&e.right<=innerWidth&&getComputedStyle(fav).backgroundColor===getComputedStyle(edit).backgroundColor&&!document.querySelector('.trip-cover-actions [aria-label="แพลนเที่ยว"]')})()`));
   }
+  browser('set','viewport','390','844');
+  const initialScroll=evaluate('window.scrollY');
+  browser('click','.trip-cover-preview-trigger');browser('wait','.attachment-preview-overlay');
+  assert(evaluate("document.querySelector('.attachment-preview-overlay img').getAttribute('src').includes('travel-postcard-fallback')"));
+  browser('screenshot','/tmp/bn-cover-full-preview.png');
+  browser('click','.attachment-preview-overlay [aria-label="ปิดรูป"]');
+  assert(evaluate("!document.querySelector('.attachment-preview-overlay')"));
+  assert.equal(evaluate('window.scrollY'),initialScroll);
+  assert(evaluate("document.activeElement.classList.contains('trip-cover-preview-trigger')"));
+  // A swipe/cancel must not accidentally open the viewer on the resulting click.
+  evaluate(`(()=>{const button=document.querySelector('.trip-cover-preview-trigger');button.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,clientX:200,clientY:100}));button.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,clientX:100,clientY:100}));button.dispatchEvent(new MouseEvent('click',{bubbles:true,detail:1}));return true})()`);
+  assert(evaluate("!document.querySelector('.attachment-preview-overlay')"));
+  browser('click','.trip-cover-favorite');
+  assert(evaluate("!document.querySelector('.attachment-preview-overlay')"));
+  console.log('PASS cover tap opens full image; close restores position/focus; swipe and favorite do not open it');
+  await db.query('UPDATE trips SET cover_image_urls=$2::text[] WHERE id=$1',[trips[0].id,['/travel-postcard-fallback.jpg','/travel-postcard-background.jpg']]);
+  browser('open',`${base}/trips/${trips[0].id}`);browser('wait','.trip-cover-pagination');
+  browser('click','.trip-cover-pagination [aria-label="ดูรูปที่ 2"]');
+  browser('wait','.trip-cover-pagination [aria-label="ดูรูปที่ 2"][aria-current="true"]');
+  assert(evaluate("!document.querySelector('.attachment-preview-overlay')"));
+  browser('click','.trip-cover-preview-trigger:nth-child(2)');browser('wait','.attachment-preview-overlay');
+  assert(evaluate("document.querySelector('.attachment-preview-overlay img').getAttribute('src').includes('travel-postcard-background')"));
+  browser('click','.attachment-preview-overlay [aria-label="ปิดรูป"]');
+  assert(evaluate("document.querySelector('.trip-cover-pagination [aria-label=\"ดูรูปที่ 2\"]').getAttribute('aria-current')==='true'"));
+  console.log('PASS active carousel photo opens, pagination stays independent, closing preserves active photo');
   browser('click','.trip-menu-more');browser('wait','.trip-menu-sheet');
   browser('click','.trip-menu-sheet .trip-menu-plan-image');browser('wait','.attachment-preview-overlay');
   assert(evaluate(`document.querySelector('.attachment-preview-overlay img').getAttribute('src').includes('travel-postcard-background')`));
