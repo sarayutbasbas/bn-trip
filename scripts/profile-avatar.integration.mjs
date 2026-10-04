@@ -61,14 +61,25 @@ try {
  assert.equal((await json(await api('/api/me'))).avatar_url,first.avatar_url,'cancel preserves avatar');
  browser('upload','.profile-avatar-editor input[type=file]',process.cwd()+'/public/travel-postcard-background.jpg');
  browser('wait','--fn',"!!document.querySelector('.crop-apply')&&!document.querySelector('.crop-apply').disabled");
+ evaluate(`(()=>{const original=window.fetch.bind(window);window.fetch=async(...args)=>{if(String(args[0])==='/api/me/avatar')await new Promise(resolve=>setTimeout(resolve,4000));return original(...args)};return true})()`);
  browser('click','.crop-apply');
- browser('wait','--fn',"document.querySelector('.profile-avatar-editor [role=status]')?.textContent==='เปลี่ยนรูปแล้ว'");
+ browser('wait','.profile-avatar-loading');
+ assert(evaluate("document.querySelector('.profile-avatar-upload').disabled"));
+ browser('wait','--fn',"document.querySelector('.toast')?.textContent.includes('เปลี่ยนรูปโปรไฟล์เรียบร้อยแล้ว')");
  const updated=await json(await api('/api/me'));files.add(updated.avatar_url);assert.notEqual(updated.avatar_url,first.avatar_url);
  assert(evaluate(`document.querySelector('.nav-profile-avatar img').getAttribute('src')===${JSON.stringify(updated.avatar_url)}`));
  const changed=await json(await api('/api/trips/'+trip.id,{},peerAuth));
  assert.equal(changed.members.find(member=>member.id===id).avatar_url,updated.avatar_url);
  assert.equal((await api(first.avatar_url)).status,404,'unreferenced previous upload deleted');
  browser('screenshot','/tmp/bn-profile-settings.png');
+ browser('click','[aria-label="แก้ไขชื่อที่แสดง"]');
+ browser('fill','.account-name-editor input','Updated profile');
+ browser('click','.account-name-save');
+ browser('wait','--fn',"document.querySelector('.toast')?.textContent.includes('บันทึกชื่อเรียบร้อยแล้ว')");
+ browser('click','.settings-logout-btn');browser('wait','[role=alertdialog]');
+ assert.equal((await api('/api/me')).status,200,'opening logout confirmation keeps session');
+ browser('click','.confirm-cancel');
+ assert.equal((await api('/api/me')).status,200,'cancelling logout keeps session');
  browser('click','.app-bottom-navigation-item[aria-label="หน้าแรก"]');browser('wait','.dashboard-quick-actions');
  browser('wait','--fn',"getComputedStyle(document.querySelector('.nav-profile-avatar')).outlineStyle==='none'");
  assert(evaluate("!document.querySelector('.home-profile-btn')"));
@@ -81,6 +92,10 @@ try {
  await db.query("UPDATE trips SET start_date='2025-01-01',outbound_departure_at='2025-01-01 08:00',return_departure_at='2025-01-02 18:00' WHERE id=$1",[trip.id]);
  browser('open',base+'/analytics');browser('wait','.analytics-memory-kpis article');
  assert(evaluate(`Array.from(document.querySelectorAll('.analytics-memory-kpis article')).every(el=>el.getBoundingClientRect().height===64)`));
+ browser('open',base+'/settings');browser('wait','.settings-logout-btn');
+ browser('click','.settings-logout-btn');browser('click','.confirm-delete');
+ browser('wait','--fn',"location.pathname==='/' && !document.querySelector('.settings-logout-btn')");
+ assert.equal(evaluate("fetch('/api/me').then(r=>r.status)"),401,'confirmed logout clears browser session');
  console.log('PASS profile preview/edit, download confirmation/native share, borderless navbar, compact home labels and analytics, upload validation and shared avatar');
 } finally {
  try{browser('close');}catch{}

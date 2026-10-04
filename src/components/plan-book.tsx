@@ -70,7 +70,7 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
     <div key="cover" className={styles.flipPage} data-density="soft"><FantasyCover count={trips.length}/></div>,
     ...trips.map(trip => <div key={trip.id} className={styles.flipPage} data-density="soft"><PlanImage trip={trip}/></div>),
   ], [trips]);
-  const [immersive, setImmersive] = useState(false);
+  const [immersive, setImmersive] = useState(() => trips.length > 0);
   const [chrome, setChrome] = useState(true);
   const [preview, setPreview] = useState<PlanBookTrip | null>(null);
   const [search, setSearch] = useState("");
@@ -79,7 +79,7 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
   const contentsButton = useRef<HTMLButtonElement>(null);
   const book = useRef<HTMLDivElement>(null);
   const ownsFullscreen = useRef(false);
-  const wantsFullscreen = useRef(false);
+  const wantsFullscreen = useRef(trips.length > 0);
   const current = page ? trips[page - 1] : null;
 
   const enterFullscreen = () => {

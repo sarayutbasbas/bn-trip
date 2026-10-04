@@ -52,6 +52,8 @@ try {
   assert(html.includes('BOOK-SHARED') && html.includes('BOOK-NEW'));
   assert(!html.includes('BOOK-PRIVATE') && !html.includes('BOOK-NO-PLAN'));
   browser('open', base + '/plan-book'); browser('wait', '.stf__item');
+  assert(evaluate('document.querySelector("[data-book-fullscreen=true]") !== null'), 'book opens fullscreen on its cover');
+  browser('click','[aria-label="ออกจากเต็มจอ"]');
   assert.equal(evaluate('getComputedStyle(document.querySelector("main")).paddingTop'), '20px');
   for (const [width, height] of [[320,568], [390,844], [430,932], [844,390], [1024,768]]) {
     browser('set', 'viewport', String(width), String(height));

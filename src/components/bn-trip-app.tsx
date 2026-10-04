@@ -7007,6 +7007,7 @@ function SettingsContent({
 
 function SettingsScreen(
   props: Parameters<typeof SettingsContent>[0] & {
+    notify: (message: string) => void;
     demo?: boolean;
     demoAction?: () => void;
     storageAdmin?: boolean;
@@ -7040,6 +7041,7 @@ function SettingsScreen(
     if (!response.ok) throw new Error(data.error || t("บันทึกไม่สำเร็จ"));
     updateCurrentAccount(data);
     setProfile(data);
+    props.notify(t("บันทึกชื่อเรียบร้อยแล้ว"));
   }
   async function saveAvatar(file: File) {
     if (props.demo) { props.demoAction?.(); throw new Error("กรุณาเข้าสู่ระบบเพื่อเปลี่ยนรูปโปรไฟล์"); }
@@ -7049,6 +7051,7 @@ function SettingsScreen(
     if (!response.ok) throw new Error(data.error || "บันทึกรูปไม่สำเร็จ");
     updateCurrentAccount(data);
     setProfile(data);
+    props.notify(t("เปลี่ยนรูปโปรไฟล์เรียบร้อยแล้ว"));
   }
   return (
     <div className="settings-page-wrapper">
@@ -10751,7 +10754,14 @@ export function BNTripApp({
       dark={dark}
       toggleTheme={toggleTheme}
       lang={lang}
-      logout={logout}
+      notify={flash}
+      logout={() => setConfirmation({
+        title: "ออกจากระบบ?",
+        description: "คุณต้องการออกจากระบบใช่ไหม? สามารถเข้าสู่ระบบอีกครั้งเพื่อดูทริปของคุณได้",
+        confirmLabel: "ออกจากระบบ",
+        busyLabel: "กำลังออกจากระบบ…",
+        onConfirm: logout,
+      })}
       cards={cards}
       saveCard={saveCard}
       deleteCard={removeCard}

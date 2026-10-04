@@ -167,6 +167,8 @@
 .document-search:not(.checklist-search) { position:relative;top:auto;z-index:auto; }
 .profile-avatar-editor { position:relative;flex:0 0 auto;max-width:76px; }
 .profile-avatar-upload { position:relative;display:block;padding:0;border:0;background:transparent;cursor:pointer;overflow:visible; }
+.profile-avatar-loading { position:absolute;inset:0;display:grid;place-items:center;border-radius:50%;background:#0008;color:#fff; }
+.profile-avatar-loading svg { animation:save-progress-spin .8s linear infinite; }
 .profile-avatar-pencil { position:absolute;right:-5px;bottom:-5px;width:27px;height:27px;border-radius:50%;display:grid;place-items:center;color:white;background:var(--orange);box-shadow:0 2px 8px #0003;border:2px solid var(--surface-solid); }
 .profile-avatar-editor > small { display:block;font-size:10px;line-height:1.5;margin-top:8px;overflow-wrap:anywhere;color:var(--muted); }
 .fixed-crop-frame.is-profile-circle { border-radius:50%;overflow:hidden; }
