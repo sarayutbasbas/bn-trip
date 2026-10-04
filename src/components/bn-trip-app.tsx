@@ -3,6 +3,7 @@ import { tripAvatarOrder } from "@/src/lib/trip-avatar-order";
 import { ParticipantMode, TripCompanions } from "./trip-companions";
 import { GUEST_REMOVAL_DESCRIPTION } from "./guest-removal";
 import { ParticipantAccess, ParticipantInviteActions } from "./participant-access";
+import { isValidInvitationEmail } from "@/src/lib/invitation-email";
 import { tripDurationDays } from "@/src/lib/trip-duration";
 import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
 import { TripCoverArt, TripCoverCarousel } from "./trip-cover-gallery";
@@ -8413,6 +8414,7 @@ function CollaboratorsSheet({
   }, [trip.id]);
   async function add(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving || !isValidInvitationEmail(email)) return;
     setSaving(true);
     setError("");
     try {
@@ -8542,7 +8544,7 @@ function CollaboratorsSheet({
                 required
               />
             </div>
-            <ParticipantInviteActions value={inviteAccess} onChange={setInviteAccess} allowAdmin={canManage} busy={saving} disabled={!email.trim()}/>
+            <ParticipantInviteActions value={inviteAccess} onChange={setInviteAccess} allowAdmin={canManage} busy={saving} disabled={!isValidInvitationEmail(email)}/>
             {suggestions.length > 0 && (
               <div className="recent-collaborators">
                 <small>{t("เลือกจากคนที่เพิ่มล่าสุด")}</small>

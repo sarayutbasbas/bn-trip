@@ -30,6 +30,16 @@ function checkInviteLayout() {
     assert.deepEqual(result,{aligned:true,sameSize:true,inside:true,round:'50%',size:true});
   }
 }
+function checkInviteEmail() {
+  const input = '.collaborator-form input[type="email"]';
+  for (const value of ['', 'friend', 'friend@', 'friend@gmail', 'friend@gmail.', 'friend name@gmail.com', 'friend@gmail.com', 'friend+trip@example.co.th', 'not-an-email']) {
+    if (value) browser('fill', input, value);
+    const enabled = value === 'friend@gmail.com' || value === 'friend+trip@example.co.th';
+    browser('wait', '--fn', `document.querySelector('.participant-send').disabled === ${!enabled}`);
+    assert.equal(JSON.parse(browser('eval', "document.querySelector('.participant-send').disabled")), !enabled, JSON.stringify(value));
+  }
+  console.log('PASS: invitation send requires a valid email and disables again when edited to an invalid value');
+}
 function checkAvatars(selector) {
   const result=JSON.parse(browser('eval', `(()=>{const stack=document.querySelector(${JSON.stringify(selector)});const people=[...stack.querySelectorAll('[data-person-kind]')];const ranks={guest:0,email:1,owner:2};return {ownerRight:people.at(-1)?.dataset.personKind==='owner',ordered:people.every((p,i)=>!i||ranks[p.dataset.personKind]>=ranks[people[i-1].dataset.personKind]),spaced:[...stack.children].every((p,i)=>!i||p.getBoundingClientRect().left>stack.children[i-1].getBoundingClientRect().left)}})()`));
   assert.deepEqual(result,{ownerRight:true,ordered:true,spaced:true});
@@ -69,6 +79,7 @@ try {
     assert.equal(JSON.parse(browser("eval", "(()=>{const invite=document.querySelector('.trip-idea-invite').getBoundingClientRect();const create=document.querySelector('.trip-idea-convert').getBoundingClientRect();return invite.left>=create.right})()")), true);
     browser("click", ".trip-idea-invite");
     browser("wait", ".participant-invite-actions");
+    checkInviteEmail();
     assert.equal(browser("get", "text", '.participant-invite-actions button[aria-pressed="true"]').trim(), "Admin");
     browser("fill", '.collaborator-form input[type="email"]', `ui-${randomUUID()}@example.invalid`);
     browser("click", '.participant-send');
@@ -113,6 +124,7 @@ try {
     checkAvatars('.shared-trip-avatars');
     browser("wait", 'button[aria-label="เชิญเพื่อนร่วมทริป"]'); browser("click", 'button[aria-label="เชิญเพื่อนร่วมทริป"]');
     browser("wait", ".participant-invite-actions");
+    checkInviteEmail();
     assert.equal(browser("get", "text", '.participant-invite-actions button[aria-pressed="true"]').trim(), "Admin");
     browser("wait", '.collaborator-row .participant-access-buttons');
     checkInviteLayout();
