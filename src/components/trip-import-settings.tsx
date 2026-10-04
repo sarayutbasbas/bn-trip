@@ -60,13 +60,15 @@ export function TripImportSettings({ onImported }: { onImported: () => void }) {
   }
   return <>
     <article className="card trip-import-settings">
+      <div className="trip-import-heading">
       <div className="setting-label">
         <span className="stat-icon settings-feature-icon trip-import-icon"><FileSpreadsheet size={26} /></span>
         <div><strong>นำเข้าข้อมูลทริป</strong><small>1 แถวต่อ 1 ทริป</small></div>
       </div>
       <div className="trip-import-actions">
-        <button type="button" className="secondary-btn" disabled={busy} onClick={downloadTemplate}><Download size={17} />ดาวน์โหลดเทมเพลต</button>
-        <button type="button" className="primary-btn" disabled={busy} onClick={() => input.current?.click()}><Upload size={17} />อัปโหลดข้อมูล</button>
+        <button type="button" className="secondary-btn" aria-label="ดาวน์โหลดเทมเพลต" title="ดาวน์โหลดเทมเพลต" disabled={busy} onClick={downloadTemplate}><Download size={22} /></button>
+        <button type="button" className="primary-btn" aria-label="อัปโหลดข้อมูล" title="อัปโหลดข้อมูล" disabled={busy} onClick={() => input.current?.click()}><Upload size={22} /></button>
+      </div>
       </div>
       <input ref={input} hidden type="file" accept=".xlsx" onChange={event => void chooseFile(event.target.files?.[0])} />
       {busy && !importing && <p role="status">กำลังดาวน์โหลดเทมเพลต…</p>}

@@ -181,7 +181,7 @@ export function PlanBook({ trips }: { trips: PlanBookTrip[] }) {
       </section>
       <div className={styles.caption} aria-live="polite" aria-atomic="true">
         {current ? <strong>{current.name}</strong> : <button type="button" data-book-control className={styles.openBook} onClick={() => { enterFullscreen(); changePage(1); }}><BookOpen size={17}/>เปิดสมุดแพลน <ArrowRight size={17}/></button>}
-        <span>{current ? <><MapPin size={12}/>{current.destination} · {dateLabel(current.travel_date)}</> : "ปัดซ้ายเพื่อเปิดอ่าน หรือเลือกทริปจากสารบัญ"}</span>
+        {current && <span><MapPin size={12}/>{current.destination} · {dateLabel(current.travel_date)}</span>}
       </div>
       <footer className={styles.controls} inert={controlsHidden}>
         <div className={styles.navigation}>

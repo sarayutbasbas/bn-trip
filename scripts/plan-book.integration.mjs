@@ -58,6 +58,15 @@ try {
     assert(evaluate('document.documentElement.scrollWidth <= innerWidth'), `overflow at ${width}`);
     assert(evaluate('document.documentElement.scrollHeight <= innerHeight'), `vertical overflow at ${width}x${height}`);
     assert(evaluate(`(()=>{const b=document.querySelector('[data-book-base]').getBoundingClientRect(),footer=document.querySelector('main footer').getBoundingClientRect();return b.width>0&&b.bottom<=footer.top&&footer.bottom<=innerHeight&&Math.abs(b.width/b.height-9/16)<.01})()`), `book and controls fit at ${width}x${height}`);
+    const geometry = () => evaluate(`(()=>{const r=document.querySelector('[data-book-base]').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()`);
+    const coverGeometry = geometry();
+    for (const page of [1, 2]) {
+      browser('click', next); atPage(page); settled();
+      geometry().forEach((value, index) => assert(Math.abs(value-coverGeometry[index]) < 1, `no layout shift on page ${page} at ${width}x${height}`));
+    }
+    browser('click', prev); atPage(1); settled();
+    browser('click', prev); atPage(0); settled();
+    assert(evaluate(`!document.body.textContent.includes('ปัดซ้ายเพื่อเปิดอ่าน หรือเลือกทริปจากสารบัญ')`));
   }
   browser('set', 'viewport', '390', '844');
   assert(evaluate(`!document.querySelector('[data-book-base] [data-book-control]')&&!document.body.textContent.includes('เรื่องราวของเรา เริ่มตรงนี้')`));
@@ -144,6 +153,14 @@ try {
   browser('open', base); browser('wait', '.dashboard-quick-actions');
   assert.notEqual(evaluate('document.body.style.overflow'), 'hidden');
   assert.equal(evaluate('document.querySelectorAll(".dashboard-quick-actions > button").length'), 4);
+  assert.deepEqual(evaluate('Array.from(document.querySelectorAll(".dashboard-memory-stats small"),el=>el.textContent)'), ['ทริป','ประเทศ','จังหวัด']);
+  browser('open', base + '/settings'); browser('wait', '.trip-import-actions');
+  for (const width of [320,390]) {
+    browser('set','viewport',String(width),'844');
+    assert(evaluate(`(()=>{const a=document.querySelector('.trip-import-actions'),h=a.previousElementSibling,r=a.getBoundingClientRect(),s=h.getBoundingClientRect();return Math.abs((r.top+r.height/2)-(s.top+s.height/2))<1&&r.right<=innerWidth&&Array.from(a.children).every(b=>b.getBoundingClientRect().width===36&&b.getBoundingClientRect().height===36&&!b.textContent.trim()&&b.getAttribute('aria-label'))})()`), 'compact accessible import actions share title row');
+  }
+  browser('screenshot','/tmp/bn-settings-compact.png');
+  browser('open', base); browser('wait', '.dashboard-quick-actions');
   browser('click', '.dashboard-quick-actions > button:nth-child(4)'); browser('wait', '[data-book-base]');
   console.log('PASS: auth/access, ordering, home entry, safe area, viewport-fit without scrolling (320/390/430/landscape/1024), 9:16 fullscreen, fallback, toolbar, zoom, live curl/reversal, symmetric slow swipes from center, small-drag/cancel both ways, search/jump, scroll restored after leaving');
 } catch (error) {

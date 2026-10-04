@@ -3262,16 +3262,16 @@ function Dashboard({
       {counts.total > 0 && <section className="dashboard-memory-stats" aria-label={t("ความทรงจำของเรา")}>
         <div>
           <button type="button" onClick={viewAnalytics}>
-            <i><Luggage size={18} /></i>
-            <span><strong>{counts.total}</strong><small>{t("ทริปทั้งหมด")}</small></span>
+            <i><Luggage size={16} /></i>
+            <span><strong>{counts.total}</strong><small>{t("ทริป")}</small></span>
           </button>
           <button type="button" onClick={viewAnalytics}>
-            <i><Globe2 size={18} /></i>
-            <span><strong>{visitedCountries}</strong><small>{t("ประเทศที่เคยไป")}</small></span>
+            <i><Globe2 size={16} /></i>
+            <span><strong>{visitedCountries}</strong><small>{t("ประเทศ")}</small></span>
           </button>
           <button type="button" onClick={viewAnalytics}>
-            <i><MapPin size={18} /></i>
-            <span><strong>{visitedDestinations}</strong><small>{t("จังหวัดที่เคยไป")}</small></span>
+            <i><MapPin size={16} /></i>
+            <span><strong>{visitedDestinations}</strong><small>{t("จังหวัด")}</small></span>
           </button>
         </div>
       </section>}

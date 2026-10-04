@@ -9123,8 +9123,10 @@ html.dark .settings-liquid-glass .card {
 .trip-import-settings { display: grid; gap: 12px; }
 .trip-import-icon { color: #0ba578; }
 .trip-import-settings > p { margin: 0; font-size: 12px; color: var(--muted); }
-.trip-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.trip-import-actions button { display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1 1 140px; font-size: 12px; padding: 10px; }
+.trip-import-heading { display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0; }
+.trip-import-heading .setting-label { min-width:0; }
+.trip-import-actions { display:flex;flex-shrink:0;gap:6px; }
+.trip-import-actions button { display:grid;place-items:center;width:36px;height:36px;min-height:36px;flex:0 0 36px;padding:0;border:0;border-radius:50%;box-shadow:0 3px 10px rgba(30,40,60,.16); }
 .trip-import-preview { padding-left: 24px; margin: 12px 0; }
 .trip-import-preview li { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .trip-import-preview li > * { display: block; overflow-wrap: anywhere; }
@@ -9571,7 +9573,7 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .trip-crop-guide-nav svg { width:19px;height:19px;stroke-width:2.2; }
 .trip-crop-guide-actions { display:flex;gap:5px;align-items:center; }
 .trip-crop-guide-actions i.trip-crop-guide-favorite { color:#c2185b; }
-.settings-page-wrapper .account-name-editor .account-name-row a.storage-toggle { width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border:1px solid var(--line-strong);border-radius:50%;background:var(--orange);color:white;text-decoration:none; }
+.settings-page-wrapper .account-name-editor .account-name-row a.storage-toggle { width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border:0;border-radius:50%;background:var(--orange);color:white;text-decoration:none;box-shadow:0 3px 10px rgba(30,40,60,.16); }
 .system-screen { padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
 .system-screen h2 { display:flex;align-items:center;gap:8px; }
 .system-screen .card { padding:16px;background:var(--surface); }
@@ -15575,6 +15577,7 @@ html.dark .home-upcoming-grid .trip-card-flights {
 .dashboard-home .section-title-row {
   align-items: center;
 }
+.dashboard-home .country-highlights-head h2 { margin:0;line-height:1.5; }
 .dashboard-ideas-section { min-width:0; }
 .dashboard-ideas-section .section-head { margin-top:0; }
 .home-ideas-grid .home-idea-card .trip-body { display:flex;flex-direction:column;align-items:flex-start;gap:0; }
@@ -16075,9 +16078,9 @@ html.dark .dashboard-badge-copy em { color: #c6c6ca; }
   background: color-mix(in srgb, #79a9ff 12%, var(--surface-solid));
 }
 .dashboard-memory-stats button > i {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -16094,7 +16097,7 @@ html.dark .dashboard-badge-copy em { color: #c6c6ca; }
   display: block;
 }
 .dashboard-memory-stats strong {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1;
 }
@@ -16103,7 +16106,7 @@ html.dark .dashboard-badge-copy em { color: #c6c6ca; }
   padding-top: 1px;
   overflow: visible;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1.5;
   white-space: nowrap;
 }
