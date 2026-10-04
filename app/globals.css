@@ -9565,6 +9565,10 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .companion-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 .companion-chips > span { display: flex; align-items: center; gap: 7px; border-radius: 14px; background: var(--surface-2); padding: 9px 12px; font-size: 13px; overflow-wrap: anywhere; }
 .companion-chips svg { flex-shrink: 0; color: var(--muted); }
+.companion-chips > span { max-width: 100%; }
+.companion-chips > span > span { min-width: 0; }
+.companion-remove { flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; display: grid; place-items: center; background: var(--surface-solid); color: var(--ink); }
+.companion-remove:disabled { opacity: .5; }
 .participant-access { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; grid-column: 1 / -1; font-size: 12px; }
 .participant-access select { min-width: 0; width: 100%; }
 .expense-settlement-summary { margin-top: 20px; }
@@ -9635,6 +9639,8 @@ html.dark .timeline-location-image-status.has-image { color: #6bdda0; }
 .expense-people-sheet .split-checkmark { width: 24px; height: 24px; flex-basis: 24px; }
 .expense-people-sheet .split-guest-option { grid-template-columns: minmax(0, 1fr) auto; }
 .expense-people-sheet .split-guest-delete { width: 44px; height: 44px; }
+.expense-people-sheet .split-guest-delete { border: 1px solid var(--line-strong); border-radius: 50%; color: var(--ink); background: var(--surface-solid); }
+.expense-people-sheet .split-guest-delete:active { background: var(--surface-2); }
 .people-sheet-footer { flex: 0 0 auto; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface-solid); }
 .people-sheet-footer .split-guest-add { display: grid; grid-template-columns: 22px minmax(0, 1fr) 48px; gap: 8px; padding: 0; margin: 0; border: 0; }
 .people-sheet-footer .split-guest-add input { position: static; width: 100%; height: 48px; min-width: 0; padding: 0 12px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface-2); font: inherit; font-size: 16px; }

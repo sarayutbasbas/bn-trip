@@ -35,9 +35,11 @@ export async function DELETE(
     await ensureLatestDatabaseSchema();
     const { id, guestId: rawGuestId } = await params;
     const guestId = idSchema.parse(rawGuestId);
-    if (!await getTripRole(id, session.userId)) {
+    const role = await getTripRole(id, session.userId);
+    if (!role) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    if (role !== "owner" && role !== "admin") return NextResponse.json({ error: "ไม่มีสิทธิ์ลบผู้ร่วมทริป" }, { status: 403 });
 
     const result = await transaction(async (client) => {
       const guest = await client.query<{ id: string; owner_id: string }>(

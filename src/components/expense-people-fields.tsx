@@ -222,7 +222,10 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
               <input type="hidden" name="paidBy" value={payerKey}/>
               <button id="expense-paid-by" type="button" className={`split-member-trigger ${payerOpen ? "is-open" : ""}`} disabled={people.length <= 1} aria-expanded={payerOpen} onClick={() => { setSplitPickerOpen(false); setPayerOpen(open => !open); }}><span>{selectedPayer?.label || t("เลือกผู้จ่าย")}</span><ChevronDown size={16}/></button>
               {payerOpen && <PeopleSheet title={t("จ่ายโดย")} onClose={closePayer} footer={addPersonFooter} payer>
-                {people.map(person => <label key={person.key}><input type="radio" name="expensePayerChoice" value={person.key} checked={payerKey === person.key} onChange={() => { setPayerKey(person.key); setPayerOpen(false); }}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}</span></label>)}
+                {people.map(person => <div className="split-guest-option" key={person.key}>
+                  <label><input type="radio" name="expensePayerChoice" value={person.key} checked={payerKey === person.key} onChange={() => { setPayerKey(person.key); setPayerOpen(false); }}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}</span></label>
+                  {person.key.startsWith("guest:") && requestDeleteExpenseGuest && <button type="button" className="split-guest-delete" disabled={Boolean(deletingGuestId)} aria-label={`${t("ลบ")} ${person.label}`} onClick={() => { setPayerOpen(false); requestDeleteExpenseGuest({ id: person.key.slice(6), name: person.label }); }}><Trash2 size={20}/></button>}
+                </div>)}
               </PeopleSheet>}
               <small>{t("ผู้ที่ออกเงินเต็มจำนวนให้ก่อน")}</small>
             </div>

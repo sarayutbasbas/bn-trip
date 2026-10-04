@@ -1,5 +1,6 @@
 "use client";
 import { ExpensePeopleFields } from "./expense-people-fields";
+import { useGuestRemoval } from "./guest-removal";
 import { useExpenseGuests, EXPENSE_GUESTS_CHANGED_EVENT } from "./use-expense-guests";
 import type { ExpensePayer } from "@/src/lib/expense-settlement";
 import { safeBookingUrl } from "@/src/lib/booking-url";
@@ -488,6 +489,13 @@ export function TripAccommodations({
   const { guests: expenseGuests, setGuests: setExpenseGuests } = useExpenseGuests(tripId);
   const [guestName, setGuestName] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
+  const guestRemoval = useGuestRemoval({ id: tripId, onRemoved: async guest => {
+    setExpenseGuests(current => current.filter(person => person.id !== guest.id));
+    setSplitGuestIds(current => current.filter(value => value !== guest.id));
+    setPayerKey(current => current === `guest:${guest.id}` ? "" : current);
+    await Promise.all([load(), onChanged()]);
+    notify(`ลบ ${guest.name} แล้ว`);
+  } });
   async function addExpenseGuest() {
     if (!guestName.trim() || addingGuest) return;
     setAddingGuest(true);
@@ -1295,7 +1303,9 @@ export function TripAccommodations({
                     splitMemberIds={splitMemberIds} setSplitMemberIds={setSplitMemberIds}
                     splitGuestIds={splitGuestIds} setSplitGuestIds={setSplitGuestIds}
                     payerKey={payerKey} setPayerKey={setPayerKey} guestName={guestName} setGuestName={setGuestName}
-                    addingGuest={addingGuest} addExpenseGuest={addExpenseGuest} />
+                    addingGuest={addingGuest} addExpenseGuest={addExpenseGuest}
+                    requestDeleteExpenseGuest={canDelete ? guest => { setSplitPickerOpen(false); guestRemoval.requestRemoval(guest); } : undefined}
+                    deletingGuestId={guestRemoval.deletingId} />
                   <fieldset className="expense-payment-picker accommodation-payment-picker">
                     <legend>ช่องทางชำระ</legend>
                     <label>
@@ -1345,6 +1355,7 @@ export function TripAccommodations({
         </BottomSheet>
       )}
       {editing && error && <FormErrorDialog title="บันทึกที่พักไม่สำเร็จ" description={error} onClose={() => setError("")} />}
+      {guestRemoval.dialog}
       {deleteTarget && (
         <div
           className="confirm-backdrop"

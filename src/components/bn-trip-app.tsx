@@ -1,6 +1,7 @@
 "use client";
 import { tripAvatarOrder } from "@/src/lib/trip-avatar-order";
 import { ParticipantMode, TripCompanions } from "./trip-companions";
+import { GUEST_REMOVAL_DESCRIPTION } from "./guest-removal";
 import { ParticipantAccess, ParticipantInviteActions } from "./participant-access";
 import { tripDurationDays } from "@/src/lib/trip-duration";
 import { tripCovers, uploadTripCovers, type CoverDraft } from "@/src/lib/trip-covers";
@@ -8838,6 +8839,7 @@ function CostSheet({
         current.filter((item) => item.id !== guest.id),
       );
       setSplitGuestIds((current) => current.filter((id) => id !== guest.id));
+      setPayerKey(current => current === `guest:${guest.id}` ? "" : current);
       window.dispatchEvent(
         new CustomEvent(EXPENSE_GUESTS_CHANGED_EVENT, {
           detail: { tripId: trip.id },
@@ -9134,10 +9136,9 @@ function CostSheet({
         <ConfirmDialog
           confirmation={{
             title: `ลบ “${guestDeleteTarget.guest.name}” ออกจากทริป?`,
-            description:
-              guestDeleteTarget.affectedCosts > 0
+            description: (guestDeleteTarget.affectedCosts > 0
                 ? `ชื่อนี้จะหายจากผู้หาร ${guestDeleteTarget.affectedCosts} รายการ รวมยอด ฿${bahtFormat(guestDeleteTarget.affectedTotal)} และระบบจะคำนวณส่วนหารใหม่ทั้งหมด การเชื่อมโยงชื่อจะหายไปแต่รายการค่าใช้จ่ายยังอยู่${guestDeleteTarget.reassignedToOwner > 0 ? ` โดย ${guestDeleteTarget.reassignedToOwner} รายการที่มีชื่อนี้เป็นผู้หารคนเดียวจะย้ายยอดให้เจ้าของทริป` : ""}`
-                : "รายชื่อนี้ยังไม่เชื่อมกับค่าใช้จ่าย จึงลบได้โดยไม่กระทบยอดรายการอื่น",
+                : "") + " " + GUEST_REMOVAL_DESCRIPTION,
             confirmLabel: "ลบและคำนวณใหม่",
             busyLabel: "กำลังลบและคำนวณ…",
             onConfirm: () => deleteExpenseGuest(guestDeleteTarget.guest),

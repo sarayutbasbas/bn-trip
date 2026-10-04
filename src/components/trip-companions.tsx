@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mail, Plus, UserRound, UsersRound } from "lucide-react";
+import { Mail, Plus, UserRound, UsersRound, X } from "lucide-react";
+import { useGuestRemoval } from "./guest-removal";
 import { EXPENSE_GUESTS_CHANGED_EVENT } from "./use-expense-guests";
 
 export function ParticipantMode({ value, onChange }: { value: "email" | "name"; onChange: (value: "email" | "name") => void }) {
@@ -18,6 +19,10 @@ export function TripCompanions({ id, idea = false, editable, showForm, onChanged
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const url = `/api/${idea ? "trip-ideas" : "trips"}/${id}/expense-guests`;
+  const removal = useGuestRemoval({ id, idea, onRemoved: person => {
+    setPeople(current => current.filter(item => item.id !== person.id));
+    onChanged();
+  } });
   useEffect(() => {
     const controller = new AbortController();
     fetch(url, { signal: controller.signal }).then(async response => {
@@ -51,6 +56,7 @@ export function TripCompanions({ id, idea = false, editable, showForm, onChanged
     </form>}
     {error && <p role="alert" className="login-error">{error}</p>}
     {(people.length > 0 || showForm) && <><h3>คนที่ไปด้วย <small>ไม่ใช้บัญชี · {people.length} คน</small></h3>
-      {loading ? <p role="status">กำลังโหลดรายชื่อ…</p> : people.length ? <div className="companion-chips">{people.map(person => <span key={person.id}><UserRound size={20}/>{person.name}</span>)}</div> : <p className="collaborator-empty">เพิ่มชื่อคนที่ไปด้วยได้เลย</p>}</>}
+      {loading ? <p role="status">กำลังโหลดรายชื่อ…</p> : people.length ? <div className="companion-chips">{people.map(person => <span key={person.id}><UserRound size={20}/><span>{person.name}</span>{editable && <button type="button" className="companion-remove" aria-label={`ลบ ${person.name}`} disabled={Boolean(removal.deletingId)} onClick={() => removal.requestRemoval(person)}><X size={16}/></button>}</span>)}</div> : <p className="collaborator-empty">เพิ่มชื่อคนที่ไปด้วยได้เลย</p>}</>}
+    {removal.dialog}
   </section>;
 }

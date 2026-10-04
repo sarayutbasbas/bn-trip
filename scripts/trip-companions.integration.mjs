@@ -76,10 +76,21 @@ try {
     browser("click", '.companion-form button[type="submit"]');
     browser("wait", "--fn", "document.querySelector('.companion-chips')?.textContent.includes('เพื่อนทดสอบ')");
     browser("screenshot", "/tmp/bn-companions-idea.png");
+    const father = (await ok(await api(owner, `${path}/expense-guests`))).find(person => person.name === 'พ่อ');
+    assert.equal((await api(viewer, `${path}/expense-guests/${father.id}`, 'DELETE')).status, 403);
+    browser('click', '.companion-remove[aria-label="ลบ พ่อ"]');
+    browser('wait', '.confirm-dialog'); browser('click', '.confirm-cancel');
+    assert((await ok(await api(owner, `${path}/expense-guests`))).some(person => person.id === father.id));
+    browser('click', '.companion-remove[aria-label="ลบ พ่อ"]');
+    browser('click', '.confirm-delete');
+    browser('wait', '--fn', "!document.querySelector('.companion-remove[aria-label=\"ลบ พ่อ\"]')");
+    assert(!(await ok(await api(owner, `${path}/expense-guests`))).some(person => person.id === father.id));
+    console.log('PASS: idea named companion removal requires confirmation; view role denied');
   }
   const trip = await ok(await api(owner, "/api/trips", "POST", { name: "Companion test trip", sourceIdeaId: idea, countryCode: "JP", locationIds: ["JP:kyoto"], outboundDate: "2030-01-01", outboundTime: "08:00", returnDate: "2030-01-03", returnTime: "20:00", budgetThb: 10000 }), 201);
   const guests = await ok(await api(owner, `/api/trips/${trip.id}/expense-guests`));
   assert(guests.some(guest => guest.id === named.id && guest.name === "แม่"));
+  assert.equal((await api(viewer, `/api/trips/${trip.id}/expense-guests/${named.id}`, 'DELETE')).status, 403);
   assert.equal((await api(stranger, `/api/trips/${trip.id}/expense-guests`)).status, 404);
   const access = await db.query("SELECT access_level FROM trip_collaborators WHERE trip_id=$1 AND user_id=$2", [trip.id, viewer.id]);
   assert.equal(access.rows[0].access_level, "view");
@@ -119,6 +130,8 @@ try {
       assert.equal(JSON.parse(browser("eval", "document.querySelector('.payer-member-menu input').value")), `member:${owner.id}`);
       const payerLayout = JSON.parse(browser("eval", "(()=>{const menu=document.querySelector('.payer-member-menu');const labels=[...menu.querySelectorAll('label')].map(el=>el.getBoundingClientRect());return {singleColumn:labels[1].top>labels[0].top&&labels[1].left===labels[0].left,font:getComputedStyle(menu.querySelector('label')).fontSize,inputHeight:document.querySelector('.people-sheet-footer input').getBoundingClientRect().height}})()"));
       assert.deepEqual(payerLayout, {singleColumn:true,font:"16px",inputHeight:48});
+      const removeStyle = JSON.parse(browser('eval', "(()=>{const el=document.querySelector('.payer-member-menu .split-guest-delete');const style=getComputedStyle(el);return {round:style.borderRadius,border:style.borderTopWidth,neutral:style.color===getComputedStyle(document.querySelector('.expense-people-sheet')).color}})()"));
+      assert.deepEqual(removeStyle,{round:'50%',border:'1px',neutral:true});
       const scrollLayout = JSON.parse(browser("eval", "(()=>{const list=document.querySelector('.people-sheet-list');const input=document.querySelector('.people-sheet-footer input');const top=input.getBoundingClientRect().top;list.scrollTop=10000;return {scrolled:list.scrollTop>0,fixed:input.getBoundingClientRect().top===top,visible:input.getBoundingClientRect().bottom<=innerHeight}})()"));
       assert.deepEqual(scrollLayout, {scrolled:true,fixed:true,visible:true});
       if(screenshot==="stay") assert.deepEqual(JSON.parse(browser("eval", "[...document.querySelectorAll('.accommodation-check-times .native-picker-value')].map(el=>getComputedStyle(el).fontSize)")), ["16px","16px"]);
@@ -157,6 +170,28 @@ try {
       browser('screenshot', `/tmp/bn-avatar-${route==='/'?'home':route==='/trips'?'list':'cover'}.png`);
     }
     console.log('PASS: owner/email/named avatar order and contained profile icons on home, list and cover');
+    assert.equal((await api(viewer, `/api/trips/${trip.id}/expense-guests/${named.id}`, 'DELETE')).status, 404);
+    browser('open', `${base}/trips/${trip.id}`);
+    browser('wait', 'button[aria-label="เชิญเพื่อนร่วมทริป"]');
+    browser('click', 'button[aria-label="เชิญเพื่อนร่วมทริป"]');
+    browser('wait', '.companion-remove[aria-label="ลบ แม่"]');
+    browser('click', '.companion-remove[aria-label="ลบ แม่"]');
+    browser('wait', '.confirm-dialog');
+    assert(browser('get','text','.confirm-dialog').includes('รายการค่าใช้จ่ายและที่พักยังอยู่'));
+    browser('screenshot','/tmp/bn-companion-delete-confirm.png');
+    browser('click','.confirm-cancel');
+    assert((await ok(await api(owner, `/api/trips/${trip.id}/expense-guests`))).some(person=>person.id===named.id));
+    browser('click', '.companion-remove[aria-label="ลบ แม่"]');
+    browser('click','.confirm-delete');
+    browser('wait','--fn',"!document.querySelector('.companion-remove[aria-label=\"ลบ แม่\"]')");
+    const storedCosts = await db.query('SELECT cost_items FROM itineraries WHERE id=$1',[itinerary.id]);
+    assert.equal(storedCosts.rows[0].cost_items[0].paidBy,undefined);
+    assert.deepEqual(storedCosts.rows[0].cost_items[0].splitGuestIds,[]);
+    assert.deepEqual(storedCosts.rows[0].cost_items[0].splitMemberIds,[owner.id]);
+    const storedStay = await db.query('SELECT paid_by,split_guest_ids FROM trip_accommodations WHERE id=$1',[accommodation.id]);
+    assert.equal(storedStay.rows[0].paid_by,null);
+    assert.deepEqual(storedStay.rows[0].split_guest_ids,[]);
+    console.log('PASS: cancel preserves companion; confirm removes payer/splits while retaining expense and stay');
   }
 } finally {
   if (process.env.COMPANIONS_BROWSER === "1") browser("close");
