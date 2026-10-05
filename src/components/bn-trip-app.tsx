@@ -9632,7 +9632,6 @@ function ModalForm({
                     item.address,
                     placeSource?.id,
                   );
-                  setPlaceName(item.place_name.trim());
                   setSelectedLocationImage(
                     imageSource?.accommodation_image_url ||
                       imageSource?.image_url ||
