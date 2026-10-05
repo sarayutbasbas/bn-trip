@@ -107,7 +107,7 @@ import {
 import {
   TRIP_COUNTRIES,
   countryByCode,
-  formatTripDestination,
+  tripDestinationRows,
   inferTripCountry,
   isDomesticTrip,
 } from "@/src/lib/countries";
@@ -1632,23 +1632,8 @@ export function CountryPicker({
   );
 }
 
-function TripCountryFlag({ trip }: { trip: Trip }) {
-  const country =
-    countryByCode(trip.country_code) ||
-    inferTripCountry(
-      [trip.destination, trip.country_name].filter(Boolean).join(", "),
-      trip.timezone,
-    );
-  return (
-    <span
-      className="trip-country-flag"
-      role="img"
-      aria-label={country.nameEn}
-      title={country.nameEn}
-    >
-      <CountryFlagImage code={country.code} label="" />
-    </span>
-  );
+export function TripDestinationLines({ trip }: { trip: Parameters<typeof tripDestinationRows>[0] }) {
+  return <span className="trip-country-lines">{tripDestinationRows(trip).map(row => <span className="trip-country-line" key={row.code}><span className="trip-country-flag"><CountryFlagImage code={row.code} label={countryByCode(row.code)?.nameTh || row.code}/></span><span className="trip-country-line-label">{row.label}</span></span>)}</span>;
 }
 
 function Brand() {
@@ -2504,12 +2489,6 @@ function TripCard({
   const budget = Number(trip.budget_thb || 0);
   const actualSpent = Number(trip.actual_spent_thb || 0);
   const ongoing = temporal.ongoing;
-  const destinationLabel = formatTripDestination(
-    trip.destination,
-    trip.country_code,
-    trip.country_name,
-    trip.trip_destinations,
-  );
   const hasBudget = budget > 0 || actualSpent > 0;
   const countdownLabel = !trip.outbound_departure_at
     ? t("ยังไม่กำหนดวัน")
@@ -2547,12 +2526,7 @@ function TripCard({
       </div>
       <div className="trip-body">
         <h3>{trip.name}</h3>
-        {destinationLabel && (
-          <p>
-            <TripCountryFlag trip={trip} />
-            {destinationLabel}
-          </p>
-        )}
+        <p><TripDestinationLines trip={trip}/></p>
         <TripCardFacts trip={trip} />
         {trip.note?.trim() && <div className="home-trip-note">{trip.note.trim()}</div>}
         <TripCardFlights trip={trip} />
@@ -2584,8 +2558,6 @@ function HomeTripIdeaCard({
   open: () => void;
   priority?: boolean;
 }) {
-  const country = countryByCode(idea.country_code);
-  const destinationLabel = formatTripDestination(idea.destination, idea.country_code, country?.nameTh, idea.trip_destinations);
   const countdown = ideaCountdown(idea, new Date(now));
   const targetDate = ideaTargetDate(idea);
   return (
@@ -2598,10 +2570,7 @@ function HomeTripIdeaCard({
       </div>
       <div className="trip-body">
         <h3>{idea.name}</h3>
-        {destinationLabel && <p className="home-idea-destination">
-          {country ? <span className="trip-country-flag"><CountryFlagImage code={country.code} label="" /></span> : <Globe2 size={16} />}
-          <span>{destinationLabel}</span>
-        </p>}
+        <p className="home-idea-destination"><TripDestinationLines trip={idea}/></p>
         {targetDate && <div className="trip-card-facts"><span><CalendarDays size={11} />คาดการณ์ช่วง {targetDate}</span></div>}
         {idea.note?.trim() && <div className="home-trip-note">{idea.note.trim()}</div>}
       </div>
@@ -3741,17 +3710,7 @@ function CompactTripCard({
       </div>
       <div className="compact-trip-body">
         <h3>{trip.name}</h3>
-        <p>
-          <TripCountryFlag trip={trip} />
-          <span>
-            {formatTripDestination(
-              trip.destination,
-              trip.country_code,
-              trip.country_name,
-              trip.trip_destinations,
-            )}
-          </span>
-        </p>
+        <p><TripDestinationLines trip={trip}/></p>
         <TripCardFacts trip={trip} />
         <TripCardFlights trip={trip} />
         <div className="compact-trip-meta">
@@ -4266,15 +4225,7 @@ function TripHeader({
           <span className="trip-header-countdown is-ongoing"><CalendarDays size={12} />{countdownLabel}</span>
         ) : <TripCountdownBadge label={countdownLabel} />)}
         <h1 className="page-title">{trip.name}</h1>
-        <span className="eyebrow">
-          <TripCountryFlag trip={trip} />
-          {formatTripDestination(
-            trip.destination,
-            trip.country_code,
-            trip.country_name,
-            trip.trip_destinations,
-          )}
-        </span>
+        <span className="eyebrow"><TripDestinationLines trip={trip}/></span>
         <p className="page-sub">{tripHeaderRangeLabel(trip)}</p>
       </div>
       <SharedTripAvatars

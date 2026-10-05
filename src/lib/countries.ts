@@ -106,3 +106,21 @@ export function formatTripDestination(
   }
   return `${city}, ${country}`;
 }
+
+export function tripDestinationRows(trip: {
+  destination?: string | null;
+  country_code?: string | null;
+  country_name?: string | null;
+  trip_destinations?: ReadonlyArray<{countryCode?: string | null; nameTh?: string | null; nameEn?: string | null}> | null;
+}) {
+  const primary = trip.country_code || inferTripCountry(trip.destination).code;
+  const places = trip.trip_destinations || [];
+  const codes = [...new Set([primary, ...places.map(place => place.countryCode || primary)])];
+  return codes.map(code => {
+    const cities = places.filter(place => (place.countryCode || primary) === code)
+      .map(place => place.nameTh?.trim() || place.nameEn?.trim() || "").filter(Boolean);
+    const country = countryByCode(code)?.nameTh || (code === primary ? trip.country_name : "") || code;
+    const city = [...new Set(cities)].join(" · ") || (code === primary && !places.length ? tripCity(trip.destination) : "");
+    return {code, label: city && city !== country ? `${city}, ${country}` : country};
+  });
+}

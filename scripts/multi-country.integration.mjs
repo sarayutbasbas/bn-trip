@@ -50,5 +50,14 @@ try {
  browser('click','.bottom-sheet-actions .primary-btn');
  browser('wait','--fn',"!document.querySelector('.trip-country-multi')");
  const saved=await api(`/api/trips/${trip.id}`);assert.equal(saved.name,'Saved from multi-country form');assert.equal(saved.trip_destinations.length,2);
+ for (const path of ['/', '/trips', '/trip-ideas', `/trips/${trip.id}`]) {
+   browser('open',base+path);browser('wait','.trip-country-lines');
+   for (const width of [320,390]) {
+     browser('set','viewport',String(width),'844');
+     assert(evaluate(`Array.from(document.querySelectorAll('.trip-country-lines')).every(group=>{const rows=Array.from(group.querySelectorAll('.trip-country-line'));return rows.length===2&&rows[0].querySelector('img').getAttribute('src').includes('/hk.svg')&&rows[1].querySelector('img').getAttribute('src').includes('/cn.svg')&&rows[1].textContent.includes('เซินเจิ้น, จีน')&&rows[1].getBoundingClientRect().top>=rows[0].getBoundingClientRect().bottom})`),`country rows and flags ${path} at ${width}`);
+     assert(evaluate('document.documentElement.scrollWidth<=innerWidth'));
+   }
+   browser('screenshot',`/tmp/multi-country-lines-${path==='/'?'home':path==='/trips'?'list':path==='/trip-ideas'?'ideas':'cover'}.png`);
+ }
  console.log('PASS multi-country create/update/idea persistence, validation, search, unique trip counts, country counts, mobile selection and flags');
 } finally {try{browser('close')}catch{}await db.query('DELETE FROM users WHERE id=$1',[id]);await db.end();}

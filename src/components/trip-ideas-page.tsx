@@ -15,11 +15,11 @@ import { useEffect,useMemo,useState,type FormEvent,type KeyboardEvent } from "re
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays,CalendarRange,CheckCircle2,Compass,Globe2,Heart,LogOut,Luggage,MapPin,MapPinned,PlaneTakeoff,Plus,RefreshCw,RotateCcw,Search,Settings2,Trash2,UserPlus,X } from "lucide-react";
+import { CalendarDays,CalendarRange,CheckCircle2,Compass,Globe2,Heart,LogOut,Luggage,MapPin,PlaneTakeoff,Plus,RefreshCw,RotateCcw,Search,Settings2,Trash2,UserPlus,X } from "lucide-react";
 import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas";
-import { countryByCode,isDomesticTrip,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
+import { countryByCode,isDomesticTrip,TRIP_COUNTRIES } from "@/src/lib/countries";
 import { TRIP_DESTINATION_OPTIONS,type TripDestinationOption } from "@/src/lib/travel-badges";
-import { ConfirmDialog,EmptyState,CountryFlagImage,TripCountryPicker,TripCoverPicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
+import { ConfirmDialog,EmptyState,TripDestinationLines,TripCountryPicker,TripCoverPicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
 import { PageIntro } from "@/src/components/page-intro";
 import { NavIcon } from "@/src/components/nav-icon";
 import { BottomSheet } from "@/src/components/bottom-sheet";
@@ -54,7 +54,6 @@ function IdeaAvatars({members:accounts,companions=[],open}:{members:TripIdeaMemb
 }
 
 function IdeaCard({idea,edit,convert,share,toggleFavorite,favoriteBusy}:{idea:TripIdea;edit:()=>void;convert?:()=>void;share:()=>void;toggleFavorite:()=>void;favoriteBusy:boolean}){
-  const country=countryByCode(idea.country_code);
   const detail=(idea.note||"").trim();
   const countdown=ideaCountdown(idea);
   const targetDate=ideaTargetDate(idea);
@@ -62,7 +61,7 @@ function IdeaCard({idea,edit,convert,share,toggleFavorite,favoriteBusy}:{idea:Tr
   return <article className={`compact-trip-card trip-idea-card is-${idea.kind} ${idea.members?.length>1?"has-shared-members":""}`} role="button" tabIndex={0} onClick={edit} onKeyDown={activate} aria-label={`แก้ไข ${idea.name}`}>
     <div className="compact-trip-cover"><TripCoverArt record={idea} sizes="(max-width: 639px) 42vw, 260px"/>{countdown?<TripCountdownBadge label={countdown}/>:null}<TripFavoriteButton favorite={Boolean(idea.is_favorite)} onToggle={toggleFavorite} disabled={favoriteBusy}/></div>
     <div className="compact-trip-body trip-idea-copy"><h3>{idea.name}</h3>
-      <p>{country?<span className="trip-country-flag"><CountryFlagImage code={country.code} label=""/></span>:<MapPinned size={13}/>}<span>{formatTripDestination(idea.destination,idea.country_code,country?.nameTh,idea.trip_destinations)}</span></p>
+      <p><TripDestinationLines trip={idea}/></p>
       {targetDate?<small className="trip-idea-target-date"><CalendarDays size={11}/><span>{targetDate}</span></small>:null}
       {detail?<small className="trip-idea-note">{detail}</small>:null}
       <div className="trip-idea-card-footer">
