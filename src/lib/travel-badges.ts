@@ -201,7 +201,7 @@ export const TRAVEL_BADGE_CATALOG: readonly TravelBadgeDefinition[] = [
 ];
 
 const INTERNATIONAL_CITIES: Record<string, readonly (readonly [string, string, string])[]> = {
-  CN: [["beijing", "ปักกิ่ง", "Beijing"], ["shanghai", "เซี่ยงไฮ้", "Shanghai"], ["chengdu", "เฉิงตู", "Chengdu"], ["guangzhou", "กวางโจว", "Guangzhou"], ["harbin", "ฮาร์บิน", "Harbin"]],
+  CN: [["beijing", "ปักกิ่ง", "Beijing"], ["shanghai", "เซี่ยงไฮ้", "Shanghai"], ["chengdu", "เฉิงตู", "Chengdu"], ["guangzhou", "กวางโจว", "Guangzhou"], ["shenzhen", "เซินเจิ้น", "Shenzhen"], ["harbin", "ฮาร์บิน", "Harbin"]],
   KR: [["seoul", "โซล", "Seoul"], ["busan", "ปูซาน", "Busan"], ["jeju", "เชจู", "Jeju"]],
   TW: [["taipei", "ไทเป", "Taipei"], ["kaohsiung", "เกาสง", "Kaohsiung"], ["taichung", "ไถจง", "Taichung"]],
   HK: [["hong_kong", "ฮ่องกง", "Hong Kong"]], SG: [["singapore", "สิงคโปร์", "Singapore"]],
@@ -278,11 +278,12 @@ function customDestinationFromId(countryCode: string, id: string) {
   }
 }
 
-export function resolveTripDestinations(countryCode: string, ids: string[]): TripDestinationSelection[] {
+export function resolveTripDestinations(countryCode: string | string[], ids: string[]): TripDestinationSelection[] {
+  const codes = Array.isArray(countryCode) ? countryCode : [countryCode];
   const uniqueIds = [...new Set(ids)];
   return uniqueIds.flatMap((id) => {
-    const option = TRIP_DESTINATION_OPTIONS.find((candidate) => candidate.countryCode === countryCode && candidate.id === id)
-      || customDestinationFromId(countryCode, id);
+    const option = TRIP_DESTINATION_OPTIONS.find((candidate) => codes.includes(candidate.countryCode) && candidate.id === id)
+      || codes.map(code => customDestinationFromId(code, id)).find(Boolean);
     return option ? [{ id: option.id, countryCode: option.countryCode, nameTh: option.nameTh, nameEn: option.nameEn, badgeId: option.badgeId }] : [];
   });
 }
@@ -299,11 +300,10 @@ function tripCountryCode(trip: BadgeTripSource) {
 }
 
 function tripMatchesBadge(trip: BadgeTripSource, badge: TravelBadgeDefinition) {
-  const code = tripCountryCode(trip);
-  if (code !== badge.countryCode) return false;
+  const code = badge.countryCode;
   if (trip.trip_destinations?.length) {
     return trip.trip_destinations.some((destination) => {
-      if (destination.countryCode && destination.countryCode.toUpperCase() !== code) return false;
+      if ((destination.countryCode?.toUpperCase() || tripCountryCode(trip)) !== code) return false;
       if (badge.category === "international") return true;
       if (destination.badgeId === badge.id || destination.id === `${code}:${badge.slug}`) return true;
       // Older/custom selections may not have a badgeId. Match only the saved
@@ -311,6 +311,7 @@ function tripMatchesBadge(trip: BadgeTripSource, badge: TravelBadgeDefinition) {
       return [destination.nameTh, destination.nameEn].some((name) => name && badge.aliases.some((alias) => alias.toLowerCase() === name.trim().toLowerCase()));
     });
   }
+  if (tripCountryCode(trip) !== code) return false;
   if (badge.category === "international") return true;
   const haystack = `${trip.destination} ${trip.country_name || ""}`.toLowerCase();
   return badge.aliases.some((alias) => haystack.includes(alias));

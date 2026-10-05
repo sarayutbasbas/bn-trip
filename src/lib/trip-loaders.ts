@@ -23,7 +23,7 @@ import {
   tripReviewSummarySql,
   tripRoleSql,
 } from "@/src/lib/trip-access";
-import { inferTripCountry } from "@/src/lib/countries";
+import { countryByCode, inferTripCountry } from "@/src/lib/countries";
 import { loadTripIdeas, type TripIdea } from "@/src/lib/trip-ideas";
 import {
   buildTravelBadgeCollection,
@@ -247,16 +247,19 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
     years.set(year, yearEntry);
     const country = row.country.trim() || "ไม่ระบุประเทศ";
     const countryCode = (row.country_code || "").trim().toUpperCase();
-    const countryKey = countryCode || country;
+    const visitedCodes = [...new Set([countryCode, ...(row.trip_destinations || []).map(place => place.countryCode || countryCode)].filter(Boolean))];
+    for (const visitedCode of visitedCodes.length ? visitedCodes : [countryCode]) {
+    const countryKey = visitedCode || country;
     const countryEntry = countries.get(countryKey) || {
-      country,
-      countryCode,
+      country: countryByCode(visitedCode)?.nameTh || country,
+      countryCode: visitedCode,
       trips: 0,
       totalExpense: 0,
     };
     countryEntry.trips += 1;
     countryEntry.totalExpense += total;
     countries.set(countryKey, countryEntry);
+    }
     const savedDestinations = Array.isArray(row.trip_destinations)
       ? row.trip_destinations.filter(
           (destination) =>
@@ -275,7 +278,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
         }),
     );
     const tripDestinations = savedDestinations.length
-      ? savedDestinations.map(destination => canonicalTripDestination(destination, countryCode))
+      ? savedDestinations.map(destination => canonicalTripDestination(destination, destination.countryCode || countryCode))
       : legacyMatches.length
         ? legacyMatches
         : [{
@@ -290,7 +293,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
         .toLocaleLowerCase();
       if (!id || seenDestinations.has(id)) continue;
       seenDestinations.add(id);
-      yearEntry.destinations.add(`${countryKey}:${id}`);
+      yearEntry.destinations.add(id);
       const entry = destinations.get(id) || {
         id,
         nameTh: destination.nameTh?.trim() || destination.nameEn?.trim() || fallbackDestination,
@@ -349,7 +352,7 @@ function aggregateTravelAnalytics(rows: AnalyticsTripRow[]): TravelAnalyticsPayl
 
 function isDomesticAnalyticsTrip(row: AnalyticsTripRow) {
   const countryCode = (row.country_code || "").trim().toUpperCase();
-  if (countryCode) return countryCode === "TH";
+  if (countryCode) return countryCode === "TH" && !(row.trip_destinations || []).some(place => place.countryCode && place.countryCode !== "TH");
   const countryName = row.country.trim().toLowerCase();
   return countryName === "thailand" || countryName === "ไทย";
 }
@@ -535,11 +538,15 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
     query(`SELECT count(*)::int AS total,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS ongoing,count(*) FILTER (WHERE COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS upcoming,count(*) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS past,count(DISTINCT COALESCE(NULLIF(btrim(t.country_code),''),NULLIF(btrim(t.country_name),''))) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')))::int AS countries,COALESCE(sum(t.total_days) FILTER (WHERE COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))),0)::int AS travel_days FROM trips t WHERE ${access}`, [session.userId]),
     query<{country_code:string;country:string;trips:number;average_rating:number;review_count:number}>(`WITH trip_country_rows AS (
         SELECT
-          upper(btrim(COALESCE(t.country_code,''))) AS country_code,
+          visited.code AS country_code,
           COALESCE(NULLIF(btrim(t.country_name),''),NULLIF(btrim(regexp_replace(t.destination,'^.*,','')),''),'ไม่ระบุประเทศ') AS country,
           review.average_rating,
           review.review_count
         FROM trips t
+        CROSS JOIN LATERAL (
+          SELECT upper(btrim(COALESCE(t.country_code,''))) AS code
+          UNION SELECT upper(place->>'countryCode') FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE COALESCE(place->>'countryCode','')<>''
+        ) visited
         LEFT JOIN LATERAL (
           SELECT avg(trip_review.rating) AS average_rating,count(*)::int AS review_count
           FROM trip_reviews trip_review
@@ -599,13 +606,14 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
     tripIdeas: tripIdeas.filter((idea) => idea.kind === "planned"),
     counts: {
       ...(counts.rows[0] as DashboardPayload["counts"]),
+      countries: countries.rows.length,
       destinations: Number(destinations.rows[0]?.total || 0),
       badges_unlocked: badgeProgress.unlocked,
       badges_total: badgeProgress.total,
     },
     countryHighlights: countries.rows.map((country) => ({
       countryCode: country.country_code,
-      country: country.country,
+      country: countryByCode(country.country_code)?.nameTh || country.country,
       trips: Number(country.trips),
       averageRating: Number(country.average_rating || 0),
       reviewCount: Number(country.review_count || 0),
@@ -651,9 +659,9 @@ export async function loadTripDirectory(
     where.push("COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
   if (status === "favorite")
     where.push("EXISTS(SELECT 1 FROM user_favorite_trips favorite_trip WHERE favorite_trip.trip_id=t.id AND favorite_trip.user_id=$1)");
-  if (tripType === "domestic") where.push("t.country_code='TH'");
+  if (tripType === "domestic") where.push("(t.country_code='TH' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
   if (tripType === "international")
-    where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
+    where.push("((t.country_code IS NOT NULL AND t.country_code<>'TH') OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
   if (selectedYears.length) {
     values.push(selectedYears);
     where.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${values.length}::int[])`);
@@ -662,9 +670,9 @@ export async function loadTripDirectory(
   appendTripMemberFilter(where, values, parseMemberFilter(params.getAll("member").join(","), session.userId));
   const statusCountValues: Array<string | number | number[] | string[]> = [session.userId];
   const statusCountWhere = [access];
-  if (tripType === "domestic") statusCountWhere.push("t.country_code='TH'");
+  if (tripType === "domestic") statusCountWhere.push("(t.country_code='TH' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
   if (tripType === "international")
-    statusCountWhere.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
+    statusCountWhere.push("((t.country_code IS NOT NULL AND t.country_code<>'TH') OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
   if (selectedYears.length) {
     statusCountValues.push(selectedYears);
     statusCountWhere.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${statusCountValues.length}::int[])`);

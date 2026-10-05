@@ -13,13 +13,14 @@ export function destinationSearchTerms(search: string) {
   return [...terms];
 }
 
-type SearchableTrip = { name: string; destination: string; note?: string | null; country_code?: string | null; country_name?: string | null; trip_destinations?: Array<{nameTh?: string; nameEn?: string}> | null };
+type SearchableTrip = { name: string; destination: string; note?: string | null; country_code?: string | null; country_name?: string | null; trip_destinations?: Array<{nameTh?: string; nameEn?: string; countryCode?: string}> | null };
 export function tripMatchesSearch(trip: SearchableTrip, search: string) {
   if (!search.trim()) return true;
   const country = countryByCode(trip.country_code || "");
   const text = normalize([trip.name, trip.destination, trip.note, trip.country_name, country?.nameTh, country?.nameEn,
     ...(country?.aliases || []), ...(trip.trip_destinations || []).flatMap(place => [place.nameTh, place.nameEn])].filter(Boolean).join(" "));
-  return destinationSearchTerms(search).some(term => text.includes(term)) || countryCodesMatchingSearch(search).includes(trip.country_code?.toUpperCase() || "");
+  const codes = countryCodesMatchingSearch(search);
+  return destinationSearchTerms(search).some(term => text.includes(term)) || codes.includes(trip.country_code?.toUpperCase() || "") || (trip.trip_destinations || []).some(place => codes.includes(place.countryCode || ""));
 }
 
 export function canonicalTripDestination<T extends {id?: string; nameTh?: string; nameEn?: string}>(destination: T, countryCode: string) {

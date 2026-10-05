@@ -83,11 +83,15 @@ export function tripCity(destination?: string | null) {
   return (destination || "").split(",")[0]?.trim() || "";
 }
 
+export function isDomesticTrip(trip: {country_code?: string | null; trip_destinations?: ReadonlyArray<{countryCode?: string | null}> | null}) {
+  return trip.country_code === "TH" && !(trip.trip_destinations || []).some(place => place.countryCode && place.countryCode !== "TH");
+}
+
 export function formatTripDestination(
   destination?: string | null,
   countryCode?: string | null,
   countryName?: string | null,
-  destinations?: ReadonlyArray<{ nameTh?: string | null }> | null,
+  destinations?: ReadonlyArray<{ nameTh?: string | null; countryCode?: string | null }> | null,
 ) {
   const thaiLocations = (destinations || [])
     .map((item) => item.nameTh?.trim() || "")
@@ -95,7 +99,8 @@ export function formatTripDestination(
   const city = thaiLocations.length
     ? [...new Set(thaiLocations)].join(" · ")
     : tripCity(destination);
-  const country = countryByCode(countryCode)?.nameTh || countryName?.trim() || "";
+  const codes = [...new Set([countryCode, ...(destinations || []).map(item => item.countryCode)].filter(Boolean))];
+  const country = codes.map(code => countryByCode(code)?.nameTh).filter(Boolean).join(" · ") || countryName?.trim() || "";
   if (!city || !country || city.toLowerCase() === country.toLowerCase()) {
     return city || country;
   }

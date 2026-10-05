@@ -22,9 +22,9 @@ test("custom and legacy cities resolve without a saved badgeId", () => {
   }
   assert.equal(shizuoka({ ...trip, trip_destinations: [{ id: "JP:shizuoka", countryCode: "JP", nameTh: "", nameEn: "", badgeId: "" }] }).unlocked, true);
 });
-test("future trips and cities in another country do not unlock Shizuoka", () => {
+test("future trips do not unlock badges; a secondary country can unlock its own cities", () => {
   const cities = resolveTripDestinations("JP", ["JP:shizuoka"]);
   assert.equal(shizuoka({ ...trip, start_date: "2999-01-01", trip_destinations: cities }).unlocked, false);
-  assert.equal(shizuoka({ ...trip, country_code: "TH", trip_destinations: cities }).unlocked, false);
+  assert.equal(shizuoka({ ...trip, country_code: "TH", trip_destinations: cities }).unlocked, true);
   assert.equal(shizuoka({ ...trip, trip_destinations: [createCustomTripDestination("JP", "Not Shizuoka")!] }).unlocked, false);
 });

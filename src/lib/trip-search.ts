@@ -12,6 +12,6 @@ export function appendTripSearch(where: string[], values: Array<string | number 
       WHERE place->>'nameTh' ILIKE ANY(${patterns}) OR place->>'nameEn' ILIKE ANY(${patterns}))`;
   if (codes.length) {
     values.push(codes);
-    where.push(`(${text} OR upper(btrim(t.country_code))=ANY($${values.length}::text[]))`);
+    where.push(`(${text} OR upper(btrim(t.country_code))=ANY($${values.length}::text[]) OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE upper(place->>'countryCode')=ANY($${values.length}::text[])))`);
   } else where.push(`(${text})`);
 }

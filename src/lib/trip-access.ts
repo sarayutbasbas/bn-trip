@@ -121,7 +121,7 @@ export const tripIncompleteSetupSql=(alias="trips")=>`(
     ) OR (
       ${alias}.has_flights=true AND (
         NOT EXISTS(SELECT 1 FROM trip_flight_segments flight WHERE flight.trip_id=${alias}.id)
-        OR (COALESCE(${alias}.country_code,'')<>'TH' AND NOT EXISTS(
+        OR ((COALESCE(${alias}.country_code,'')<>'TH' OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${alias}.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH')) AND NOT EXISTS(
           SELECT 1 FROM trip_travel_insurance insurance
           WHERE insurance.trip_id=${alias}.id
             AND NOT EXISTS (

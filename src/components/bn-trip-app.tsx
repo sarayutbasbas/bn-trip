@@ -109,6 +109,7 @@ import {
   countryByCode,
   formatTripDestination,
   inferTripCountry,
+  isDomesticTrip,
 } from "@/src/lib/countries";
 import {
   badgesHrefForScope,
@@ -4423,7 +4424,7 @@ function TripSectionNav({
         if (trip.google_photos_url) window.location.assign(trip.google_photos_url);
       },
     },
-    { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: trip.country_code === "TH", availableInTrip: trip.country_code !== "TH", hasNotification: completion.insuranceIncomplete, active: active === "insurance", action: () => select("insurance") },
+    { id: "insurance", label: "ประกัน", Icon: ShieldCheck, disabled: isDomesticTrip(trip), availableInTrip: !isDomesticTrip(trip), hasNotification: completion.insuranceIncomplete, active: active === "insurance", action: () => select("insurance") },
     { id: "documents", label: "เอกสาร", Icon: FileText, active: active === "workspace" && workspaceTab === "documents", action: () => select("workspace", "documents") },
     { id: "export", label: "Download", Icon: Download, action: () => setConfirmDownload(true) },
     ...(trip.summary_image_url ? [{ id: "plan-image", label: "แพลนเที่ยว", Icon: ImageIcon, action: () => setPlanImageOpen(true) }] : []),
@@ -5450,7 +5451,7 @@ function TripHub({
               members={trip.members || []}
               tripOutboundAt={trip.outbound_departure_at}
               tripReturnAt={trip.return_departure_at}
-              showTravelInsurance={trip.country_code !== "TH"}
+              showTravelInsurance={!isDomesticTrip(trip)}
               canDelete={trip.access_role !== "view"}
               notify={notify}
               onChanged={onFlightChanged}
@@ -5462,7 +5463,7 @@ function TripHub({
               tripOutboundAt={trip.outbound_departure_at}
               tripReturnAt={trip.return_departure_at}
               mode="insurance"
-              showTravelInsurance={trip.country_code !== "TH"}
+              showTravelInsurance={!isDomesticTrip(trip)}
               canDelete={trip.access_role !== "view"}
               notify={notify}
               onChanged={onFlightChanged}
@@ -8816,12 +8817,32 @@ function TripLocationInput({
   );
 }
 
+export function TripCountryPicker({ selected, onChange }: { selected: string[]; onChange: (codes: string[]) => void }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const options = TRIP_COUNTRIES.filter(country => !selected.includes(country.code) && [country.nameTh, country.nameEn, country.code].some(value => value.toLowerCase().includes(query.trim().toLowerCase())));
+  return <div className="field trip-destination-picker trip-country-multi">
+    <label htmlFor={id}>ประเทศที่ไป</label>
+    <input type="hidden" name="countryCode" value={selected[0] || ""}/>
+    {selected.map(code => <input key={code} type="hidden" name="countryCodes" value={code}/>)}
+    <div className="trip-destination-control">
+      <div className="trip-destination-chips">{selected.map(code => <span key={code}><CountryFlagImage code={code} label={countryByCode(code)?.nameTh || code}/><b>{countryByCode(code)?.nameTh}</b><button type="button" disabled={selected.length === 1} aria-label={`นำประเทศ ${countryByCode(code)?.nameTh} ออก`} onClick={() => onChange(selected.filter(item => item !== code))}><X size={12}/></button></span>)}</div>
+      <div className="trip-destination-search"><Search size={16}/><input id={id} type="search" value={query} placeholder="ค้นหาและเพิ่มประเทศ" autoComplete="off" role="combobox" aria-expanded={open} aria-controls={`${id}-options`} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 120)} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if(event.key === 'Enter') event.preventDefault(); if(event.key === 'Escape') setOpen(false); }}/></div>
+      {open && <div id={`${id}-options`} className="trip-destination-options" role="listbox">{options.map(country => <button type="button" key={country.code} role="option" aria-selected="false" onPointerDown={event => event.preventDefault()} onClick={() => { onChange([...selected, country.code]); setQuery(""); }}><CountryFlagImage code={country.code} label={country.nameTh}/><span><strong>{country.nameTh}</strong><small>{country.nameEn}</small></span><Plus size={14}/></button>)}{!options.length && <p>ไม่พบประเทศ</p>}</div>}
+    </div>
+    <small>เลือกได้หลายประเทศ · เลือกเมืองอย่างน้อย 1 แห่งต่อประเทศ · เวลาเริ่มต้น: {countryByCode(selected[0])?.timezone}</small>
+  </div>;
+}
+
 export function TripDestinationPicker({
   countryCode,
+  countryCodes,
   selected,
   onChange,
 }: {
   countryCode: string;
+  countryCodes?: string[];
   selected: TripDestinationOption[];
   onChange: (items: TripDestinationOption[]) => void;
 }) {
@@ -8832,11 +8853,11 @@ export function TripDestinationPicker({
   const options = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return TRIP_DESTINATION_OPTIONS.filter((option) =>
-      option.countryCode === countryCode &&
+      (countryCodes || [countryCode]).includes(option.countryCode) &&
       !selected.some((item) => item.id === option.id) &&
       (!normalized || [option.nameTh, option.nameEn, ...option.searchTerms].some((term) => term.toLowerCase().includes(normalized)))
     ).slice(0, 12);
-  }, [countryCode, query, selected]);
+  }, [countryCode, countryCodes, query, selected]);
   const matchesQuery = (option: TripDestinationOption, value: string) =>
     [option.nameTh, option.nameEn, ...option.searchTerms].some(
       (term) => term.trim().toLowerCase() === value.trim().toLowerCase(),
@@ -8846,7 +8867,7 @@ export function TripDestinationPicker({
     setQuery("");
     setFocused(true);
   };
-  const commitQuery = () => {
+  const commitQuery = (customCountry = countryCode) => {
     const normalized = query.trim().replace(/\s+/g, " ");
     if (!normalized) return;
     const alreadySelected = selected.find((option) => matchesQuery(option, normalized));
@@ -8858,7 +8879,8 @@ export function TripDestinationPicker({
     const exact = options.find((option) =>
       matchesQuery(option, normalized),
     );
-    const custom = exact || createCustomTripDestination(countryCode, normalized);
+    if (!exact && (countryCodes?.length || 1) > 1 && !customCountry) return;
+    const custom = exact || createCustomTripDestination(customCountry, normalized);
     if (custom) add(custom);
   };
   const canAddCustom = Boolean(query.trim()) && !options.some((option) =>
@@ -8875,6 +8897,7 @@ export function TripDestinationPicker({
           <div className="trip-destination-chips">
             {selected.map((option) => (
               <span key={option.id}>
+                {(countryCodes?.length || 1) > 1 && <CountryFlagImage code={option.countryCode} label={countryByCode(option.countryCode)?.nameTh || option.countryCode}/>}
                 <b>{lang === "EN" ? option.nameEn : option.nameTh}</b>
                 <button type="button" onClick={() => onChange(selected.filter((item) => item.id !== option.id))} aria-label={`${t("ลบ")} ${option.nameTh}`}><X size={12} /></button>
               </span>
@@ -8901,7 +8924,7 @@ export function TripDestinationPicker({
             onKeyDown={(event) => {
               if (event.key === "Enter" && query.trim()) {
                 event.preventDefault();
-                commitQuery();
+                if ((countryCodes?.length || 1) === 1 || options.some(option => matchesQuery(option, query))) commitQuery();
               }
             }}
             maxLength={80}
@@ -8915,17 +8938,17 @@ export function TripDestinationPicker({
           <div id="trip-destination-options" className="trip-destination-options" role="listbox">
             {options.map((option) => (
               <button type="button" role="option" aria-selected="false" key={option.id} onPointerDown={(event) => event.preventDefault()} onClick={() => add(option)}>
-                <MapPin size={14} />
+                {(countryCodes?.length || 1) > 1 ? <CountryFlagImage code={option.countryCode} label={countryByCode(option.countryCode)?.nameTh || option.countryCode}/> : <MapPin size={14} />}
                 <span><strong>{lang === "EN" ? option.nameEn : option.nameTh}</strong><small>{lang === "EN" ? option.nameTh : option.nameEn}</small></span>
                 <Plus size={14} />
               </button>
             ))}
-            {canAddCustom ? (
-              <button type="button" role="option" aria-selected="false" className="trip-destination-custom-option" onPointerDown={(event) => event.preventDefault()} onClick={commitQuery}>
+            {canAddCustom ? (countryCodes || [countryCode]).map(code => (
+              <button key={code} type="button" role="option" aria-selected="false" className="trip-destination-custom-option" onPointerDown={(event) => event.preventDefault()} onClick={() => commitQuery(code)}>
                 <Plus size={14} />
-                <span><strong>เพิ่ม “{query.trim()}”</strong><small>บันทึกเป็นเมืองใหม่ในประเทศที่เลือก</small></span>
+                <span><strong>เพิ่ม “{query.trim()}”</strong><small>ใน{countryByCode(code)?.nameTh}</small></span>
               </button>
-            ) : !options.length ? <p>{t("ไม่พบเมืองในรายการ")}</p> : null}
+            )) : !options.length ? <p>{t("ไม่พบเมืองในรายการ")}</p> : null}
           </div>
         )}
       </div>
@@ -9039,7 +9062,8 @@ function ModalForm({
         })?.countryCode) ||
         inferTripCountry(modal.trip?.destination, modal.trip?.timezone)
       : TRIP_COUNTRIES[0];
-  const [countryCode, setCountryCode] = useState(initialCountry.code);
+  const [countryCodes, setCountryCodes] = useState(() => [...new Set([initialCountry.code, ...(modal.type === "trip" ? (modal.trip?.trip_destinations || modal.preset?.tripDestinations || []).map(item => item.countryCode) : [])])]);
+  const countryCode = countryCodes[0];
   const [tripDestinations, setTripDestinations] = useState<TripDestinationOption[]>(() => {
     if (modal.type !== "trip") return [];
     if (!modal.trip && modal.preset) {
@@ -9296,6 +9320,8 @@ function ModalForm({
     try {
       if (modal.type === "trip") {
         if (!tripDestinations.length) throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");
+        const missingCountry = countryCodes.find(code => !tripDestinations.some(place => place.countryCode === code));
+        if (missingCountry) throw new Error(`กรุณาเลือกเมืองใน${countryByCode(missingCountry)?.nameTh}อย่างน้อย 1 แห่ง หรือเอาประเทศนี้ออก`);
         const coverImageUrls = await uploadTripCovers(coverDrafts);
         const coverImageUrl = coverImageUrls[0];
         let summaryImageUrl=summaryImageRemoved?null:modal.trip?.summary_image_url||null;
@@ -9310,6 +9336,7 @@ function ModalForm({
           name: f.get("name"),
           note: String(f.get("note") || "").trim(),
           countryCode: f.get("countryCode"),
+          countryCodes,
           locationIds: tripDestinations.map((destination) => destination.id),
           googlePhotosUrl: String(f.get("googlePhotosUrl") || "").trim(),
           outboundDate: f.get("outboundDate"),
@@ -9431,17 +9458,17 @@ function ModalForm({
                 <label>{t("ชื่อทริป")}</label>
                 <TripNameInput defaultValue={modal.trip?.name || modal.preset?.destination} />
               </div>
-              <CountryPicker
-                value={countryCode}
-                onChange={(nextCountryCode) => {
-                  setCountryCode(nextCountryCode);
-                  setTripDestinations([]);
+              <TripCountryPicker
+                selected={countryCodes}
+                onChange={(nextCountryCodes) => {
+                  setCountryCodes(nextCountryCodes);
+                  setTripDestinations(current => current.filter(item => nextCountryCodes.includes(item.countryCode)));
                   window.setTimeout(checkForChanges, 0);
                 }}
-                note={<>{t("เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง")} · {t("เวลาอัตโนมัติ")}: {countryByCode(countryCode)?.timezone}</>}
               />
               <TripDestinationPicker
                 countryCode={countryCode}
+                countryCodes={countryCodes}
                 selected={tripDestinations}
                 onChange={(next) => {
                   setTripDestinations(next);

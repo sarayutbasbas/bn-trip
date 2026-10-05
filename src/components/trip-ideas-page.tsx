@@ -17,9 +17,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarDays,CalendarRange,CheckCircle2,Compass,Globe2,Heart,LogOut,Luggage,MapPin,MapPinned,PlaneTakeoff,Plus,RefreshCw,RotateCcw,Search,Settings2,Trash2,UserPlus,X } from "lucide-react";
 import type { TripIdea,TripIdeaKind,TripIdeaMember } from "@/src/lib/trip-ideas";
-import { countryByCode,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
+import { countryByCode,isDomesticTrip,formatTripDestination,TRIP_COUNTRIES } from "@/src/lib/countries";
 import { TRIP_DESTINATION_OPTIONS,type TripDestinationOption } from "@/src/lib/travel-badges";
-import { ConfirmDialog,EmptyState,CountryFlagImage,CountryPicker,TripCoverPicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
+import { ConfirmDialog,EmptyState,CountryFlagImage,TripCountryPicker,TripCoverPicker,TripDestinationPicker,type Confirmation } from "@/src/components/bn-trip-app";
 import { PageIntro } from "@/src/components/page-intro";
 import { NavIcon } from "@/src/components/nav-icon";
 import { BottomSheet } from "@/src/components/bottom-sheet";
@@ -34,7 +34,7 @@ import { tripMatchesSearch } from "@/src/lib/destination-search";
 import { TripMemberFilter } from "@/src/components/trip-member-filter";
 import { collectFilterMembers, matchesMemberFilter } from "@/src/lib/trip-member-filter";
 
-type IdeaDraft={name:string;countryCode:string;locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string;coverImageUrls:string[]};
+type IdeaDraft={name:string;countryCode:string;countryCodes:string[];locationIds:string[];kind:TripIdeaKind;targetMonth:number|null;targetYear:number|null;note:string;coverImageUrl:string;coverImageUrls:string[]};
 type IdeaEditor={idea:TripIdea|null;promote:boolean};
 type IdeaCollaborator={id:string;email:string;user_id:string|null;joined:boolean;display_name:string|null;avatar_url:string|null;access_level:"view"|"admin"};
 type IdeaTripType="all"|"domestic"|"international";
@@ -84,7 +84,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   const defaultYear=savedYear&&savedYear>=currentYear&&savedYear<=currentYear+20?savedYear:currentYear+1;
   const initialCountry=countryByCode(current?.country_code)||TRIP_COUNTRIES[0];
   const [name,setName]=useState(current?.name||"");
-  const [countryCode,setCountryCode]=useState(initialCountry.code);
+  const [countryCodes,setCountryCodes]=useState(()=>[...new Set([initialCountry.code,...(current?.trip_destinations||[]).map(item=>item.countryCode)])]);const countryCode=countryCodes[0];
   const [locations,setLocations]=useState<TripDestinationOption[]>(()=>current?.trip_destinations?.map(saved=>{
     const option=TRIP_DESTINATION_OPTIONS.find(candidate=>candidate.id===saved.id);
     return option||{...saved,searchTerms:[saved.nameTh,saved.nameEn].filter(Boolean)} as TripDestinationOption;
@@ -97,7 +97,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
   const locationIds=locations.map(location=>location.id).sort();
   const originalLocationIds=(current?.trip_destinations||[]).map(location=>location.id).sort();
   const unchanged=Boolean(current)&&!coversChanged&&name.trim()===(current?.name||"").trim()&&countryCode===(current?.country_code||initialCountry.code)&&locationIds.join("|")===originalLocationIds.join("|")&&kind===current?.kind&&targetMonth===(current?.target_month||null)&&targetYear===(current?.target_year||null)&&note.trim()===(current?.note||"").trim();
-  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");const coverImageUrls=await uploadTripCovers(covers);const coverImageUrl=coverImageUrls[0];await save({name,countryCode,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl,coverImageUrls})}catch(caught){setError((caught as Error).message)}}
+  async function submit(event:FormEvent){event.preventDefault();setError("");try{if(!locations.length)throw new Error("กรุณาเลือกเมืองหรือจังหวัดอย่างน้อย 1 แห่ง");const missing=countryCodes.find(code=>!locations.some(place=>place.countryCode===code));if(missing)throw new Error(`กรุณาเลือกเมืองใน${countryByCode(missing)?.nameTh}อย่างน้อย 1 แห่ง หรือเอาประเทศนี้ออก`);const coverImageUrls=await uploadTripCovers(covers);const coverImageUrl=coverImageUrls[0];await save({name,countryCode,countryCodes,locationIds:locations.map(location=>location.id),kind,targetMonth,targetYear,note,coverImageUrl,coverImageUrls})}catch(caught){setError((caught as Error).message)}}
   return <><BottomSheet
     title={promote?"กำหนดช่วงเวลาที่อยากไป":current?"แก้ไขรายการ":"เพิ่มสถานที่ที่อยากไป"}
     subtitle={promote?"เลือกเดือนและปีเพื่อย้ายมาเป็นทริปที่เล็งไว้":current?"แก้ไขข้อมูลของทริปที่เล็งไว้หรือลิสต์สักวันหนึ่ง":"บันทึกสถานที่ที่อยากเดินทางไปในอนาคต"}
@@ -114,8 +114,8 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
     <div className="form-grid trip-idea-form-grid">
     <TripCoverPicker value={covers} onChange={value=>{setCovers(value);setCoversChanged(true)}}/>
     <label className="trip-idea-field"><span>ชื่อทริป</span><TripNameInput value={name} onChange={setName} placeholder="เช่น Fukuoka Food Trip"/></label>
-    <CountryPicker value={countryCode} onChange={nextCountryCode=>{setCountryCode(nextCountryCode);setLocations([])}} note="เลือกประเทศก่อน แล้วจึงค้นหาเมืองด้านล่าง"/>
-    <TripDestinationPicker countryCode={countryCode} selected={locations} onChange={setLocations}/>
+    <TripCountryPicker selected={countryCodes} onChange={codes=>{setCountryCodes(codes);setLocations(current=>current.filter(item=>codes.includes(item.countryCode)))}}/>
+    <TripDestinationPicker countryCode={countryCode} countryCodes={countryCodes} selected={locations} onChange={setLocations}/>
     <fieldset className="trip-idea-kind-picker"><legend>วางไว้ในลิสต์ไหน</legend><button type="button" className={kind==="planned"?"active":""} onClick={()=>{setKind("planned");setTargetMonth(targetMonth||1);setTargetYear(targetYear||defaultYear)}}><CalendarRange size={17}/><span>ทริปที่เล็งไว้<small>มีเดือนและปีคร่าว ๆ</small></span></button><button type="button" className={kind==="someday"?"active":""} onClick={()=>setKind("someday")}><Compass size={17}/><span>ลิสต์สักวันหนึ่ง<small>ยังไม่รู้ว่าจะไปเมื่อไร</small></span></button></fieldset>
     <div className={`trip-idea-date-row${kind==="someday"?" is-disabled":""}`}><label className="trip-idea-field"><span>เดือน</span><select required={kind==="planned"} disabled={kind==="someday"} value={targetMonth||""} onChange={event=>setTargetMonth(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกเดือน</option>{monthNames.map((month,index)=><option key={month} value={index+1}>{month}</option>)}</select></label><label className="trip-idea-field"><span>ปี ค.ศ.</span><select required={kind==="planned"} disabled={kind==="someday"} value={targetYear||""} onChange={event=>setTargetYear(event.target.value?Number(event.target.value):null)}><option value="" disabled>เลือกปี</option>{yearOptions.map(year=><option key={year} value={year}>{year}</option>)}</select></label></div>
     <TripNoteField value={note} onChange={event=>setNote(event.target.value)}/>
@@ -149,8 +149,8 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo,currentUserId}:{i
   const [favoriteBusyId,setFavoriteBusyId]=useState<string|null>(null);
   const router=useRouter();const [ideas,setIdeas]=useState(()=>sortIdeas(initialIdeas));const [editing,setEditing]=useState<IdeaEditor|undefined>(()=>{const idea=initialIdeas.find(item=>item.id===initialEditId);return idea?{idea,promote:false}:undefined});const [sharing,setSharing]=useState<TripIdea|null>(null);const [confirmation,setConfirmation]=useState<Confirmation|null>(null);const [busy,setBusy]=useState(false);const [toast,setToast]=useState("");const [query,setQuery]=useState("");const [kindFilter,setKindFilter]=useState<"all"|TripIdeaKind|"favorite">("all");const [tripType,setTripType]=useState<IdeaTripType>("all");const [selectedYears,setSelectedYears]=useState<string[]>([]);const [filtersOpen,setFiltersOpen]=useState(false);const [draftTripType,setDraftTripType]=useState<IdeaTripType>("all");const [draftYears,setDraftYears]=useState<string[]>([]);const [refreshing,setRefreshing]=useState(false);
   const availableYears=useMemo(()=>[...new Set(ideas.filter(idea=>idea.kind==="planned").map(idea=>idea.target_year).filter((year):year is number=>typeof year==="number"))].sort((a,b)=>b-a),[ideas]);
-  const hasDomestic=ideas.some(idea=>idea.country_code==="TH");
-  const hasInternational=ideas.some(idea=>idea.country_code!=="TH");
+  const hasDomestic=ideas.some(idea=>isDomesticTrip(idea));
+  const hasInternational=ideas.some(idea=>!isDomesticTrip(idea));
   const filterMembers=useMemo(()=>collectFilterMembers(ideas,currentUserId),[ideas,currentUserId]);
   const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0||selectedMembers.length>0;
   const tripTypes=[
@@ -158,7 +158,7 @@ export function TripIdeasPage({initialIdeas,initialEditId,demo,currentUserId}:{i
     ...(hasDomestic?[{value:"domestic" as const,label:"ในประเทศ",Icon:MapPin}]:[]),
     ...(hasInternational?[{value:"international" as const,label:"ต่างประเทศ",Icon:Globe2}]:[]),
   ];
-  const searchedIdeas=useMemo(()=>ideas.filter(idea=>matchesMemberFilter(idea.members,selectedMembers)&&tripMatchesSearch(idea,query)&&(tripType==="all"||(tripType==="domestic")===(idea.country_code==="TH"))&&(!selectedYears.length||(idea.kind==="planned"&&idea.target_year!==null&&selectedYears.includes(String(idea.target_year))))),[ideas,query,tripType,selectedYears,selectedMembers]);
+  const searchedIdeas=useMemo(()=>ideas.filter(idea=>matchesMemberFilter(idea.members,selectedMembers)&&tripMatchesSearch(idea,query)&&(tripType==="all"||(tripType==="domestic")===(isDomesticTrip(idea)))&&(!selectedYears.length||(idea.kind==="planned"&&idea.target_year!==null&&selectedYears.includes(String(idea.target_year))))),[ideas,query,tripType,selectedYears,selectedMembers]);
   const filteredIdeas=kindFilter==="all"?searchedIdeas:searchedIdeas.filter(idea=>kindFilter==="favorite"?idea.is_favorite:idea.kind===kindFilter);
   const plannedIdeas=filteredIdeas.filter(idea=>idea.kind==="planned");
   const somedayIdeas=filteredIdeas.filter(idea=>idea.kind==="someday");

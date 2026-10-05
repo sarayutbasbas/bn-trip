@@ -6153,6 +6153,8 @@ html.dark .trip-section-nav button.active {
   flex-wrap: wrap;
   gap: 5px;
 }
+.trip-destination-chips .country-flag-image,
+.trip-destination-options .country-flag-image { width:20px;height:20px;flex:0 0 20px;border-radius:50%;object-fit:cover; }
 .timeline-document-badge {
   width: fit-content;
   max-width: min(100%,150px);

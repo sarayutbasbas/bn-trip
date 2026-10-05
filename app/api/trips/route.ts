@@ -10,13 +10,13 @@ import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode,formatTripDestination } from "@/src/lib/countries";
 import { appendTripSearch } from "@/src/lib/trip-search";
 import { loadDashboard } from "@/src/lib/trip-loaders";
-import { resolveTripDestinations } from "@/src/lib/travel-badges";
+import { resolveMultiCountryDestinations } from "@/src/lib/trip-countries";
 import { tripNoteSchema } from "@/src/lib/trip-note";
 import { appendTripMemberFilter, parseMemberFilter, tripFilterMembersSql, type TripFilterMember } from "@/src/lib/trip-member-filter";
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const countryCodeSchema=z.string().length(2).transform(value=>value.toUpperCase()).refine(value=>Boolean(countryByCode(value)),{message:"Invalid country"});
-const tripSchema = z.object({ name:z.string().min(2), note:tripNoteSchema.optional(), locationIds:z.array(z.string().min(3).max(800)).min(1).max(20), countryCode:countryCodeSchema, outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), coverImageUrls:tripCoverUrlsSchema.optional(), summaryImageUrl:z.string().max(500).nullable().optional(), googlePhotosUrl:googlePhotosUrlSchema.optional(), sourceIdeaId:z.string().uuid().optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
+const tripSchema = z.object({ name:z.string().min(2), note:tripNoteSchema.optional(), locationIds:z.array(z.string().min(3).max(800)).min(1).max(20), countryCode:countryCodeSchema, countryCodes:z.array(countryCodeSchema).min(1).max(20).optional(), outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), coverImageUrls:tripCoverUrlsSchema.optional(), summaryImageUrl:z.string().max(500).nullable().optional(), googlePhotosUrl:googlePhotosUrlSchema.optional(), sourceIdeaId:z.string().uuid().optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
 const selectedYears=(params:URLSearchParams)=>[...new Set(params.getAll("year").flatMap(value=>value.split(",")).map(Number).filter(year=>Number.isInteger(year)&&year>=2000&&year<=2200))].slice(0,50);
 
 export async function GET(request:Request) {
@@ -42,15 +42,15 @@ export async function GET(request:Request) {
     if(status==="upcoming")where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
     if(status==="past")where.push("COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
     if(status==="favorite")where.push("EXISTS(SELECT 1 FROM user_favorite_trips favorite_trip WHERE favorite_trip.trip_id=t.id AND favorite_trip.user_id=$1)");
-    if(tripType==="domestic")where.push("t.country_code='TH'");
-    if(tripType==="international")where.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
+    if(tripType==="domestic")where.push("(t.country_code='TH' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
+    if(tripType==="international")where.push("((t.country_code IS NOT NULL AND t.country_code<>'TH') OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
     if(filterYears.length){values.push(filterYears);where.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${values.length}::int[])`)}
     appendTripSearch(where,values,search);
     appendTripMemberFilter(where,values,filterMembers);
     const statusCountValues:Array<string|number|number[]|string[]>=[session.userId];
     const statusCountWhere=[access];
-    if(tripType==="domestic")statusCountWhere.push("t.country_code='TH'");
-    if(tripType==="international")statusCountWhere.push("t.country_code IS NOT NULL AND t.country_code<>'TH'");
+    if(tripType==="domestic")statusCountWhere.push("(t.country_code='TH' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
+    if(tripType==="international")statusCountWhere.push("((t.country_code IS NOT NULL AND t.country_code<>'TH') OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
     if(filterYears.length){statusCountValues.push(filterYears);statusCountWhere.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${statusCountValues.length}::int[])`)}
     appendTripSearch(statusCountWhere,statusCountValues,search);
     appendTripMemberFilter(statusCountWhere,statusCountValues,filterMembers);
@@ -82,7 +82,7 @@ export async function POST(request:Request) {
   try {
     const input = tripSchema.parse(await request.json());
     const country=countryByCode(input.countryCode)!;
-    const tripDestinations=resolveTripDestinations(country.code,input.locationIds);
+    const tripDestinations=resolveMultiCountryDestinations(country.code,input.locationIds,input.countryCodes);
     if(tripDestinations.length!==new Set(input.locationIds).size)return NextResponse.json({error:"กรุณาเลือกเมืองจากรายการ"},{status:400});
     const destination=formatTripDestination(tripDestinations.map(item=>item.nameTh).join(" · "),country.code,country.nameTh,tripDestinations);
     const totalDays=Math.floor((new Date(`${input.returnDate}T00:00:00`).getTime()-new Date(`${input.outboundDate}T00:00:00`).getTime())/86400000)+1;
