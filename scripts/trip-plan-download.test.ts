@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { saveTripPlanDownload } from '../src/lib/trip-plan-download';
+import { prepareTripPlanDownload, saveTripPlanDownload } from '../src/lib/trip-plan-download';
+
+test('prepares a workbook with a safe filename and rejects failed or invalid responses', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    const mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    globalThis.fetch = async () => new Response('workbook', { headers: { 'Content-Type': mime } });
+    const file = await prepareTripPlanDownload('trip-id', 'Tokyo/Osaka');
+    assert.equal(file.name, 'Tokyo-Osaka-plan.xlsx');
+    assert.equal(await file.text(), 'workbook');
+    globalThis.fetch = async () => new Response('error', { status: 500 });
+    await assert.rejects(prepareTripPlanDownload('id', 'test'));
+    globalThis.fetch = async () => new Response('<html>login</html>', { headers: { 'Content-Type': 'text/html' } });
+    await assert.rejects(prepareTripPlanDownload('id', 'test'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('desktop downloads normally; mobile supports sharing, permission fallback and cancellation', async () => {
   const originals = new Map(['navigator','document','window'].map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
@@ -12,6 +29,7 @@ test('desktop downloads normally; mobile supports sharing, permission fallback a
   const file=new File(['test'],'plan.xlsx');
   try {
     await saveTripPlanDownload(file);assert.equal(downloads,1);assert.equal(shares,0);assert.equal(anchor.download,'plan.xlsx');
+    assert.equal(anchor.target, '_blank');assert(anchor.href.startsWith('blob:'));
     nav.userAgent='iPhone';await saveTripPlanDownload(file);assert.equal(downloads,2);assert.equal(shares,1);
     nav.share=async()=>{throw new DOMException('Cancelled','AbortError')};
     await assert.rejects(saveTripPlanDownload(file),{name:'AbortError'});assert.equal(downloads,2);
