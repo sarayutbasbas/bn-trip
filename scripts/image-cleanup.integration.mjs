@@ -37,7 +37,7 @@ try{
  await save(`/api/trip-ideas/${idea}`,"PATCH",{...ideaBody,coverImageUrls:[next]});await gone(covers[1]);
  await save(`/api/itineraries/${item}`,"PATCH",{...itemBody,imageUrl:next});await gone(covers[2]);
  const hotelOld=await upload(),hotelNew=await upload();
- const hotelBody={name:"Media hotel",imageUrl:hotelOld,checkInDay:2,checkOutDay:3,checkInTime:"15:00",checkOutTime:"11:00",foreignAmount:100,currency:"THB",exchangeRate:1,rateDate:"2030-01-01",paymentMethod:"cash",splitMemberIds:[owner]};
+const hotelBody={paymentStatus:"paid", name:"Media hotel",imageUrl:hotelOld,checkInDay:2,checkOutDay:3,checkInTime:"15:00",checkOutTime:"11:00",foreignAmount:100,currency:"THB",exchangeRate:1,rateDate:"2030-01-01",paymentMethod:"cash",splitMemberIds:[owner]};
  const hotel=await save(`/api/trips/${trip}/accommodations`,"POST",hotelBody);
  await save(`/api/trips/${trip}/accommodations/${hotel.id}`,"PATCH",{...hotelBody,imageUrl:hotelNew});await gone(hotelOld);
  await save(`/api/trips/${trip}/accommodations/${hotel.id}`,"DELETE");await gone(hotelNew);

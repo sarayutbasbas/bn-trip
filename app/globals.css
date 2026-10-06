@@ -6100,12 +6100,13 @@ html.dark .trip-section-nav button.active {
 .editable-event-card .event-copy h3 {
   display: -webkit-box;
   overflow: hidden;
-  line-height: 1.35;
+  line-height: 1.6;
+  padding-block: .12em;
   text-overflow: ellipsis;
   white-space: normal;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  max-height: 2.7em;
+  max-height: none;
 }
 .timeline-expense-tag {
   position: relative;
@@ -16613,10 +16614,19 @@ body:has(.login-redesign) .app-glass-scene-content { padding-bottom:0; }
 .accommodation-card-copy .breakfast-day-tag { white-space:nowrap; border-radius:8px; padding:1px 5px; margin:0; background:#16a34a; color:#fff; font-size:9px; line-height:1.5; box-shadow:0 1px 4px #0002; }
 .breakfast-all-days { color:#fff; fill:#16a34a; background:#16a34a; border-radius:50%; }
 .accommodation-night-entry .accommodation-breakfast-toggle { margin:8px 0; }
-.accommodation-night-options { display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:10px;align-items:end; }
-.accommodation-night-options .accommodation-breakfast-toggle { position:relative;gap:6px;padding:6px 8px!important;min-height:48px; }
+.accommodation-night-options { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end; }
+.accommodation-night-options .accommodation-breakfast-toggle { position:relative;gap:6px;margin:0;padding:6px 8px!important;height:48px;min-height:48px; }
 .accommodation-night-options .accommodation-breakfast-toggle input { top:50%;left:12px;margin:0; }
 .accommodation-night-options .accommodation-breakfast-icon { width:28px;height:28px;flex-basis:28px; }
 .accommodation-night-options .accommodation-breakfast-toggle strong { font-size:11px;line-height:1.4; }
-.accommodation-night-options .accommodation-night-bedtime { width:100%;min-width:0; }
+.accommodation-night-options .accommodation-night-bedtime { width:100%;min-width:0;max-width:none; }
+.accommodation-sheet .accommodation-night-options .native-picker-control { height:48px;min-height:48px;margin:0; }
 .accommodation-sheet > .flight-sheet-scroll { flex:1 1 auto; }
+.accommodation-night-breakfast { min-width:0; }
+.accommodation-night-breakfast > .accommodation-breakfast-toggle { margin:0; }
+.accommodation-booking-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.accommodation-payment-icon { position:relative;width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border-radius:50%;background:#0d9488;color:#fff; }
+.accommodation-card-copy .accommodation-payment-icon svg { color:#fff; }
+.payment-status-badge { position:absolute;right:-5px;top:-5px;border-radius:50%;color:#fff; }
+.payment-status-badge.is-paid { background:#16a34a;fill:#16a34a; }
+.payment-status-badge.is-pending { background:#f97316;fill:#f97316; }

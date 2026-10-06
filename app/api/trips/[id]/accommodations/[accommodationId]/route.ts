@@ -52,7 +52,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         split_member_ids=$19::uuid[],booking_platform=$20,includes_breakfast=$21,image_url=$22,booking_url=$23,paid_by=CASE WHEN $26 THEN $24::jsonb ELSE paid_by END,split_guest_ids=$25::uuid[],updated_at=now()
         WHERE id=$1 AND trip_id=$2 RETURNING id,cost_item_id`, [accommodationId,id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),JSON.stringify(input.nightBedtimes),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,input.imageUrl,input.bookingUrl,JSON.stringify(input.paidBy || null),input.splitGuestIds,input.paidBy !== undefined]);
       if (!updated.rows[0]) throw new Error("not_found");
-      await client.query(`UPDATE trip_accommodations SET breakfast_days=$3::int[],hotel_id=COALESCE((SELECT hotel_id FROM trip_accommodations WHERE id=$4 AND trip_id=$2),hotel_id) WHERE id=$1 AND trip_id=$2`,[accommodationId,id,breakfastDays,input.sourceAccommodationId||null]);
+      await client.query(`UPDATE trip_accommodations SET payment_status=$5,breakfast_days=$3::int[],hotel_id=COALESCE((SELECT hotel_id FROM trip_accommodations WHERE id=$4 AND trip_id=$2),hotel_id) WHERE id=$1 AND trip_id=$2`,[accommodationId,id,breakfastDays,input.sourceAccommodationId||null,input.paymentStatus]);
       await syncAccommodationLinkedRecords(client, {
         id: accommodationId, tripId: id, ...input,
         currency: input.currency.toUpperCase(), costItemId: updated.rows[0].cost_item_id,

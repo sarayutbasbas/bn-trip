@@ -26,6 +26,7 @@ export const accommodationSchema = z.object({
     .or(z.literal(""))
     .default(""),
   includesBreakfast: z.boolean().default(false),
+  paymentStatus: z.enum(["paid", "pending"]),
   breakfastDays: z.array(z.number().int()).max(32).optional(),
   sourceAccommodationId: z.string().uuid().nullable().optional(),
   imageUrl: z.string().trim().max(2000).nullable().default(null),

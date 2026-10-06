@@ -17,7 +17,11 @@ try {
  const path='/api/trips/'+trip.id+'/accommodations';
  const input={name:'Tokyo Hotel',location:'Tokyo station',checkInDay:1,checkOutDay:4,checkInTime:'15:00',checkOutTime:'11:00',foreignAmount:3000,currency:'THB',exchangeRate:1,rateDate:'2027-01-01',paymentMethod:'เงินสด',splitMemberIds:[id],imageUrl:'/travel-postcard-fallback.jpg',breakfastDays:[2,3]};
  input.bookingPlatform='trip.com';
+ input.paymentStatus='pending';
+ const missingStatus={...input};delete missingStatus.paymentStatus;
+ const missingResponse=await fetch(base+path,{method:'POST',headers:{cookie:'bn_trip_session='+token,'Content-Type':'application/json'},body:JSON.stringify(missingStatus)});assert.equal(missingResponse.status,400);
  const first=await api(path,input);assert.deepEqual(first.breakfast_days,[2,3]);assert(first.hotel_id);
+ assert.equal(first.payment_status,'pending');
  const second=await api(path,{...input,name:'Return Hotel',checkInDay:6,checkOutDay:8,breakfastDays:[7,8],sourceAccommodationId:first.id});assert.equal(second.hotel_id,first.hotel_id);assert.equal(second.image_url,first.image_url);
  const invalid=await fetch(base+path,{method:'POST',headers:{cookie:'bn_trip_session='+token,'Content-Type':'application/json'},body:JSON.stringify({...input,breakfastDays:[1]})});assert.equal(invalid.status,400);
  browser('open',base);browser('cookies','set','bn_trip_session',token,'--url',base);browser('set','viewport','390','844');browser('open',base+'/trips/'+trip.id+'?view=stays');browser('wait','.breakfast-day-tag');
@@ -31,16 +35,20 @@ try {
  browser('click','[aria-label="แก้ไข Return Hotel"]');browser('wait','[aria-label="เลือกโรงแรมเดิม"]');browser('select','[aria-label="เลือกโรงแรมเดิม"]',first.id);
  assert.equal(evaluate('document.querySelector("input[name=name]").value'),'Tokyo Hotel');assert(evaluate('document.querySelector(".accommodation-cover-picker img").src.includes("travel-postcard-fallback")'));
  assert.equal(evaluate('document.querySelectorAll(".accommodation-night-entry input[type=checkbox]:checked").length'),2);
+ browser('select','#accommodation-payment-status','paid');
  for(const width of [390,1280]) {
    browser('set','viewport',String(width),'900');
    browser('scrollintoview','.accommodation-night-options');
    assert(evaluate(`Array.from(document.querySelectorAll('.accommodation-night-options')).every(row=>{const a=row.children[0].getBoundingClientRect(),b=row.children[1].getBoundingClientRect();return a.right<=b.left&&Math.abs(a.bottom-b.bottom)<3})`),'breakfast before bedtime in one row');
+   assert(evaluate(`Array.from(document.querySelectorAll('.accommodation-night-options')).every(row=>{const a=row.querySelector('.accommodation-breakfast-toggle').getBoundingClientRect(),b=row.querySelector('.native-picker-control').getBoundingClientRect();return Math.abs(a.width-b.width)<2&&Math.abs(a.height-b.height)<2&&Math.abs(a.top-b.top)<2})`),'equal width and height breakfast/time controls');
    browser('uncheck','.accommodation-night-entry:first-child input[type=checkbox]');
    assert(evaluate(`(()=>{const sheet=document.querySelector('.accommodation-sheet').getBoundingClientRect(),footer=document.querySelector('.accommodation-sheet .bottom-sheet-actions').getBoundingClientRect();return sheet.bottom-footer.bottom<50})()`),'no blank space under save footer after toggling');
    browser('screenshot',`/tmp/accommodation-options-${width}.png`);
  }
  browser('click','.bottom-sheet-actions .primary-btn');browser('wait','--fn','!document.querySelector("#accommodation-booking-url")');
  const saved=(await api(path)).find(item=>item.id===second.id);assert.deepEqual(saved.breakfast_days,[8]);assert.equal(saved.hotel_id,first.hotel_id);assert.equal(saved.name,first.name);assert.equal(saved.image_url,first.image_url);
+ assert.equal(saved.payment_status,'paid');
+ assert(evaluate(`!!document.querySelector('.payment-status-badge.is-paid')&&!!document.querySelector('.payment-status-badge.is-pending')`));
  evaluate(`(()=>{window.testDownload='';window.shareCalls=0;Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});Object.defineProperty(navigator,'share',{configurable:true,value:async()=>{window.shareCalls++;throw new DOMException('Permission denied','NotAllowedError')}});HTMLAnchorElement.prototype.click=function(){window.testDownload=this.download};return true})()`);
  browser('click','.trip-menu-more');browser('click','.trip-menu-sheet .trip-menu-export');browser('click','.confirm-delete');
  browser('wait','--fn',`document.querySelector('#confirm-title')?.textContent==='ไฟล์แผนทริปพร้อมแล้ว'`);

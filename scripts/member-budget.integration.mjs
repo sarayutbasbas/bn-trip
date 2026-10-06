@@ -32,7 +32,7 @@ try {
   const itinerary=await api(`/api/trips/${trip}/itineraries`,'POST',{dayNumber:1,timeSlot:'morning',startTime:'08:00',placeName:'Budget fixture',costItems:costs});
   const list=await api('/api/trips?mode=list');
   approx(list.items.find(row=>row.id===trip).actual_spent_thb,10000*2/7);
-  await api(`/api/trips/${trip}/accommodations`,'POST',{name:'Shared hotel',checkInDay:1,checkOutDay:2,checkInTime:'14:00',checkOutTime:'11:00',foreignAmount:7000,currency:'THB',exchangeRate:1,rateDate:'2026-01-01',paymentMethod:'cash',...shared});
+await api(`/api/trips/${trip}/accommodations`,'POST',{paymentStatus:'paid', name:'Shared hotel',checkInDay:1,checkOutDay:2,checkInTime:'14:00',checkOutTime:'11:00',foreignAmount:7000,currency:'THB',exchangeRate:1,rateDate:'2026-01-01',paymentMethod:'cash',...shared});
   const expected=10000*2/7+2000;
   for(const path of ['/api/trips','/api/trips?mode=list','/api/trips?mode=dashboard']) {
     const data=await api(path);

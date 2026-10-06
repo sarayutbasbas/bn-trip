@@ -682,6 +682,9 @@ const migrations = [
     "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS hotel_id UUID NOT NULL DEFAULT gen_random_uuid()",
     "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS breakfast_days INTEGER[]",
   ] },
+  { version: 54, statements: [
+    "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS payment_status TEXT CHECK (payment_status IN ('paid','pending'))",
+  ] },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

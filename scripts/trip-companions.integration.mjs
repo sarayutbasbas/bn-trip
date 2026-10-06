@@ -113,7 +113,7 @@ try {
   const access = await db.query("SELECT access_level FROM trip_collaborators WHERE trip_id=$1 AND user_id=$2", [trip.id, viewer.id]);
   assert.equal(access.rows[0].access_level, "view");
   const paidBy = { type: "guest", id: named.id };
-  const accommodation = await ok(await api(owner, `/api/trips/${trip.id}/accommodations`, "POST", { name: "Companion hotel", checkInDay: 1, checkOutDay: 2, checkInTime: "14:00", checkOutTime: "11:00", foreignAmount: 1000, currency: "THB", exchangeRate: 1, rateDate: "2030-01-01", paymentMethod: "cash", splitMemberIds: [owner.id], splitGuestIds: [named.id], paidBy }), 201);
+const accommodation = await ok(await api(owner, `/api/trips/${trip.id}/accommodations`, "POST", { paymentStatus: "paid", name: "Companion hotel", checkInDay: 1, checkOutDay: 2, checkInTime: "14:00", checkOutTime: "11:00", foreignAmount: 1000, currency: "THB", exchangeRate: 1, rateDate: "2030-01-01", paymentMethod: "cash", splitMemberIds: [owner.id], splitGuestIds: [named.id], paidBy }), 201);
   assert.deepEqual(accommodation.paid_by, paidBy);
   const itinerary = await ok(await api(owner, `/api/trips/${trip.id}/itineraries`, "POST", { dayNumber: 1, startTime: "10:00", placeName: "Lunch", costItems: [{ key: "Lunch", value: 500, splitMemberIds: [owner.id], splitGuestIds: [named.id], paidBy }] }), 201);
   assert.deepEqual(itinerary.cost_items[0].paidBy, paidBy);

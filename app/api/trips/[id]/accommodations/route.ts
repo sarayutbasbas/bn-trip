@@ -63,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9::time,$10::time,$11,$12,$13,$14,$15,$16,$17,$18::uuid[],$19,$20,$21,$22,$23,$24::jsonb,$25::uuid[])
         RETURNING *`, [id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),JSON.stringify(input.nightBedtimes),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,input.imageUrl,session.userId,input.bookingUrl,JSON.stringify(input.paidBy || null),input.splitGuestIds]);
       const accommodation = result.rows[0];
-      await client.query(`UPDATE trip_accommodations SET breakfast_days=$3::int[],hotel_id=COALESCE((SELECT hotel_id FROM trip_accommodations WHERE id=$4 AND trip_id=$2),hotel_id) WHERE id=$1 AND trip_id=$2`,[accommodation.id,id,breakfastDays,input.sourceAccommodationId||null]);
+      await client.query(`UPDATE trip_accommodations SET payment_status=$5,breakfast_days=$3::int[],hotel_id=COALESCE((SELECT hotel_id FROM trip_accommodations WHERE id=$4 AND trip_id=$2),hotel_id) WHERE id=$1 AND trip_id=$2`,[accommodation.id,id,breakfastDays,input.sourceAccommodationId||null,input.paymentStatus]);
       await syncAccommodationLinkedRecords(client, {
         id: accommodation.id, tripId: id, ...input,
         currency: input.currency.toUpperCase(), costItemId: accommodation.cost_item_id,

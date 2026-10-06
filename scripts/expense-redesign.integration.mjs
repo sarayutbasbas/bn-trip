@@ -93,7 +93,7 @@ try {
   browser('click','.expense-day-card:first-child .expense-day-actions > button:not(.expense-day-chevron)');
   browser('wait','.cost-sheet');
   assert(evaluate("!document.querySelector('.expense-day-card').classList.contains('is-collapsed')"));
-  await api('/api/trips/'+trip.id+'/accommodations',{name:'Hotel list fixture',location:'Kyoto',bookingPlatform:'trip.com',includesBreakfast:true,checkInDay:1,checkOutDay:2,checkInTime:'15:00',checkOutTime:'11:00',foreignAmount:1000,currency:'THB',exchangeRate:1,rateDate:'2026-01-01',paymentMethod:'เงินสด',splitMemberIds:[id],splitGuestIds:[],paidBy:{type:'member',id}});
+await api('/api/trips/'+trip.id+'/accommodations',{paymentStatus:'paid', name:'Hotel list fixture',location:'Kyoto',bookingPlatform:'trip.com',includesBreakfast:true,checkInDay:1,checkOutDay:2,checkInTime:'15:00',checkOutTime:'11:00',foreignAmount:1000,currency:'THB',exchangeRate:1,rateDate:'2026-01-01',paymentMethod:'เงินสด',splitMemberIds:[id],splitGuestIds:[],paidBy:{type:'member',id}});
   browser('open',base+'/trips/'+trip.id+'?view=stays');
   browser('wait','.accommodation-card-copy');
   assert(evaluate("!document.querySelector('.accommodation-guest-avatars') && !!document.querySelector('.accommodation-booking-badge') && !!document.querySelector('.accommodation-breakfast-icon')"));

@@ -23,7 +23,7 @@ try {
   await db.query("INSERT INTO trips(id,owner_id,name,destination,start_date,total_days) VALUES($1,$2,'Accommodation fixture','Bangkok','2026-01-01',3)", [trip,owner]);
   await db.query("INSERT INTO trip_collaborators(trip_id,email,user_id,invited_by) VALUES($1,$2,$3,$4)", [trip,`accommodation-${member}@example.invalid`,member,owner]);
   const guest = await (await api(`/api/trips/${trip}/expense-guests`, "POST", {name:"Guest C"})).json();
-  const input = { name:"Hotel fixture", location:"Bangkok", bookingPlatform:"trip.com", bookingUrl:"https://th.trip.com/hotels/test-hotel?checkin=2026-01-01",
+const input = { paymentStatus:"paid", name:"Hotel fixture", location:"Bangkok", bookingPlatform:"trip.com", bookingUrl:"https://th.trip.com/hotels/test-hotel?checkin=2026-01-01",
     checkInDay:1,checkOutDay:3,checkInTime:"15:00",checkOutTime:"11:00",foreignAmount:3000,currency:"THB",exchangeRate:1,rateDate:"2026-01-01",paymentMethod:"เงินสด",
     splitMemberIds:[owner,member],splitGuestIds:[guest.id],paidBy:{type:"member",id:owner}};
   const created = await api(`/api/trips/${trip}/accommodations`, "POST", input);
