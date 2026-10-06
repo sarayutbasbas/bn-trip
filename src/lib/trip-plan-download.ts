@@ -12,9 +12,17 @@ export async function prepareTripPlanDownload(tripId: string, tripName: string) 
 // Call from a fresh tap AFTER fetching: Safari may expire user activation
 // while the workbook is being generated. Never navigate the app to the file.
 export async function saveTripPlanDownload(file: File) {
-  if (navigator.canShare?.({ files: [file] }) && navigator.share) {
-    await navigator.share({ files: [file] });
-    return;
+  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (mobile && navigator.canShare?.({ files: [file] }) && navigator.share) {
+    try {
+      await navigator.share({ files: [file] });
+      return;
+    } catch (error) {
+      // Cancellation is intentional. Permission/platform failures can still
+      // use the regular browser download without leaving the current page.
+      if (error instanceof Error && error.name === "AbortError") throw error;
+    }
   }
   const url = URL.createObjectURL(file);
   const link = document.createElement("a");

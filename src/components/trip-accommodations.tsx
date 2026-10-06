@@ -1187,10 +1187,11 @@ export function TripAccommodations({
                           </span>
                         </strong>
                       </header>
+                      <div className="accommodation-night-options">
                       <label className="trip-flight-checkbox accommodation-breakfast-toggle">
                         <input type="checkbox" checked={breakfastDays.includes(day+1)} onChange={event=>setBreakfastDays(current=>event.target.checked?[...new Set([...current,day+1])]:current.filter(value=>value!==day+1))}/>
                         <span className="split-checkmark" aria-hidden="true"/><span className="accommodation-breakfast-icon"><BreakfastPlateIcon size={23}/></span>
-                        <span><strong>อาหารเช้า Day {displayDay(day+1)}</strong><small>{tripDateLabel(startDate,day+1)} · เช้าหลังคืนที่พักนี้</small></span>
+                        <span><strong>รวมอาหารเช้า Day {displayDay(day+1)}</strong><small>{tripDateLabel(startDate,day+1)}</small></span>
                       </label>
                       <div className="field accommodation-night-bedtime">
                         <label>เวลานอน</label>
@@ -1206,6 +1207,7 @@ export function TripAccommodations({
                             }))
                           }
                         />
+                      </div>
                       </div>
                       <div className="field">
                         <label>รายละเอียด / หมายเหตุ</label>

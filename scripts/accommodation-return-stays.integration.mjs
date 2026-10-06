@@ -31,7 +31,21 @@ try {
  browser('click','[aria-label="แก้ไข Return Hotel"]');browser('wait','[aria-label="เลือกโรงแรมเดิม"]');browser('select','[aria-label="เลือกโรงแรมเดิม"]',first.id);
  assert.equal(evaluate('document.querySelector("input[name=name]").value'),'Tokyo Hotel');assert(evaluate('document.querySelector(".accommodation-cover-picker img").src.includes("travel-postcard-fallback")'));
  assert.equal(evaluate('document.querySelectorAll(".accommodation-night-entry input[type=checkbox]:checked").length'),2);
- browser('uncheck','.accommodation-night-entry:first-child input[type=checkbox]');browser('click','.bottom-sheet-actions .primary-btn');browser('wait','--fn','!document.querySelector("#accommodation-booking-url")');
+ for(const width of [390,1280]) {
+   browser('set','viewport',String(width),'900');
+   browser('scrollintoview','.accommodation-night-options');
+   assert(evaluate(`Array.from(document.querySelectorAll('.accommodation-night-options')).every(row=>{const a=row.children[0].getBoundingClientRect(),b=row.children[1].getBoundingClientRect();return a.right<=b.left&&Math.abs(a.bottom-b.bottom)<3})`),'breakfast before bedtime in one row');
+   browser('uncheck','.accommodation-night-entry:first-child input[type=checkbox]');
+   assert(evaluate(`(()=>{const sheet=document.querySelector('.accommodation-sheet').getBoundingClientRect(),footer=document.querySelector('.accommodation-sheet .bottom-sheet-actions').getBoundingClientRect();return sheet.bottom-footer.bottom<50})()`),'no blank space under save footer after toggling');
+   browser('screenshot',`/tmp/accommodation-options-${width}.png`);
+ }
+ browser('click','.bottom-sheet-actions .primary-btn');browser('wait','--fn','!document.querySelector("#accommodation-booking-url")');
  const saved=(await api(path)).find(item=>item.id===second.id);assert.deepEqual(saved.breakfast_days,[8]);assert.equal(saved.hotel_id,first.hotel_id);assert.equal(saved.name,first.name);assert.equal(saved.image_url,first.image_url);
+ evaluate(`(()=>{window.testDownload='';window.shareCalls=0;Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});Object.defineProperty(navigator,'share',{configurable:true,value:async()=>{window.shareCalls++;throw new DOMException('Permission denied','NotAllowedError')}});HTMLAnchorElement.prototype.click=function(){window.testDownload=this.download};return true})()`);
+ browser('click','.trip-menu-more');browser('click','.trip-menu-sheet .trip-menu-export');browser('click','.confirm-delete');
+ browser('wait','--fn',`document.querySelector('#confirm-title')?.textContent==='ไฟล์แผนทริปพร้อมแล้ว'`);
+ browser('click','.confirm-delete');browser('wait','--fn',`window.testDownload.endsWith('-plan.xlsx')`);
+ assert.equal(evaluate('window.shareCalls'),0);assert(evaluate(`location.pathname.includes('/trips/')`));
+ console.log('PASS desktop All Menu export generates XLSX and downloads without native share or leaving app');
  console.log('PASS return hotel identity/image reuse, per-morning breakfast persistence, invalid day rejection and list badges');
 } finally {try{browser('close')}catch{}await db.query('DELETE FROM users WHERE id=$1',[id]);await db.end();}
