@@ -26,6 +26,8 @@ export const accommodationSchema = z.object({
     .or(z.literal(""))
     .default(""),
   includesBreakfast: z.boolean().default(false),
+  breakfastDays: z.array(z.number().int()).max(32).optional(),
+  sourceAccommodationId: z.string().uuid().nullable().optional(),
   imageUrl: z.string().trim().max(2000).nullable().default(null),
   description: z.string().trim().max(2000).default(""),
   nightDescriptions: nightDescriptionsSchema,
@@ -46,6 +48,9 @@ export const accommodationSchema = z.object({
   paymentOwnerName: z.string().max(120).nullable().optional(),
   splitMemberIds: z.array(z.string().uuid()).max(20),
 }).superRefine((value, context) => {
+  if (value.breakfastDays?.some(day => day <= value.checkInDay || day > value.checkOutDay)) {
+    context.addIssue({code:"custom",path:["breakfastDays"],message:"วันอาหารเช้าต้องอยู่หลังคืนที่พักและไม่เกินวันเช็กเอาต์"});
+  }
   const invalidDay = Object.keys(value.nightDescriptions).some((day) => {
     const dayNumber = Number(day);
     return dayNumber < value.checkInDay || dayNumber >= value.checkOutDay;

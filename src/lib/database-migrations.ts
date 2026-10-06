@@ -678,6 +678,10 @@ const migrations = [
       "CREATE UNIQUE INDEX IF NOT EXISTS trip_idea_expense_guests_name_idx ON trip_idea_expense_guests(trip_idea_id,lower(name))",
     ],
   },
+  { version: 53, statements: [
+    "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS hotel_id UUID NOT NULL DEFAULT gen_random_uuid()",
+    "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS breakfast_days INTEGER[]",
+  ] },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

@@ -36,6 +36,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await ensureLatestDatabaseSchema();
     if (!await getTripRole(id, session.userId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const input = accommodationSchema.parse(await request.json());
+    const breakfastDays = [...new Set(input.breakfastDays ?? (input.includesBreakfast ? Array.from({length: Math.max(0, input.checkOutDay-input.checkInDay)}, (_, index) => input.checkInDay+index+1) : []))].sort((a,b)=>a-b);
+    input.includesBreakfast = breakfastDays.length > 0;
     if (!await tripExpenseGuestIdsBelongToTrip(id, input.splitGuestIds)) return NextResponse.json({ error: "คนนอกทริปไม่ถูกต้อง" }, { status: 400 });
     if (input.paidBy && !(input.paidBy.type === "member"
       ? await tripMemberIdsAreMembers(id, [input.paidBy.id])
@@ -45,6 +47,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!await tripCardIdsAreMembers(id, input.creditCardId ? [input.creditCardId] : [])) return NextResponse.json({ error: "บัตรนี้ไม่ได้เป็นของสมาชิกในทริป" }, { status: 400 });
     if (!await tripMemberIdsAreMembers(id, input.splitMemberIds)) return NextResponse.json({ error: "ผู้หารค่าใช้จ่ายต้องเป็นสมาชิกในทริป" }, { status: 400 });
     const saved = await transaction(async (client) => {
+      if(input.sourceAccommodationId) {
+        const source=await client.query('SELECT id FROM trip_accommodations WHERE id=$1 AND trip_id=$2',[input.sourceAccommodationId,id]);
+        if(!source.rows.length) throw new Error('invalid_source_accommodation');
+      }
       const trip = await client.query<{ total_days: number }>("SELECT total_days FROM trips WHERE id=$1", [id]);
       if (trip.rows[0]?.total_days <= 1) throw new Error("one_day_trip");
       if (!trip.rows[0] || input.checkOutDay > trip.rows[0].total_days + 1) throw new Error("day_outside_trip");
@@ -57,6 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9::time,$10::time,$11,$12,$13,$14,$15,$16,$17,$18::uuid[],$19,$20,$21,$22,$23,$24::jsonb,$25::uuid[])
         RETURNING *`, [id,input.name,input.location,input.description,JSON.stringify(input.nightDescriptions),JSON.stringify(input.nightBedtimes),input.checkInDay,input.checkOutDay,input.checkInTime,input.checkOutTime,input.foreignAmount,input.currency.toUpperCase(),input.exchangeRate,input.rateDate,input.paymentMethod,input.creditCardId||null,input.paymentOwnerName||null,input.splitMemberIds,input.bookingPlatform,input.includesBreakfast,input.imageUrl,session.userId,input.bookingUrl,JSON.stringify(input.paidBy || null),input.splitGuestIds]);
       const accommodation = result.rows[0];
+      await client.query(`UPDATE trip_accommodations SET breakfast_days=$3::int[],hotel_id=COALESCE((SELECT hotel_id FROM trip_accommodations WHERE id=$4 AND trip_id=$2),hotel_id) WHERE id=$1 AND trip_id=$2`,[accommodation.id,id,breakfastDays,input.sourceAccommodationId||null]);
       await syncAccommodationLinkedRecords(client, {
         id: accommodation.id, tripId: id, ...input,
         currency: input.currency.toUpperCase(), costItemId: accommodation.cost_item_id,

@@ -16606,3 +16606,8 @@ body:has(.login-redesign) .app-glass-scene-content { padding-bottom:0; }
   overflow-wrap: anywhere;
   white-space: normal;
 }
+.accommodation-card-icons .accommodation-breakfast-icon { position:relative; margin-bottom:12px; }
+.breakfast-day-tag,.breakfast-all-days { position:absolute; top:calc(100% - 4px); left:50%; transform:translateX(-50%); }
+.breakfast-day-tag { white-space:nowrap; border-radius:8px; padding:1px 5px; background:var(--surface-solid); color:var(--ink); font-size:9px; line-height:1.5; box-shadow:0 1px 4px #0002; }
+.breakfast-all-days { color:#fff; fill:#16a34a; background:#16a34a; border-radius:50%; }
+.accommodation-night-entry .accommodation-breakfast-toggle { margin:8px 0; }

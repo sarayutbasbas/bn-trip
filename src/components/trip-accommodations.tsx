@@ -65,6 +65,8 @@ type Accommodation = {
   paid_by?: ExpensePayer | null;
   split_guest_ids?: string[];
   includes_breakfast: boolean;
+  breakfast_days?: number[] | null;
+  hotel_id?: string;
   image_url: string | null;
   description: string;
   night_descriptions: Record<string, string>;
@@ -429,6 +431,10 @@ export function TripAccommodations({
   );
   const [editing, setEditing] = useState<Accommodation | "new" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [breakfastDays, setBreakfastDays] = useState<number[]>([]);
+  const [sourceAccommodationId, setSourceAccommodationId] = useState("");
+  const [hotelName, setHotelName] = useState("");
+  const [hotelLocation, setHotelLocation] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Accommodation | null>(null);
   const [checkInDay, setCheckInDay] = useState(1);
   const [checkOutDay, setCheckOutDay] = useState(Math.min(2, totalDays + 1));
@@ -686,6 +692,7 @@ export function TripAccommodations({
     if (imageInputRef.current) imageInputRef.current.value = "";
   }
   function openNew() {
+    setBreakfastDays([]);setSourceAccommodationId("");setHotelName("");setHotelLocation("");
     setCheckInDay(1);
     setCheckOutDay(2);
     setNightDescriptions({});
@@ -711,6 +718,8 @@ export function TripAccommodations({
     setEditing("new");
   }
   function openEdit(item: Accommodation, detailDay: number | null = null) {
+    setBreakfastDays(item.breakfast_days ?? (item.includes_breakfast ? Array.from({length:item.check_out_day-item.check_in_day},(_,i)=>item.check_in_day+i+1) : []));
+    setSourceAccommodationId("");setHotelName(item.name);setHotelLocation(item.location || "");
     setCheckInDay(item.check_in_day);
     setCheckOutDay(item.check_out_day);
     setNightDescriptions(
@@ -834,7 +843,7 @@ export function TripAccommodations({
     setSaving(true);
     setError("");
     try {
-      let imageUrl = imageRemoved ? null : edit?.image_url || null;
+      let imageUrl = imageRemoved ? null : imagePreview || edit?.image_url || null;
       if (imageFile) {
         const optimized = await compressImageFile(imageFile, {
           maxWidth: 1600,
@@ -858,7 +867,8 @@ export function TripAccommodations({
       bookingUrl,
       paidBy,
       splitGuestIds,
-      includesBreakfast: form.get("includesBreakfast") === "true",
+      breakfastDays: breakfastDays.filter(day=>day>checkInDay&&day<=checkOutDay),
+      sourceAccommodationId: sourceAccommodationId || null,
       imageUrl,
       description: nightDescriptions[String(checkInDay)]?.trim() || "",
       nightDescriptions: Object.fromEntries(
@@ -1017,6 +1027,7 @@ export function TripAccommodations({
                           {item.includes_breakfast && (
                             <span className="accommodation-breakfast-icon" role="img" aria-label="รวมอาหารเช้า" title="รวมอาหารเช้า">
                               <BreakfastPlateIcon size={23} />
+                              {(item.breakfast_days?.length ?? item.nights) === item.nights ? <CheckCircle2 className="breakfast-all-days" size={16} aria-label="รวมทุกวัน"/> : <small className="breakfast-day-tag">วันที่ {item.breakfast_days?.map(displayDay).join(",")}</small>}
                             </span>
                           )}
                         </div>
@@ -1067,6 +1078,7 @@ export function TripAccommodations({
           deleteLabel="ลบที่พัก"
         >
           <div className="form-grid">
+                {items.some(item=>item.id!==edit?.id) && <div className="field"><label>กลับมาพักที่เดิม</label><select aria-label="เลือกโรงแรมเดิม" value={sourceAccommodationId} onChange={event=>{const source=items.find(item=>item.id===event.target.value);setSourceAccommodationId(event.target.value);if(source){setHotelName(source.name);setHotelLocation(source.location||"");setImagePreview(source.image_url||"");setImageFile(null);setImageRemoved(false);}}}><option value="">เลือกที่พักเดิมเพื่อใช้ข้อมูลและรูป</option>{items.filter(item=>item.id!==edit?.id).filter((item,index,list)=>list.findIndex(other=>(other.hotel_id||other.id)===(item.hotel_id||item.id))===index).map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select><small>ใช้โรงแรมและรูปเดิม · วันพัก ราคา และอาหารเช้าแยกตามการจองนี้</small></div>}
                 <section className="accommodation-image-field">
                   <div><strong>รูปที่พัก</strong><small>ไม่บังคับ · หากไม่เพิ่มจะแสดงรูปเริ่มต้น</small></div>
                   <div className={`cover-picker square-picker accommodation-cover-picker ${imagePreview ? "has-image" : ""}`}>
@@ -1099,34 +1111,22 @@ export function TripAccommodations({
                     name="name"
                     required
                     maxLength={180}
-                    defaultValue={edit?.name || ""}
+                    value={hotelName}
+                    onChange={event=>setHotelName(event.target.value)}
                     placeholder="เช่น APA Hotel Hakata"
                   />
                 </div>
                 <LocationSearch
+                  key={`${edit?.id || "new"}-${sourceAccommodationId}`}
                   options={locations}
-                  defaultValue={edit?.location || ""}
+                  defaultValue={hotelLocation}
                 />
                 <div className="form-row accommodation-booking-row">
                   <BookingPlatformPicker
                     value={bookingPlatform}
                     onChange={setBookingPlatform}
                   />
-                  <label className="trip-flight-checkbox accommodation-breakfast-toggle">
-                    <input
-                      key={`breakfast-${edit?.id || "new"}`}
-                      name="includesBreakfast"
-                      type="checkbox"
-                      value="true"
-                      defaultChecked={Boolean(edit?.includes_breakfast)}
-                    />
-                    <span className="split-checkmark" aria-hidden="true" />
-                    <span className="accommodation-breakfast-icon" aria-hidden="true"><BreakfastPlateIcon size={23} /></span>
-                    <span>
-                      <strong>มีอาหารเช้า</strong>
-                      <small>ที่พักรวมอาหารเช้าไว้ในการจอง</small>
-                    </span>
-                  </label>
+
                 </div>
                 <div className="field">
                   <label htmlFor="accommodation-booking-url">ลิงก์ที่พักที่จอง</label>
@@ -1187,6 +1187,11 @@ export function TripAccommodations({
                           </span>
                         </strong>
                       </header>
+                      <label className="trip-flight-checkbox accommodation-breakfast-toggle">
+                        <input type="checkbox" checked={breakfastDays.includes(day+1)} onChange={event=>setBreakfastDays(current=>event.target.checked?[...new Set([...current,day+1])]:current.filter(value=>value!==day+1))}/>
+                        <span className="split-checkmark" aria-hidden="true"/><span className="accommodation-breakfast-icon"><BreakfastPlateIcon size={23}/></span>
+                        <span><strong>อาหารเช้า Day {displayDay(day+1)}</strong><small>{tripDateLabel(startDate,day+1)} · เช้าหลังคืนที่พักนี้</small></span>
+                      </label>
                       <div className="field accommodation-night-bedtime">
                         <label>เวลานอน</label>
                         <NativeTimeInput
