@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import { BlockingSaveOverlay, useBlockingSubmit } from "@/src/components/bottom-sheet";
@@ -658,7 +659,7 @@ export function ChecklistMasterPage({
 
       {itemSheetOpen && error && <FormErrorDialog title="ตรวจสอบข้อมูล Checklist" description={error} onClose={() => setError("")} />}
 
-      {deleteTarget && (
+      {deleteTarget && createPortal(
         <div
           className="confirm-backdrop"
           role="presentation"
@@ -701,7 +702,8 @@ export function ChecklistMasterPage({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
