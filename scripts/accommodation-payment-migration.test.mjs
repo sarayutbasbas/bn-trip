@@ -13,6 +13,11 @@ try {
   assert.deepEqual((await client.query('SELECT * FROM trip_accommodations')).rows,[{name:'Existing stay',payment_status:null}]);
   await client.query("UPDATE trip_accommodations SET payment_status='pending'");
   await client.query("UPDATE trip_accommodations SET payment_status='paid'");
+  const dateSql = readFileSync(new URL('../db/migrations/0055_accommodation_payment_date.sql',import.meta.url),'utf8');
+  await client.query(dateSql);await client.query(dateSql);
+  assert.deepEqual((await client.query('SELECT payment_status,payment_date FROM trip_accommodations')).rows,[{payment_status:'paid',payment_date:null}]);
+  await client.query("UPDATE trip_accommodations SET payment_date='2099-01-01'");
+  assert.equal((await client.query('SELECT payment_date::text FROM trip_accommodations')).rows[0].payment_date,'2099-01-01');
   await assert.rejects(client.query("UPDATE trip_accommodations SET payment_status='invalid'"));
   console.log('PASS idempotent payment migration, preserved legacy rows, valid states and constraint');
 } finally {

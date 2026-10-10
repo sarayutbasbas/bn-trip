@@ -26,7 +26,8 @@ export const accommodationSchema = z.object({
     .or(z.literal(""))
     .default(""),
   includesBreakfast: z.boolean().default(false),
-  paymentStatus: z.enum(["paid", "pending"]),
+  paymentStatus: z.enum(["paid", "pending"]).optional(),
+  paymentDate: z.string().date().optional(),
   breakfastDays: z.array(z.number().int()).max(32).optional(),
   sourceAccommodationId: z.string().uuid().nullable().optional(),
   imageUrl: z.string().trim().max(2000).nullable().default(null),
@@ -49,6 +50,7 @@ export const accommodationSchema = z.object({
   paymentOwnerName: z.string().max(120).nullable().optional(),
   splitMemberIds: z.array(z.string().uuid()).max(20),
 }).superRefine((value, context) => {
+  if (!value.paymentDate && !value.paymentStatus) context.addIssue({code:"custom",path:["paymentDate"],message:"กรุณาเลือกวันที่จ่ายเงิน"});
   if (value.breakfastDays?.some(day => day <= value.checkInDay || day > value.checkOutDay)) {
     context.addIssue({code:"custom",path:["breakfastDays"],message:"วันอาหารเช้าต้องอยู่หลังคืนที่พักและไม่เกินวันเช็กเอาต์"});
   }

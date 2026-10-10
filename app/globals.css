@@ -16625,6 +16625,7 @@ body:has(.login-redesign) .app-glass-scene-content { padding-bottom:0; }
 .accommodation-night-breakfast { min-width:0; }
 .accommodation-night-breakfast > .accommodation-breakfast-toggle { margin:0; }
 .accommodation-booking-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.accommodation-sheet .accommodation-booking-row .native-picker-control { margin:0; }
 .accommodation-payment-icon { position:relative;width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border-radius:50%;background:#0d9488;color:#fff; }
 .accommodation-card-copy .accommodation-payment-icon svg { color:#fff; }
 .payment-status-badge { position:absolute;right:-5px;top:-5px;border-radius:50%;color:#fff; }

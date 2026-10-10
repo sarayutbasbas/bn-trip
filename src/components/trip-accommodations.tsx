@@ -4,6 +4,7 @@ import { useGuestRemoval } from "./guest-removal";
 import { useExpenseGuests, EXPENSE_GUESTS_CHANGED_EVENT } from "./use-expense-guests";
 import type { ExpensePayer } from "@/src/lib/expense-settlement";
 import { safeBookingUrl } from "@/src/lib/booking-url";
+import { accommodationPaymentStatus, bangkokDate } from "@/src/lib/accommodation-payment";
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -67,6 +68,7 @@ type Accommodation = {
   split_guest_ids?: string[];
   includes_breakfast: boolean;
   payment_status?: "paid" | "pending" | null;
+  payment_date?: string | null;
   breakfast_days?: number[] | null;
   hotel_id?: string;
   image_url: string | null;
@@ -191,6 +193,15 @@ function MoneyInput({ defaultValue }: { defaultValue?: string | number }) {
     />
   );
 }
+function PaymentDateInput({ value }: { value: string }) {
+  const [date, setDate] = useState(value);
+  return <label className="native-picker-control">
+    <span className="native-picker-value">{date ? new Date(`${date}T12:00:00`).toLocaleDateString("th-TH", {day:"numeric",month:"short",year:"2-digit"}) : "เลือกวันที่"}</span>
+    <CalendarDays size={18} aria-hidden="true" />
+    <input id="accommodation-payment-date" name="paymentDate" aria-label="วันที่จ่ายเงิน" type="date" lang="th-TH-u-ca-gregory" value={date} onChange={event=>setDate(event.target.value)} required />
+  </label>;
+}
+
 function NativeTimeInput({
   name,
   value,
@@ -426,6 +437,20 @@ export function TripAccommodations({
     accommodationResourceKey(tripId),
   );
   const [items, setItems] = useState<Accommodation[]>(() => cachedItems || []);
+  const [paymentToday, setPaymentToday] = useState(() => bangkokDate());
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const update = () => {
+      clearTimeout(timer);
+      setPaymentToday(bangkokDate());
+      const thaiTime = Date.now() + 7 * 60 * 60 * 1000;
+      timer = setTimeout(update, 86400000 - thaiTime % 86400000 + 100);
+    };
+    update();
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", update);
+    return () => { clearTimeout(timer); window.removeEventListener("focus", update); document.removeEventListener("visibilitychange", update); };
+  }, []);
   const [loading, setLoading] = useState(!cachedItems);
   const [error, setError] = useState("");
   const [favoriteBusyIds, setFavoriteBusyIds] = useState<Set<string>>(
@@ -866,7 +891,7 @@ export function TripAccommodations({
       name: String(form.get("name") || ""),
       location: String(form.get("location") || ""),
       bookingPlatform,
-      paymentStatus: String(form.get("paymentStatus") || ""),
+      paymentDate: String(form.get("paymentDate") || ""),
       bookingUrl,
       paidBy,
       splitGuestIds,
@@ -983,6 +1008,7 @@ export function TripAccommodations({
         ) : items.length ? (
           <div className="accommodation-list">
             {items.map((item) => {
+              const paymentStatus = accommodationPaymentStatus(item.payment_date, item.payment_status, paymentToday);
               const isBaht = item.currency === "THB";
               const bahtAmount =
                 Number(item.foreign_amount) * Number(item.exchange_rate || 1);
@@ -1024,7 +1050,7 @@ export function TripAccommodations({
                       <span><b>{item.nights} คืน</b></span>
                     </div>
                     <footer>
-                      {(bookingPlatform || item.includes_breakfast || item.payment_status) && (
+                      {(bookingPlatform || item.includes_breakfast || paymentStatus) && (
                         <div className="accommodation-card-icons">
                           {bookingPlatform && <span className="accommodation-booking-badge"><Image src={bookingPlatform.icon} alt={bookingPlatform.label} width={36} height={36} /></span>}
                           {item.includes_breakfast && (
@@ -1033,9 +1059,9 @@ export function TripAccommodations({
                               {(item.breakfast_days?.length ?? item.nights) === item.nights ? <CheckCircle2 className="breakfast-all-days" size={16} aria-label="รวมทุกวัน"/> : <small className="breakfast-day-tag">วันที่ {item.breakfast_days?.map(displayDay).join(",")}</small>}
                             </span>
                           )}
-                          {item.payment_status && <span className="accommodation-payment-icon" role="img" aria-label={item.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน"} title={item.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน · จองก่อนจ่ายทีหลัง"}>
+                          {paymentStatus && <span className="accommodation-payment-icon" role="img" aria-label={paymentStatus === "paid" ? "ชำระแล้ว" : "รอชำระเงิน"} title={`${paymentStatus === "paid" ? "ชำระแล้ว" : "รอชำระเงิน"}${item.payment_date ? ` · ${item.payment_date}` : ""}`}>
                             <CreditCard size={23}/>
-                            {item.payment_status === "paid" ? <CheckCircle2 className="payment-status-badge is-paid" size={16}/> : <Clock className="payment-status-badge is-pending" size={16}/>}
+                            {paymentStatus === "paid" ? <CheckCircle2 className="payment-status-badge is-paid" size={16}/> : <Clock className="payment-status-badge is-pending" size={16}/>}
                           </span>}
                         </div>
                       )}
@@ -1134,12 +1160,8 @@ export function TripAccommodations({
                     onChange={setBookingPlatform}
                   />
                   <div className="field">
-                    <label htmlFor="accommodation-payment-status">สถานะการชำระเงิน *</label>
-                    <select id="accommodation-payment-status" name="paymentStatus" defaultValue={edit?.payment_status || ""} required>
-                      <option value="" disabled>เลือกสถานะ</option>
-                      <option value="paid">ชำระแล้ว</option>
-                      <option value="pending">รอชำระเงิน</option>
-                    </select>
+                    <label htmlFor="accommodation-payment-date">วันที่จ่ายเงิน *</label>
+                    <PaymentDateInput key={edit?.id || "new"} value={edit?.payment_date?.slice(0,10) || ""} />
                   </div>
                 </div>
                 <div className="field">

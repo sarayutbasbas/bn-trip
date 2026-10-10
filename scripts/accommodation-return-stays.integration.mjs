@@ -17,10 +17,11 @@ try {
  const path='/api/trips/'+trip.id+'/accommodations';
  const input={name:'Tokyo Hotel',location:'Tokyo station',checkInDay:1,checkOutDay:4,checkInTime:'15:00',checkOutTime:'11:00',foreignAmount:3000,currency:'THB',exchangeRate:1,rateDate:'2027-01-01',paymentMethod:'เงินสด',splitMemberIds:[id],imageUrl:'/travel-postcard-fallback.jpg',breakfastDays:[2,3]};
  input.bookingPlatform='trip.com';
- input.paymentStatus='pending';
- const missingStatus={...input};delete missingStatus.paymentStatus;
+ input.paymentDate='2099-01-01';
+ const missingStatus={...input};delete missingStatus.paymentDate;
  const missingResponse=await fetch(base+path,{method:'POST',headers:{cookie:'bn_trip_session='+token,'Content-Type':'application/json'},body:JSON.stringify(missingStatus)});assert.equal(missingResponse.status,400);
  const first=await api(path,input);assert.deepEqual(first.breakfast_days,[2,3]);assert(first.hotel_id);
+ const invalidDate=await fetch(base+path,{method:'POST',headers:{cookie:'bn_trip_session='+token,'Content-Type':'application/json'},body:JSON.stringify({...input,paymentDate:'2026-02-30'})});assert.equal(invalidDate.status,400);
  assert.equal(first.payment_status,'pending');
  const second=await api(path,{...input,name:'Return Hotel',checkInDay:6,checkOutDay:8,breakfastDays:[7,8],sourceAccommodationId:first.id});assert.equal(second.hotel_id,first.hotel_id);assert.equal(second.image_url,first.image_url);
  const invalid=await fetch(base+path,{method:'POST',headers:{cookie:'bn_trip_session='+token,'Content-Type':'application/json'},body:JSON.stringify({...input,breakfastDays:[1]})});assert.equal(invalid.status,400);
@@ -35,7 +36,9 @@ try {
  browser('click','[aria-label="แก้ไข Return Hotel"]');browser('wait','[aria-label="เลือกโรงแรมเดิม"]');browser('select','[aria-label="เลือกโรงแรมเดิม"]',first.id);
  assert.equal(evaluate('document.querySelector("input[name=name]").value'),'Tokyo Hotel');assert(evaluate('document.querySelector(".accommodation-cover-picker img").src.includes("travel-postcard-fallback")'));
  assert.equal(evaluate('document.querySelectorAll(".accommodation-night-entry input[type=checkbox]:checked").length'),2);
- browser('select','#accommodation-payment-status','paid');
+ assert.equal(evaluate('document.querySelector("#accommodation-payment-date").value'),'2099-01-01');
+ evaluate(`(()=>{const input=document.querySelector('#accommodation-payment-date');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'2020-01-01');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
+ assert.equal(evaluate('document.querySelector("#accommodation-payment-date").value'),'2020-01-01');
  for(const width of [390,1280]) {
    browser('set','viewport',String(width),'900');
    browser('scrollintoview','.accommodation-night-options');
@@ -47,6 +50,7 @@ try {
  }
  browser('click','.bottom-sheet-actions .primary-btn');browser('wait','--fn','!document.querySelector("#accommodation-booking-url")');
  const saved=(await api(path)).find(item=>item.id===second.id);assert.deepEqual(saved.breakfast_days,[8]);assert.equal(saved.hotel_id,first.hotel_id);assert.equal(saved.name,first.name);assert.equal(saved.image_url,first.image_url);
+ assert.equal(saved.payment_date,'2020-01-01');
  assert.equal(saved.payment_status,'paid');
  assert(evaluate(`!!document.querySelector('.payment-status-badge.is-paid')&&!!document.querySelector('.payment-status-badge.is-pending')`));
  evaluate(`(()=>{window.testDownload='';window.shareCalls=0;Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});Object.defineProperty(navigator,'share',{configurable:true,value:async()=>{window.shareCalls++;throw new DOMException('Permission denied','NotAllowedError')}});HTMLAnchorElement.prototype.click=function(){window.testDownload=this.download};return true})()`);
