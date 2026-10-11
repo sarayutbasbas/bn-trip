@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import ts from 'typescript';
+
+const exports = {};
+runInNewContext(ts.transpileModule(readFileSync('src/lib/trip-range-filter.ts','utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText, {exports});
+const {filterDate,flightFilter,appendTripRangeFilter}=exports;
+assert.equal(filterDate('2030-02-30'),'');
+assert.equal(filterDate('0000-01-01'),'');
+assert.equal(filterDate('2028-02-29'),'2028-02-29');
+assert.equal(filterDate('2029-02-29'),'');
+assert.equal(flightFilter('false'),'false');
+assert.equal(flightFilter('true'),'true');
+assert.equal(flightFilter('garbage'),'all');
+const where=[],values=['user'];
+appendTripRangeFilter(where,values,new URLSearchParams('from=2030-01-01&to=2030-12-31&flights=false'));
+assert.deepEqual(values,['user','2030-01-01','2030-12-31']);
+assert(where[0].endsWith('>=$2::date'));
+assert(where[1].endsWith('<=$3::date'));
+assert.equal(where[2],'t.has_flights IS NOT TRUE');
+const invalid=[];
+appendTripRangeFilter(invalid,[],new URLSearchParams('from=2030-12-31&to=2030-01-01'));
+assert(invalid.includes('FALSE'));
+console.log('PASS date validation, inclusive SQL bounds and flight options');

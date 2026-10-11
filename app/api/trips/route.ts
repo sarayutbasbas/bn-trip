@@ -1,3 +1,4 @@
+import { appendTripRangeFilter } from "@/src/lib/trip-range-filter";
 import { tripCoverUrlsSchema } from "@/src/lib/trip-cover-validation";
 import { tripCovers } from "@/src/lib/trip-covers";
 import { NextResponse } from "next/server";
@@ -38,7 +39,7 @@ export async function GET(request:Request) {
     const offset=Math.max(0,Number(params.get("offset")||0));
     const values:Array<string|number|number[]|string[]>=[session.userId];
     const where=[access];
-    if(params.get("flights")==="true")where.push("t.has_flights IS TRUE");
+    appendTripRangeFilter(where, values, params);
     if(status==="ongoing")where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
     if(status==="upcoming")where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
     if(status==="past")where.push("COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
@@ -50,7 +51,7 @@ export async function GET(request:Request) {
     appendTripMemberFilter(where,values,filterMembers);
     const statusCountValues:Array<string|number|number[]|string[]>=[session.userId];
     const statusCountWhere=[access];
-    if(params.get("flights")==="true")statusCountWhere.push("t.has_flights IS TRUE");
+    appendTripRangeFilter(statusCountWhere, statusCountValues, params);
     if(tripType==="domestic")statusCountWhere.push("(t.country_code='TH' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
     if(tripType==="international")statusCountWhere.push("((t.country_code IS NOT NULL AND t.country_code<>'TH') OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
     if(filterYears.length){statusCountValues.push(filterYears);statusCountWhere.push(`EXTRACT(YEAR FROM t.start_date)::int=ANY($${statusCountValues.length}::int[])`)}

@@ -3640,6 +3640,8 @@ button:disabled {
   background: var(--surface-2);
 }
 .trip-directory-type-options { margin:0; }
+.trip-directory-filter-sheet .trip-directory-date-range { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.trip-directory-date-range .field .native-picker-control { margin:0; }
 .trip-directory-type-options .status-domestic > svg { color:#5c76d8; }
 .trip-directory-type-options .status-international > svg { color:#19a66f; }
 .trip-directory-type-options button.active > svg { color:#fff; }
