@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { packExpenseTags } from "@/src/lib/pack-expense-tags";
 
 type Tag = { id?: string; key: string; value: number };
-const currency = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const currency = new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
 export function TimelineExpenseTags({ costs, onOpen }: { costs: Tag[]; onOpen: (index: number) => void }) {
   const container = useRef<HTMLDivElement>(null);
