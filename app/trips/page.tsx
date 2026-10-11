@@ -18,5 +18,5 @@ export default async function TripsPage({searchParams}:{searchParams:Promise<Rec
   initialTripFilters.member=parseMemberFilter(initialTripFilters.member,session.userId).join(",");
   // Render the interactive shell immediately; the directory owns its cancellable
   // request, skeleton and retry UI instead of blocking route navigation on SQL.
-  return <BNTripApp authenticated demo={Boolean(session.isDemo)} page="trips" initialTripFilters={initialTripFilters}/>;
+  return <BNTripApp authenticated demo={Boolean(session.isDemo)} page="trips" initialTripFilters={{...initialTripFilters,flights:value("flights")}}/>;
 }

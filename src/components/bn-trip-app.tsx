@@ -234,6 +234,7 @@ type Lang = "TH" | "EN";
 type TripStatus = "all" | "ongoing" | "upcoming" | "past" | "favorite";
 type TripType = "all" | "domestic" | "international";
 type TripFilters = {
+  flights?: string;
   member?: string;
   status: string;
   type: string;
@@ -3775,6 +3776,8 @@ function TripsDirectory({
   const [selectedYears, setSelectedYears] = useState<string[]>(()=>parseYears(initialFilters.year));
   const [selectedMembers, setSelectedMembers] = useState(() => parseMemberFilter(initialFilters.member || ""));
   const [draftMembers, setDraftMembers] = useState(selectedMembers);
+  const [flightsOnly, setFlightsOnly] = useState(initialFilters.flights === "true");
+  const [draftFlightsOnly, setDraftFlightsOnly] = useState(flightsOnly);
   const [filterMembers, setFilterMembers] = useState<TripFilterMember[]>(initialData?.filterMembers || []);
   const [queryText, setQueryText] = useState(initialFilters.q || "");
   const [sort, setSort] = useState(() => normalizeTripSort(initialFilters.sort));
@@ -3793,7 +3796,7 @@ function TripsDirectory({
   const [loading, setLoading] = useState(!initialData);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState("");
-  const filterKey = JSON.stringify([status, tripType, selectedYears, selectedMembers, queryText.trim(), sort]);
+  const filterKey = JSON.stringify([status, tripType, selectedYears, selectedMembers, flightsOnly, queryText.trim(), sort]);
   const [loadedFilterKey, setLoadedFilterKey] = useState(filterKey);
   const [directoryError, setDirectoryError] = useState("");
   const previousQueryRef = useRef(queryText);
@@ -3803,7 +3806,7 @@ function TripsDirectory({
   const skipInitialFetch = useRef(Boolean(initialData));
   const hasContentRef = useRef(Boolean(initialData));
   const visibleTripCountRef = useRef(Math.max(20, initialData?.items.length || Math.min(200, Number(initialFilters.loaded) || 20)));
-  const activeFiltersRef = useRef(JSON.stringify([status, tripType, selectedYears, selectedMembers, queryText.trim(), sort]));
+  const activeFiltersRef = useRef(JSON.stringify([status, tripType, selectedYears, selectedMembers, flightsOnly, queryText.trim(), sort]));
   const directoryRequestRef = useRef(0);
   const refreshingDirectoryRef = useRef(false);
   const loadMoreControllerRef = useRef<AbortController | null>(null);
@@ -3883,7 +3886,7 @@ function TripsDirectory({
     loadMoreControllerRef.current = null;
     setLoadingMore(false);
     setLoadMoreError("");
-    const filterKey = JSON.stringify([status, tripType, selectedYears, selectedMembers, queryText.trim(), sort]);
+    const filterKey = JSON.stringify([status, tripType, selectedYears, selectedMembers, flightsOnly, queryText.trim(), sort]);
     if (activeFiltersRef.current !== filterKey) {
       visibleTripCountRef.current = 20;
       activeFiltersRef.current = filterKey;
@@ -3905,6 +3908,7 @@ function TripsDirectory({
         });
         if (selectedYears.length) params.set("year", selectedYears.join(","));
         if (selectedMembers.length) params.set("member", selectedMembers.join(","));
+        if (flightsOnly) params.set("flights", "true");
         if (queryText.trim()) params.set("q", queryText.trim());
         const visibleParams = new URLSearchParams(params);
         visibleParams.delete("mode");
@@ -3966,6 +3970,7 @@ function TripsDirectory({
     tripType,
     selectedYears,
     selectedMembers,
+    flightsOnly,
     queryText,
     sort,
     revision,
@@ -3991,6 +3996,7 @@ function TripsDirectory({
     });
     if (selectedYears.length) params.set("year", selectedYears.join(","));
     if (selectedMembers.length) params.set("member", selectedMembers.join(","));
+        if (flightsOnly) params.set("flights", "true");
     if (queryText.trim()) params.set("q", queryText.trim());
     try {
       const data = await fetchTripDirectoryPage(params, controller.signal);
@@ -4055,7 +4061,7 @@ function TripsDirectory({
     {value:"domestic",label:"ในประเทศ",Icon:MapPin},
     {value:"international",label:"ต่างประเทศ",Icon:Globe2},
   ];
-  const hasActiveTripFilters=tripType!=="all"||selectedYears.length>0||selectedMembers.length>0;
+  const hasActiveTripFilters=flightsOnly||tripType!=="all"||selectedYears.length>0||selectedMembers.length>0;
   const firstPastTripIndex = status === "all" && sort === "latest"
     ? items.findIndex((trip) => tripTemporalStatus(trip, now).past)
     : -1;
@@ -4083,7 +4089,7 @@ function TripsDirectory({
               </button>
             )}
           </label>
-          <button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={()=>{setDraftTripType(tripType);setDraftYears([...selectedYears]);setDraftMembers([...selectedMembers]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label={t("กำลังใช้ตัวกรอง")}/>:null}</button>
+          <button className={`trip-directory-filter-toggle ${filtersOpen||hasActiveTripFilters?"active":""}`} type="button" onClick={()=>{setDraftFlightsOnly(flightsOnly);setDraftTripType(tripType);setDraftYears([...selectedYears]);setDraftMembers([...selectedMembers]);setFiltersOpen(true)}} aria-expanded={filtersOpen} aria-label={t("ตั้งค่าตัวกรอง")}><Settings2 size={21}/>{hasActiveTripFilters?<i className="notification-dot trip-directory-filter-dot" aria-label={t("กำลังใช้ตัวกรอง")}/>:null}</button>
           <button className={`trip-directory-filter-toggle ${sortOpen || sort !== "latest" ? "active" : ""}`} type="button" onClick={() => setSortOpen(true)} aria-expanded={sortOpen} aria-label={t("เรียงลำดับทริป")} title={t("เรียงลำดับทริป")}><ArrowDownUp size={21}/>{sort !== "latest" && <i className="notification-dot trip-directory-filter-dot" aria-label={t("กำลังใช้การเรียงลำดับ")}/>}</button>
           <button className="trip-directory-add-button" type="button" onClick={createTrip} aria-label={t("สร้างทริปใหม่")} title={t("สร้างทริปใหม่")}><Plus size={21}/></button>
       </div>
@@ -4100,13 +4106,13 @@ function TripsDirectory({
           subtitle={t("เลือกปีและผู้ร่วมทริปได้หลายคน แล้วกดแสดงผล")}
           closeLabel={t("ยกเลิก")}
           onClose={()=>setFiltersOpen(false)}
-          onSubmit={(event)=>{event.preventDefault();setTripType(draftTripType);setSelectedYears([...draftYears].sort((a,b)=>Number(b)-Number(a)));setSelectedMembers([...draftMembers]);setFiltersOpen(false)}}
+          onSubmit={(event)=>{event.preventDefault();setFlightsOnly(draftFlightsOnly);setTripType(draftTripType);setSelectedYears([...draftYears].sort((a,b)=>Number(b)-Number(a)));setSelectedMembers([...draftMembers]);setFiltersOpen(false)}}
           className="trip-directory-filter-sheet"
           bodyClassName="bottom-sheet-body trip-directory-filter-body"
           submitLabel={t("แสดงผล")}
           deleteLabel={t("รีเซ็ตตัวกรอง")}
           deleteIcon={<RotateCcw size={18}/>}
-          onDelete={()=>{setDraftTripType("all");setDraftYears([]);setDraftMembers([]);setSelectedMembers([]);setTripType("all");setSelectedYears([]);setFiltersOpen(false)}}
+          onDelete={()=>{setFlightsOnly(false);setDraftFlightsOnly(false);setDraftTripType("all");setDraftYears([]);setDraftMembers([]);setSelectedMembers([]);setTripType("all");setSelectedYears([]);setFiltersOpen(false)}}
         >
           <section className="trip-directory-filter-section">
             <h3>{t("ประเภททริป")}</h3>
@@ -4122,6 +4128,12 @@ function TripsDirectory({
             </div>
           </section>
           <TripMemberFilter members={filterMembers} selected={draftMembers} onChange={setDraftMembers} />
+          <section className="trip-directory-filter-section">
+            <label className="trip-flight-checkbox">
+              <input type="checkbox" checked={draftFlightsOnly} onChange={event=>setDraftFlightsOnly(event.target.checked)} />
+              <span className="split-checkmark" aria-hidden="true"/><Plane size={22}/><strong>{t("มีเที่ยวบิน")}</strong>
+            </label>
+          </section>
         </BottomSheet>
       )}
       <TripSegmentedFilter value={status} options={statuses} onChange={setStatus} ariaLabel={t("กรองทริปตามสถานะ")} tripLabel={t("ทริป")}/>
@@ -4154,8 +4166,8 @@ function TripsDirectory({
       ) : (
         <EmptyState
           icon={Search}
-          title={status === "favorite" && !queryText && tripType === "all" && !selectedYears.length && !selectedMembers.length ? "ยังไม่มีทริปที่ติดดาว" : queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length ? "ไม่พบทริปที่ตรงกับตัวกรอง" : "ยังไม่มีทริป"}
-          description={status === "favorite" && !queryText && tripType === "all" && !selectedYears.length && !selectedMembers.length ? "กดหัวใจบนการ์ดทริปเพื่อเก็บไว้ที่นี่" : queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length ? "ลองเปลี่ยนคำค้นหาหรือตัวกรอง" : "สร้างทริปใหม่ แล้วเริ่มเติมสถานที่ที่อยากไปกัน"}
+          title={status === "favorite" && !queryText && tripType === "all" && !selectedYears.length && !selectedMembers.length && !flightsOnly ? "ยังไม่มีทริปที่ติดดาว" : queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length || flightsOnly ? "ไม่พบทริปที่ตรงกับตัวกรอง" : "ยังไม่มีทริป"}
+          description={status === "favorite" && !queryText && tripType === "all" && !selectedYears.length && !selectedMembers.length && !flightsOnly ? "กดหัวใจบนการ์ดทริปเพื่อเก็บไว้ที่นี่" : queryText || status !== "all" || tripType !== "all" || selectedYears.length || selectedMembers.length || flightsOnly ? "ลองเปลี่ยนคำค้นหาหรือตัวกรอง" : "สร้างทริปใหม่ แล้วเริ่มเติมสถานที่ที่อยากไปกัน"}
           action="สร้างทริป"
           onClick={createTrip}
         />

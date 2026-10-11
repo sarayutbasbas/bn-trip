@@ -651,6 +651,7 @@ export async function loadTripDirectory(
   const sort = params.get("sort") || "latest";
   const values: Array<string | number | number[] | string[]> = [session.userId];
   const where = [access];
+  if (params.get("flights") === "true") where.push("t.has_flights IS TRUE");
   if (status === "ongoing")
     where.push("COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok'))");
   if (status === "upcoming")
@@ -670,6 +671,7 @@ export async function loadTripDirectory(
   appendTripMemberFilter(where, values, parseMemberFilter(params.getAll("member").join(","), session.userId));
   const statusCountValues: Array<string | number | number[] | string[]> = [session.userId];
   const statusCountWhere = [access];
+  if (params.get("flights") === "true") statusCountWhere.push("t.has_flights IS TRUE");
   if (tripType === "domestic") statusCountWhere.push("(t.country_code='TH' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
   if (tripType === "international")
     statusCountWhere.push("((t.country_code IS NOT NULL AND t.country_code<>'TH') OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(t.trip_destinations,'[]'::jsonb)) place WHERE place->>'countryCode'<>'TH'))");
