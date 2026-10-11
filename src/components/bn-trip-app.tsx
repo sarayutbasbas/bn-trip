@@ -4129,10 +4129,11 @@ function TripsDirectory({
           </section>
           <TripMemberFilter members={filterMembers} selected={draftMembers} onChange={setDraftMembers} />
           <section className="trip-directory-filter-section">
-            <label className="trip-flight-checkbox">
-              <input type="checkbox" checked={draftFlightsOnly} onChange={event=>setDraftFlightsOnly(event.target.checked)} />
-              <span className="split-checkmark" aria-hidden="true"/><Plane size={22}/><strong>{t("มีเที่ยวบิน")}</strong>
-            </label>
+            <div className="trip-type-options status-filter trip-directory-type-options" role="group" aria-label={t("ตัวเลือกเพิ่มเติม")}>
+              <button type="button" className={draftFlightsOnly ? "active" : ""} aria-label={t("มีเที่ยวบิน")} aria-pressed={draftFlightsOnly} onClick={() => setDraftFlightsOnly(value => !value)}>
+                <Plane size={24}/><span><strong>{t("มีเที่ยวบิน")}</strong></span>
+              </button>
+            </div>
           </section>
         </BottomSheet>
       )}

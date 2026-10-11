@@ -21,11 +21,15 @@ try {
  const combined=await api('/api/trips?mode=list&flights=true&type=international&year=2030&status=upcoming&sort=name&q=Flight');assert.equal(combined.total,1);assert.equal(combined.items[0].name,'Flight JP');assert.equal(Number(combined.statusCounts.all),1);
  assert.equal((await api('/api/trips?mode=list&flights=true&q=Ground')).total,0);
  browser('open',base);browser('cookies','set','bn_trip_session',token,'--url',base);browser('set','viewport','390','844');browser('open',base+'/trips');browser('wait','.compact-trip-grid');
- browser('click','[aria-label="ตั้งค่าตัวกรอง"]');browser('check','.trip-directory-filter-sheet input[type=checkbox]');browser('screenshot','/tmp/trip-flight-filter.png');browser('find','role','button','click','--name','แสดงผล');
+ browser('click','[aria-label="ตั้งค่าตัวกรอง"]');browser('click','.trip-directory-filter-sheet [aria-label="มีเที่ยวบิน"]');browser('screenshot','/tmp/trip-flight-filter.png');browser('find','role','button','click','--name','แสดงผล');
  browser('wait','--fn',`location.search.includes('flights=true')&&!document.querySelector('.compact-trip-list-skeleton')`);
  assert(JSON.parse(browser('eval',`!!document.querySelector('.trip-directory-filter-dot')&&!document.querySelector('.compact-trip-grid').textContent.includes('Ground JP')`)));
  browser('reload');browser('wait','.trip-directory-filter-dot');browser('click','[aria-label="ตั้งค่าตัวกรอง"]');
- assert(JSON.parse(browser('eval',`document.querySelector('.trip-directory-filter-sheet input[type=checkbox]').checked`)));
+ assert(JSON.parse(browser('eval',`document.querySelector('.trip-directory-filter-sheet [aria-label="มีเที่ยวบิน"]').getAttribute('aria-pressed')==='true'`)));
+ for (const [width,height] of [[390,844],[1280,900],[320,568]]) {
+  browser('set','viewport',String(width),String(height));
+  assert(JSON.parse(browser('eval',`(()=>{const sheet=document.querySelector('.trip-directory-filter-sheet'),body=sheet.querySelector('.trip-directory-filter-body'),a=sheet.querySelector('.status-all').getBoundingClientRect(),b=sheet.querySelector('[aria-label="มีเที่ยวบิน"]').getBoundingClientRect();return Math.abs(a.width-b.width)<1&&Math.abs(a.height-b.height)<1&&(body.scrollHeight<=body.clientHeight+1||sheet.getBoundingClientRect().height>=innerHeight*.85-2)})()`)), 'equal button sizes; only scroll at max height');
+ }
  browser('click','[aria-label="รีเซ็ตตัวกรอง"]');browser('wait','--fn',`!location.search.includes('flights=')&&!document.querySelector('.compact-trip-list-skeleton')`);
  assert(JSON.parse(browser('eval',`document.querySelector('.compact-trip-grid').textContent.includes('Ground JP')`)));
  console.log('PASS flight filter, totals/status counts, pagination and combined filters');

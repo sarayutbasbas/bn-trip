@@ -3614,10 +3614,12 @@ button:disabled {
 }
 .modal-backdrop > .modal.bottom-sheet.trip-directory-filter-sheet {
   height: auto;
-  max-height: min(72dvh, 560px);
+  max-height: min(85dvh, 100%);
 }
 .trip-directory-filter-body {
   display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
   gap: 18px;
 }
 .trip-directory-filter-section {
