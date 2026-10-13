@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/src/lib/auth";
 import { query, transaction } from "@/src/lib/db";
 import { getDemoTrip } from "@/src/lib/demo-data";
-import { getTripRole,tripFavoriteSql,tripFlightSummariesSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
+import { canManageTripContent,getTripRole,tripFavoriteSql,tripFlightSummariesSql,tripMembersSql,tripReviewSummarySql,tripRoleSql } from "@/src/lib/trip-access";
 import { logTripActivity } from "@/src/lib/activity";
 import { ensureLatestDatabaseSchema } from "@/src/lib/database-migrations";
 import { countryByCode,formatTripDestination } from "@/src/lib/countries";
@@ -28,7 +28,9 @@ export async function GET(_:Request,{params}:{params:Promise<{id:string}>}){
 export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});if(session.isDemo)return demoDenied();
   await ensureLatestDatabaseSchema();
-  const {id}=await params;if(!await getTripRole(id,session.userId))return NextResponse.json({error:"Not found"},{status:404});
+  const {id}=await params;const role=await getTripRole(id,session.userId);
+  if(!role)return NextResponse.json({error:"Not found"},{status:404});
+  if(!canManageTripContent(role))return NextResponse.json({error:"เฉพาะเจ้าของหรือแอดมินเท่านั้นที่แก้ไขทริปได้"},{status:403});
   const body=await request.json();if(!body.outboundDate||!body.outboundTime||!body.returnDate||!body.returnTime)return NextResponse.json({error:"Travel dates and times are required"},{status:400});
   if(body.returnDate<body.outboundDate)return NextResponse.json({error:"วันเดินทางกลับต้องไม่อยู่ก่อนวันเดินทาง"},{status:400});
   const googlePhotosUrl=typeof body.googlePhotosUrl==="string"?body.googlePhotosUrl.trim():"";
@@ -50,11 +52,13 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
 
 export async function DELETE(_:Request,{params}:{params:Promise<{id:string}>}){
   const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});if(session.isDemo)return demoDenied();
-  const {id}=await params;const role=await getTripRole(id,session.userId);if(role!=="owner")return NextResponse.json({error:"เฉพาะเจ้าของทริปเท่านั้นที่ลบทริปได้"},{status:403});
+  const {id}=await params;const role=await getTripRole(id,session.userId);
+  if(!role)return NextResponse.json({error:"Not found"},{status:404});
+  if(!canManageTripContent(role))return NextResponse.json({error:"เฉพาะเจ้าของหรือแอดมินเท่านั้นที่ลบทริปได้"},{status:403});
   const images=await query<{url:string}>(`SELECT unnest(ARRAY[cover_image_url,summary_image_url]||COALESCE(cover_image_urls,'{}'::text[])) AS url FROM trips WHERE id=$1
     UNION SELECT image_url FROM itineraries WHERE trip_id=$1
     UNION SELECT image_url FROM trip_accommodations WHERE trip_id=$1`,[id]);
-  const result=await query("DELETE FROM trips WHERE id=$1 AND owner_id=$2 RETURNING id",[id,session.userId]);
+  const result=await query("DELETE FROM trips WHERE id=$1 AND (owner_id=$2 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=trips.id AND c.user_id=$2 AND c.access_level='admin')) RETURNING id",[id,session.userId]);
   if(result.rowCount)scheduleUnusedImageCleanup(images.rows.map(row=>row.url).filter(Boolean));
   return result.rowCount?NextResponse.json({ok:true}):NextResponse.json({error:"Not found"},{status:404});
 }

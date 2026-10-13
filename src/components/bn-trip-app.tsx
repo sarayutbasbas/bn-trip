@@ -4243,7 +4243,7 @@ function TripHeader({
           {(trip.access_role === "owner" || trip.access_role === "admin") && manageMembers && <button type="button" onClick={manageMembers} aria-label={t("เชิญเพื่อนร่วมทริป")} title={t("เชิญเพื่อนร่วมทริป")}>
             <UserPlus size={20} />
           </button>}
-          {editTrip && <button type="button" onClick={editTrip} aria-label={t("แก้ไข")} title={t("แก้ไข")}>
+          {editTrip && (trip.access_role === "owner" || trip.access_role === "admin") && <button type="button" onClick={editTrip} aria-label={t("แก้ไข")} title={t("แก้ไข")}>
             <Pencil size={20} />
           </button>}
         </div>
@@ -9018,7 +9018,7 @@ function ModalForm({
   const focusedTripFieldRef = useRef<HTMLElement | null>(null);
   const focusVisibilityTimerRef = useRef<number | null>(null);
   const canDeleteCurrent =
-    modal.type === "trip" ? modal.trip?.access_role === "owner" : canDelete;
+    modal.type === "trip" ? modal.trip?.access_role === "owner" || modal.trip?.access_role === "admin" : canDelete;
   const formDirtyKey =
     modal.type === "trip"
       ? `trip:${modal.trip?.id || "new"}`
