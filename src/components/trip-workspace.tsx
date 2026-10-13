@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { ChecklistBulkDelete, ChecklistSelectionBox, useChecklistSelection } from "@/src/components/checklist-bulk-delete";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
@@ -173,6 +174,7 @@ export function TripWorkspace({
 }) {
   const { saving: saveInFlight, guard: guardSave } = useBlockingSubmit();
   const pathname = usePathname();
+  const selection = useChecklistSelection();
   const searchParams = useSearchParams();
   const workspaceReturnTo = `${pathname}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
   const initialCachedWorkspace = peekClientResource<Partial<Workspace>>(
@@ -1164,13 +1166,19 @@ export function TripWorkspace({
               )}
             </label>
           </div>
-          <div className="checklist-groups">
+          <ChecklistBulkDelete selection={selection} scope="trip" allIds={data.checklist.map(item => item.id)} visibleIds={[...checklistView.visibleGroups.values()].flat().map(item => item.id)} itemUrl={id => `/api/trips/${tripId}/checklist/${id}`} onStart={() => setOpenChecklistActionMenu(null)} onDeleted={ids => {
+            setData(current => ({ ...current, checklist: current.checklist.filter(item => !ids.includes(item.id)) }));
+            invalidateWorkspaceTabs("checklist", "history");
+            signalCompletionChanged();
+            notify(`ลบ Checklist แล้ว ${ids.length} รายการ`);
+          }}/>
+          <div className={`checklist-groups ${selection.active ? "checklist-selecting" : ""}`}>
             {checklistView.categories.map((category, categoryIndex) => {
               const categoryItems =
                 checklistView.groups.get(category) || [];
               const visibleCategoryItems =
                 checklistView.visibleGroups.get(category) || [];
-              const collapsed = checklistKeyword
+              const collapsed = selection.active || checklistKeyword
                 ? false
                 : collapsedCategories.has(category);
               const completedCount = checklistView.completed.get(category) || 0;
@@ -1222,10 +1230,10 @@ export function TripWorkspace({
                     <div className="checklist-list">
                       {visibleCategoryItems.map((item) => (
                         <article
-                          className={item.completed_at ? "done" : ""}
+                          className={!selection.active && item.completed_at ? "done" : ""}
                           key={item.id}
                         >
-                          <button
+                          {selection.active ? <ChecklistSelectionBox selection={selection} id={item.id} title={item.title}/> : <button
                             type="button"
                             className="check-toggle"
                             onClick={() =>
@@ -1240,19 +1248,19 @@ export function TripWorkspace({
                             ) : (
                               <Circle size={15} />
                             )}
-                          </button>
+                          </button>}
                           <button
                             type="button"
                             className="checklist-title-toggle"
-                            disabled={busy === item.id}
+                            disabled={busy === item.id || selection.busy}
                             onClick={() =>
-                              void patchChecklist(item, {
+                              selection.active ? selection.toggle(item.id) : void patchChecklist(item, {
                                 completed: !item.completed_at,
                               })
                             }
-                            aria-pressed={Boolean(item.completed_at)}
+                            aria-pressed={selection.active ? selection.selected.includes(item.id) : Boolean(item.completed_at)}
                             aria-label={label(
-                              item.completed_at
+                              selection.active ? `เลือก ${item.title}` : item.completed_at
                                 ? `ทำเครื่องหมาย ${item.title} ว่ายังไม่เสร็จ`
                                 : `ทำเครื่องหมาย ${item.title} ว่าเสร็จแล้ว`,
                             )}

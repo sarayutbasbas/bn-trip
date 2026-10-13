@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import ts from 'typescript';
+import {Pool} from 'pg';
+import {SignJWT} from 'jose';
+const base='http://localhost:8001',id=randomUUID(),outsider=randomUUID();
+const db=new Pool({connectionString:'postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip'});
+const env=JSON.parse(execFileSync('docker',['inspect','bn-trip-app-1'],{encoding:'utf8'}))[0].Config.Env;
+const sign=user=>new SignJWT({email:user+'@example.invalid',displayName:'Bulk test'}).setProtectedHeader({alg:'HS256'}).setSubject(user).setExpirationTime('1h').sign(new TextEncoder().encode(env.find(v=>v.startsWith('AUTH_SECRET=')).slice(12)));
+const token=await sign(id),otherToken=await sign(outsider);
+const request=(path,options={})=>fetch(base+path,{...options,headers:{'Content-Type':'application/json',cookie:'bn_trip_session='+token,...options.headers}});
+const api=async(path,body)=>{const response=await request(path,body?{method:'POST',body:JSON.stringify(body)}:{});assert(response.ok,await response.clone().text());return response.json()};
+const exports={};runInNewContext(ts.transpileModule(readFileSync('src/lib/delete-checklist-selection.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,fetch,AbortController,setTimeout,clearTimeout});
+try {
+ await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Bulk test'),($3,$4,'Other test')",[id,id+'@example.invalid',outsider,outsider+'@example.invalid']);
+ const category=await api('/api/checklist-master',{kind:'category',name:'Bulk test'}),masters=[];
+ for(let i=0;i<4;i++)masters.push(await api('/api/checklist-master',{kind:'item',categoryId:category.id,title:'Bulk '+i}));
+ const trip=await api('/api/trips',{name:'Bulk checklist test',countryCode:'TH',locationIds:['TH:bangkok'],outboundDate:'2030-01-01',outboundTime:'08:00',returnDate:'2030-01-03',returnTime:'18:00',budgetThb:0});
+ const copied=await api(`/api/trips/${trip.id}/checklist`,{masterItemIds:masters.map(item=>item.id)});
+ assert.equal(copied.items.length,4);
+ for(const path of [`/api/checklist-master/items/${masters[0].id}`,`/api/trips/${trip.id}/checklist/${copied.items[0].id}`])assert.equal((await request(path,{method:'DELETE',headers:{cookie:'bn_trip_session='+otherToken}})).status,404);
+ const masterResult=await exports.deleteChecklistSelection(masters.slice(0,2).map(item=>item.id),id=>`/api/checklist-master/items/${id}`,request);
+ assert.equal(masterResult.deleted.length,2);assert.equal(masterResult.failed.length,0);
+ const tripRows=(await db.query('SELECT * FROM trip_checklist_items WHERE trip_id=$1',[trip.id])).rows;
+ assert.equal(tripRows.length,4);assert.equal(tripRows.filter(item=>item.master_item_id===null).length,2);
+ const targetTripItems=tripRows.filter(item=>item.master_item_id!==null).map(item=>item.id);
+ const tripResult=await exports.deleteChecklistSelection(targetTripItems,id=>`/api/trips/${trip.id}/checklist/${id}`,request);
+ assert.equal(tripResult.deleted.length,2);assert.equal(tripResult.failed.length,0);
+ assert.equal((await db.query('SELECT id FROM trip_checklist_items WHERE trip_id=$1',[trip.id])).rowCount,2);
+ assert.equal((await db.query('SELECT id FROM checklist_master_items WHERE category_id=$1',[category.id])).rowCount,2);
+ assert((await db.query('SELECT completed_at FROM trip_checklist_items WHERE trip_id=$1',[trip.id])).rows.every(item=>item.completed_at===null));
+ console.log('PASS multi-delete in master and trip, isolation between master/trip, completion unchanged, unauthorized deletion denied');
+} finally {await db.query('DELETE FROM users WHERE id=ANY($1::uuid[])',[[id,outsider]]);await db.end();}

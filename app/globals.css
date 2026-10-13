@@ -3640,6 +3640,16 @@ button:disabled {
   background: var(--surface-2);
 }
 .trip-directory-type-options { margin:0; }
+.checklist-bulk-toolbar { display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:12px 0; }
+.checklist-bulk-toolbar button { display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface-2);color:var(--ink);font-size:12px; }
+.checklist-bulk-toolbar span { font-size:12px;color:var(--muted);margin-right:auto; }
+.checklist-bulk-toolbar .checklist-bulk-remove { color:var(--orange); }
+.checklist-select-box { width:22px!important;height:22px!important;min-width:22px;flex:0 0 22px;accent-color:var(--orange);cursor:pointer;margin:0 10px 0 0; }
+.checklist-selecting .checklist-action-menu-wrap,.checklist-selecting .checklist-assignee { display:none; }
+.checklist-selecting .master-checklist-items article { display:flex;align-items:center; }
+.checklist-select-label { display:flex;align-items:center;flex:1;min-height:40px;cursor:pointer; }
+.checklist-select-label strong { min-width:0;font-size:13px;line-height:1.55;overflow-wrap:anywhere; }
+.checklist-selecting article:has(.checklist-select-box:checked) { background:color-mix(in srgb,var(--orange) 9%,var(--surface-solid)); }
 .trip-directory-filter-sheet .trip-directory-date-range { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .trip-directory-date-range .field .native-picker-control { margin:0; }
 .trip-directory-type-options .status-domestic > svg { color:#5c76d8; }

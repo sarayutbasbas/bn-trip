@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChecklistBulkDelete, ChecklistSelectionBox, useChecklistSelection } from "@/src/components/checklist-bulk-delete";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
@@ -63,6 +64,7 @@ export function ChecklistMasterPage({
 }) {
   const { saving: saveInFlight, guard: guardSave } = useBlockingSubmit();
   const router = useRouter();
+  const selection = useChecklistSelection();
   const cachedMaster = peekClientResource<MasterPayload>(
     MASTER_CHECKLIST_RESOURCE_KEY,
   );
@@ -392,10 +394,16 @@ export function ChecklistMasterPage({
               placeholder="ค้นหาหมวดหมู่หรือรายการ"
             />
           </label>
-          <div className="checklist-groups master-checklist-groups">
+          {!demo && <ChecklistBulkDelete selection={selection} scope="master" allIds={items.map(item => item.id)} visibleIds={[...masterView.items.values()].flat().map(item => item.id)} itemUrl={id => `/api/checklist-master/items/${id}`} onStart={() => { setOpenActionMenu(null); setEditingCategory(null); }} onDeleted={ids => {
+            setItems(current => current.filter(item => !ids.includes(item.id)));
+            invalidateClientResourcesContaining(MASTER_CHECKLIST_RESOURCE_KEY);
+            invalidateClientResourcesContaining(":workspace:checklist");
+            notify(`ลบ Checklist แล้ว ${ids.length} รายการ`);
+          }}/>}
+          <div className={`checklist-groups master-checklist-groups ${selection.active ? "checklist-selecting" : ""}`}>
             {masterView.categories.map((category, categoryIndex) => {
                 const categoryItems = masterView.items.get(category.id) || [];
-                const expanded = Boolean(keyword) || open.includes(category.id);
+                const expanded = selection.active || Boolean(keyword) || open.includes(category.id);
                 const isEditingCategory = editingCategory?.id === category.id;
                 return (
                   <section
@@ -485,7 +493,7 @@ export function ChecklistMasterPage({
                       <div className="checklist-list master-checklist-items">
                         {categoryItems.map((item) => (
                           <article key={item.id}>
-                            <strong>{item.title}</strong>
+                            {selection.active ? <label className="checklist-select-label"><ChecklistSelectionBox selection={selection} id={item.id} title={item.title}/><strong>{item.title}</strong></label> : <strong>{item.title}</strong>}
                             <div className="checklist-action-menu-wrap">
                               <button
                                 type="button"

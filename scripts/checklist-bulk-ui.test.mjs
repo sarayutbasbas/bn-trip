@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import {runInNewContext} from 'node:vm';
+import {createElement} from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import ts from 'typescript';
+const require=createRequire(import.meta.url),exports={};
+runInNewContext(ts.transpileModule(readFileSync('src/components/checklist-bulk-delete.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:id=>id.startsWith('@/')?{deleteChecklistSelection:()=>{throw Error('must not delete before confirmation')}}:require(id)});
+const selection={active:false,selected:[],busy:false,setActive(){},setSelected(){},setBusy(){},toggle(){},close(){}};
+const props={selection,visibleIds:['a'],allIds:['a','b'],itemUrl:id=>id,onDeleted(){},scope:'master'};
+let html=renderToStaticMarkup(createElement(exports.ChecklistBulkDelete,props));assert(html.includes('เลือกรายการ'));assert(!html.includes('alertdialog'));
+html=renderToStaticMarkup(createElement(exports.ChecklistBulkDelete,{...props,selection:{...selection,active:true}}));assert.match(html,/class="checklist-bulk-remove" disabled=""/);
+html=renderToStaticMarkup(createElement(exports.ChecklistBulkDelete,{...props,selection:{...selection,active:true,selected:['a','b','stale']}}));assert(html.includes('เลือก 2 รายการ'));assert(html.includes('ยกเลิกที่แสดง'));assert(!html.includes('alertdialog'));
+html=renderToStaticMarkup(createElement(exports.ChecklistSelectionBox,{selection:{...selection,selected:['a'],busy:true},id:'a',title:'พาสปอร์ต'}));assert(html.includes('type="checkbox"'));assert(html.includes('aria-label="เลือก พาสปอร์ต"'));assert(html.includes('checked=""'));assert(html.includes('disabled=""'));
+console.log('PASS bulk selection markup, count, accessible checkbox, stale selection exclusion and disabled states');
