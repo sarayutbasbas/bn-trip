@@ -16,3 +16,26 @@ export async function deleteChecklistSelection(ids: string[], itemUrl: (id: stri
   }
   return { deleted, failed };
 }
+
+export async function completeChecklistSelection(ids: string[], itemUrl: (id: string) => string, request: typeof fetch = fetch) {
+  const completed: string[] = [], failed: string[] = [];
+  const selected = [...new Set(ids)];
+  for (let offset = 0; offset < selected.length; offset += 4) {
+    await Promise.all(selected.slice(offset, offset + 4).map(async id => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000);
+      try {
+        const response = await request(itemUrl(id), {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ completed: true }),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("complete_failed");
+        completed.push(id);
+      } catch { failed.push(id); }
+      finally { clearTimeout(timer); }
+    }));
+  }
+  return { completed, failed };
+}

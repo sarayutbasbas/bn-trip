@@ -1215,6 +1215,13 @@ export function TripWorkspace({
             invalidateWorkspaceTabs("checklist", "history");
             signalCompletionChanged();
             notify(`ลบ Checklist แล้ว ${ids.length} รายการ`);
+          }} onCompleted={ids => {
+            const completedIds = new Set(ids);
+            const completedAt = new Date().toISOString();
+            setData(current => ({ ...current, checklist: current.checklist.map(item => completedIds.has(item.id) ? { ...item, completed_at: completedAt } : item) }));
+            invalidateWorkspaceTabs("checklist", "history");
+            signalCompletionChanged();
+            notify(`ติ๊ก Checklist แล้ว ${ids.length} รายการ`);
           }}/>
           <div className={`checklist-groups ${selection.active ? "checklist-selecting" : ""}`}>
             {checklistView.categories.map((category, categoryIndex) => {

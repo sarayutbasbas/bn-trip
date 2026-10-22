@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, ListChecks, Trash2, X } from "lucide-react";
-import { deleteChecklistSelection } from "@/src/lib/delete-checklist-selection";
+import { AlertTriangle, CheckCheck, ListChecks, Trash2, X } from "lucide-react";
+import { completeChecklistSelection, deleteChecklistSelection } from "@/src/lib/delete-checklist-selection";
 
 export function useChecklistSelection() {
   const [active, setActive] = useState(false);
@@ -15,12 +15,13 @@ export function useChecklistSelection() {
   };
 }
 
-export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, onDeleted, onStart, scope }: {
+export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, onDeleted, onCompleted, onStart, scope }: {
   selection: ReturnType<typeof useChecklistSelection>;
   visibleIds: string[];
   allIds: string[];
   itemUrl: (id: string) => string;
   onDeleted: (ids: string[]) => void;
+  onCompleted?: (ids: string[]) => void;
   onStart?: () => void;
   scope: "master" | "trip";
 }) {
@@ -48,11 +49,25 @@ export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, on
     if (failed.length) setError(`ลบไม่สำเร็จ ${failed.length} รายการ กรุณาลองอีกครั้ง`);
     else selection.setActive(false);
   }
+  async function complete() {
+    if (lock.current || !selected.length || !onCompleted) return;
+    lock.current = true;
+    selection.setBusy(true);
+    setError("");
+    const { completed, failed } = await completeChecklistSelection(selected, itemUrl);
+    if (completed.length) onCompleted(completed);
+    selection.setSelected(failed);
+    selection.setBusy(false);
+    lock.current = false;
+    if (failed.length) setError(`ติ๊กไม่สำเร็จ ${failed.length} รายการ กรุณาลองอีกครั้ง`);
+    else selection.setActive(false);
+  }
   return <>
     <div className="checklist-bulk-toolbar">
       {!selection.active ? <button type="button" disabled={!allIds.length} onClick={() => { setError(""); onStart?.(); selection.setActive(true); }}><ListChecks size={18}/>เลือกรายการ</button> : <>
         <button type="button" disabled={selection.busy || !visibleIds.length} onClick={() => selection.setSelected(current => allVisible ? current.filter(id => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])}>{allVisible ? "ยกเลิกที่แสดง" : "เลือกทั้งหมดที่แสดง"}</button>
         <span role="status">เลือก {selected.length} รายการ</span>
+        {scope === "trip" && onCompleted ? <button type="button" className="checklist-bulk-complete" disabled={selection.busy || !selected.length} onClick={() => void complete()}><CheckCheck size={18}/>ติ๊กทั้งหมด ({selected.length})</button> : null}
         <button type="button" className="checklist-bulk-remove" disabled={selection.busy || !selected.length} onClick={() => setConfirm(true)}><Trash2 size={18}/>ลบ ({selected.length})</button>
         <button type="button" aria-label="ยกเลิกการเลือกรายการ" disabled={selection.busy} onClick={() => { selection.close(); setError(""); }}><X size={18}/></button>
       </>}
