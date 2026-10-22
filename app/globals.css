@@ -3651,7 +3651,14 @@ button:disabled {
 .checklist-bulk-summary-row span { margin-left:0;font-size:12px;color:var(--muted); }
 .checklist-bulk-action-row { justify-content:flex-start; }
 .checklist-bulk-toolbar .checklist-bulk-complete { color:#248a3d;background:rgba(52,199,89,.1);border-color:rgba(52,199,89,.24); }
+.checklist-bulk-toolbar .checklist-bulk-uncomplete { color:var(--muted);background:var(--surface-2);border-color:var(--line); }
 .checklist-bulk-toolbar .checklist-bulk-remove { color:var(--orange); }
+@media (max-width:560px) {
+  .checklist-bulk-action-row { gap:6px; }
+  .checklist-bulk-action-row button { min-height:38px;padding:7px 9px;gap:4px;font-size:10px; }
+  .checklist-bulk-action-row :where(.checklist-bulk-complete,.checklist-bulk-uncomplete,.checklist-bulk-remove) svg { display:none; }
+  .checklist-bulk-action-row .checklist-bulk-close { width:38px;min-width:38px;padding:0; }
+}
 .checklist-checkbox {
   appearance:none;
   -webkit-appearance:none;

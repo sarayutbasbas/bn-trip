@@ -1177,7 +1177,13 @@ export function TripWorkspace({
             setData(current => ({ ...current, checklist: current.checklist.map(item => completedIds.has(item.id) ? { ...item, completed_at: completedAt } : item) }));
             invalidateWorkspaceTabs("checklist", "history");
             signalCompletionChanged();
-            notify(`ติ๊ก Checklist แล้ว ${ids.length} รายการ`);
+            notify(`check Checklist แล้ว ${ids.length} รายการ`);
+          }} onUncompleted={ids => {
+            const uncompletedIds = new Set(ids);
+            setData(current => ({ ...current, checklist: current.checklist.map(item => uncompletedIds.has(item.id) ? { ...item, completed_at: null } : item) }));
+            invalidateWorkspaceTabs("checklist", "history");
+            signalCompletionChanged();
+            notify(`uncheck Checklist แล้ว ${ids.length} รายการ`);
           }}/>
           <div className={`checklist-groups ${selection.active ? "checklist-selecting" : ""}`}>
             {checklistView.categories.map((category, categoryIndex) => {

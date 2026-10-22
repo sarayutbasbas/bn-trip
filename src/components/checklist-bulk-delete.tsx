@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, CheckCheck, ListChecks, Trash2, X } from "lucide-react";
-import { completeChecklistSelection, deleteChecklistSelection } from "@/src/lib/delete-checklist-selection";
+import { AlertTriangle, CheckCheck, CircleOff, ListChecks, Trash2, X } from "lucide-react";
+import { completeChecklistSelection, deleteChecklistSelection, uncompleteChecklistSelection } from "@/src/lib/delete-checklist-selection";
 
 export function useChecklistSelection() {
   const [active, setActive] = useState(false);
@@ -15,13 +15,14 @@ export function useChecklistSelection() {
   };
 }
 
-export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, onDeleted, onCompleted, onStart, scope }: {
+export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, onDeleted, onCompleted, onUncompleted, onStart, scope }: {
   selection: ReturnType<typeof useChecklistSelection>;
   visibleIds: string[];
   allIds: string[];
   itemUrl: (id: string) => string;
   onDeleted: (ids: string[]) => void;
   onCompleted?: (ids: string[]) => void;
+  onUncompleted?: (ids: string[]) => void;
   onStart?: () => void;
   scope: "master" | "trip";
 }) {
@@ -59,7 +60,20 @@ export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, on
     selection.setSelected(failed);
     selection.setBusy(false);
     lock.current = false;
-    if (failed.length) setError(`ติ๊กไม่สำเร็จ ${failed.length} รายการ กรุณาลองอีกครั้ง`);
+    if (failed.length) setError(`check ไม่สำเร็จ ${failed.length} รายการ กรุณาลองอีกครั้ง`);
+    else selection.setActive(false);
+  }
+  async function uncomplete() {
+    if (lock.current || !selected.length || !onUncompleted) return;
+    lock.current = true;
+    selection.setBusy(true);
+    setError("");
+    const { uncompleted, failed } = await uncompleteChecklistSelection(selected, itemUrl);
+    if (uncompleted.length) onUncompleted(uncompleted);
+    selection.setSelected(failed);
+    selection.setBusy(false);
+    lock.current = false;
+    if (failed.length) setError(`uncheck ไม่สำเร็จ ${failed.length} รายการ กรุณาลองอีกครั้ง`);
     else selection.setActive(false);
   }
   return <>
@@ -70,9 +84,10 @@ export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, on
           <span role="status">เลือก {selected.length} รายการ</span>
         </div>
         <div className="checklist-bulk-action-row">
-          {scope === "trip" && onCompleted ? <button type="button" className="checklist-bulk-complete" disabled={selection.busy || !selected.length} onClick={() => void complete()}><CheckCheck size={18}/>ติ๊กทั้งหมด ({selected.length})</button> : null}
-          <button type="button" className="checklist-bulk-remove" disabled={selection.busy || !selected.length} onClick={() => setConfirm(true)}><Trash2 size={18}/>ลบ ({selected.length})</button>
-          <button type="button" aria-label="ยกเลิกการเลือกรายการ" disabled={selection.busy} onClick={() => { selection.close(); setError(""); }}><X size={18}/></button>
+          {scope === "trip" && onCompleted ? <button type="button" className="checklist-bulk-complete" disabled={selection.busy || !selected.length} onClick={() => void complete()}><CheckCheck size={18}/>check ทั้งหมด</button> : null}
+          {scope === "trip" && onUncompleted ? <button type="button" className="checklist-bulk-uncomplete" disabled={selection.busy || !selected.length} onClick={() => void uncomplete()}><CircleOff size={18}/>uncheck ทั้งหมด</button> : null}
+          <button type="button" className="checklist-bulk-remove" disabled={selection.busy || !selected.length} onClick={() => setConfirm(true)}><Trash2 size={18}/>ลบ</button>
+          <button type="button" className="checklist-bulk-close" aria-label="ยกเลิกการเลือกรายการ" disabled={selection.busy} onClick={() => { selection.close(); setError(""); }}><X size={18}/></button>
         </div>
       </>}
     </div>

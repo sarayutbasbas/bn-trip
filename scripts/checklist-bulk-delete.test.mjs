@@ -25,4 +25,14 @@ const completed=await exports.completeChecklistSelection(['a','b','c','d','e','a
 assert.deepEqual([...completed.completed].sort(),['a','d','e']);
 assert.deepEqual([...completed.failed].sort(),['b','c']);
 assert.equal(max,4);assert.equal(calls.length,5);
-console.log('PASS bounded delete/complete, deduplication, partial failures, network failures and empty selection');
+running=0;max=0;calls.length=0;
+const uncompleted=await exports.uncompleteChecklistSelection(['a','b','c','d','e','a'],id=>id,async (id,options)=>{
+  assert.equal(options.method,'PATCH');assert(options.signal);assert.equal(options.headers['content-type'],'application/json');assert.deepEqual(JSON.parse(options.body),{completed:false});
+  calls.push(id);max=Math.max(max,++running);await new Promise(resolve=>setTimeout(resolve,5));running--;
+  if(id==='c')throw new Error('network');
+  return {ok:id!=='b'};
+});
+assert.deepEqual([...uncompleted.uncompleted].sort(),['a','d','e']);
+assert.deepEqual([...uncompleted.failed].sort(),['b','c']);
+assert.equal(max,4);assert.equal(calls.length,5);
+console.log('PASS bounded delete/check/uncheck, deduplication, partial failures, network failures and empty selection');
