@@ -65,11 +65,15 @@ export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, on
   return <>
     <div className="checklist-bulk-toolbar">
       {!selection.active ? <button type="button" disabled={!allIds.length} onClick={() => { setError(""); onStart?.(); selection.setActive(true); }}><ListChecks size={18}/>เลือกรายการ</button> : <>
-        <button type="button" disabled={selection.busy || !visibleIds.length} onClick={() => selection.setSelected(current => allVisible ? current.filter(id => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])}>{allVisible ? "ยกเลิกที่แสดง" : "เลือกทั้งหมดที่แสดง"}</button>
-        <span role="status">เลือก {selected.length} รายการ</span>
-        {scope === "trip" && onCompleted ? <button type="button" className="checklist-bulk-complete" disabled={selection.busy || !selected.length} onClick={() => void complete()}><CheckCheck size={18}/>ติ๊กทั้งหมด ({selected.length})</button> : null}
-        <button type="button" className="checklist-bulk-remove" disabled={selection.busy || !selected.length} onClick={() => setConfirm(true)}><Trash2 size={18}/>ลบ ({selected.length})</button>
-        <button type="button" aria-label="ยกเลิกการเลือกรายการ" disabled={selection.busy} onClick={() => { selection.close(); setError(""); }}><X size={18}/></button>
+        <div className="checklist-bulk-summary-row">
+          <button type="button" disabled={selection.busy || !visibleIds.length} onClick={() => selection.setSelected(current => allVisible ? current.filter(id => !visibleIds.includes(id)) : [...new Set([...current, ...visibleIds])])}>{allVisible ? "ยกเลิกที่แสดง" : "เลือกทั้งหมดที่แสดง"}</button>
+          <span role="status">เลือก {selected.length} รายการ</span>
+        </div>
+        <div className="checklist-bulk-action-row">
+          {scope === "trip" && onCompleted ? <button type="button" className="checklist-bulk-complete" disabled={selection.busy || !selected.length} onClick={() => void complete()}><CheckCheck size={18}/>ติ๊กทั้งหมด ({selected.length})</button> : null}
+          <button type="button" className="checklist-bulk-remove" disabled={selection.busy || !selected.length} onClick={() => setConfirm(true)}><Trash2 size={18}/>ลบ ({selected.length})</button>
+          <button type="button" aria-label="ยกเลิกการเลือกรายการ" disabled={selection.busy} onClick={() => { selection.close(); setError(""); }}><X size={18}/></button>
+        </div>
       </>}
     </div>
     {error ? <p className="workspace-error" role="alert">{error}</p> : null}
@@ -88,5 +92,5 @@ export function ChecklistBulkDelete({ selection, visibleIds, allIds, itemUrl, on
 }
 
 export function ChecklistSelectionBox({ selection, id, title }: { selection: ReturnType<typeof useChecklistSelection>; id: string; title: string }) {
-  return <input className="checklist-select-box" type="checkbox" aria-label={`เลือก ${title}`} checked={selection.selected.includes(id)} disabled={selection.busy} onChange={() => selection.toggle(id)}/>;
+  return <input className="checklist-checkbox checklist-select-box" type="checkbox" aria-label={`เลือก ${title}`} checked={selection.selected.includes(id)} disabled={selection.busy} onChange={() => selection.toggle(id)}/>;
 }
