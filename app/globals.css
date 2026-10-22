@@ -3649,13 +3649,13 @@ button:disabled {
 .checklist-bulk-summary-row,
 .checklist-bulk-action-row { width:100%;display:flex;align-items:center;gap:8px; }
 .checklist-bulk-summary-row span { margin-left:0;font-size:12px;color:var(--muted); }
-.checklist-bulk-action-row { justify-content:flex-start; }
+.checklist-bulk-action-row { justify-content:space-between; }
 .checklist-bulk-toolbar .checklist-bulk-complete { color:#248a3d;background:rgba(52,199,89,.1);border-color:rgba(52,199,89,.24); }
 .checklist-bulk-toolbar .checklist-bulk-uncomplete { color:var(--muted);background:var(--surface-2);border-color:var(--line); }
 .checklist-bulk-toolbar .checklist-bulk-remove { color:var(--orange); }
 @media (max-width:560px) {
   .checklist-bulk-action-row { gap:6px; }
-  .checklist-bulk-action-row button { min-height:38px;padding:7px 9px;gap:4px;font-size:10px; }
+  .checklist-bulk-action-row button { min-height:40px;padding:7px 9px;gap:4px;font-size:12px; }
   .checklist-bulk-action-row :where(.checklist-bulk-complete,.checklist-bulk-uncomplete,.checklist-bulk-remove) svg { display:none; }
   .checklist-bulk-action-row .checklist-bulk-close { width:38px;min-width:38px;padding:0; }
 }
@@ -8084,6 +8084,7 @@ html.dark .settings-liquid-glass .card {
   grid-template-columns: 42px minmax(82px, auto) minmax(58px, 1fr) auto 18px;
   gap: 9px;
 }
+.checklist-category-assignee,
 .checklist-category-select-all {
   position: relative;
   width: 34px;
@@ -8103,6 +8104,7 @@ html.dark .settings-liquid-glass .card {
 @media (max-width: 560px) {
   .workspace-panel .checklist-category-card .checklist-category-toggle { grid-template-columns: 42px minmax(60px, 1fr) auto 18px; gap: 6px; padding-right: 5px; }
   .workspace-panel .checklist-category-card .checklist-progress-track { display: none; }
+  .checklist-category-assignee,
   .workspace-panel .checklist-category-card .checklist-category-delete { width: 30px; height: 30px; flex-basis: 30px; }
 }
 .checklist-category-icon {
