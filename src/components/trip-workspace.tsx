@@ -1378,11 +1378,13 @@ export function TripWorkspace({
                             }
                           >
                             {item.assigned_avatar_url ? (
-                              <span
-                                className="member-avatar-image"
-                                style={{
-                                  backgroundImage: `url("${item.assigned_avatar_url}")`,
-                                }}
+                              <Image
+                                className="checklist-item-avatar-image"
+                                src={item.assigned_avatar_url}
+                                alt=""
+                                width={32}
+                                height={32}
+                                unoptimized
                               />
                             ) : item.assigned_name ? (
                               <span>{item.assigned_name.slice(0, 1)}</span>
