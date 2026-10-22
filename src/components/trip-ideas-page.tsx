@@ -1,6 +1,6 @@
 "use client";
 import { tripAvatarOrder } from "@/src/lib/trip-avatar-order";
-import { ParticipantMode, TripCompanions } from "./trip-companions";
+import { ParticipantMode, TripCompanions, type ParticipantModeValue } from "./trip-companions";
 import { ParticipantAccess, ParticipantInviteActions } from "./participant-access";
 import { isValidInvitationEmail } from "@/src/lib/invitation-email";
 import { UserRound } from "lucide-react";
@@ -123,7 +123,7 @@ function IdeaForm({editor,close,save,requestDelete,busy}:{editor:IdeaEditor;clos
 }
 
 function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:TripIdea;close:()=>void;onChanged:()=>void;confirm:(value:Confirmation)=>void;notify:(message:string)=>void}){
-  const [participantMode,setParticipantMode]=useState<"email"|"name">("email");
+  const [participantMode,setParticipantMode]=useState<ParticipantModeValue>("email");
   const [inviteAccess,setInviteAccess]=useState<"view"|"admin">(idea.access_role==="owner"?"admin":"view");
   const canInvite=idea.access_role==="owner"||idea.access_level==="admin";
   const canManage=idea.access_role==="owner";const [items,setItems]=useState<IdeaCollaborator[]>([]);const [recent,setRecent]=useState<string[]>([]);const [email,setEmail]=useState("");const [loading,setLoading]=useState(true);const [saving,setSaving]=useState(false);const [error,setError]=useState("");
@@ -136,7 +136,7 @@ function IdeaCollaboratorsSheet({idea,close,onChanged,confirm,notify}:{idea:Trip
   const suggestions=recent.filter(value=>!items.some(item=>item.email===value));
   return <div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)close()}}><section className="modal collaborators-sheet"><div className="modal-head"><div><h2>ผู้ร่วมวางแผน</h2><p>{canManage?"แชร์รายการนี้ให้เพื่อนช่วยดูและแก้ไขข้อมูลร่วมกัน":"รายชื่อผู้ที่วางแผนรายการนี้ร่วมกัน"}</p></div><button type="button" className="icon-btn" onClick={close} aria-label="ปิด"><X size={18}/></button></div>
     {canInvite&&<ParticipantMode value={participantMode} onChange={setParticipantMode}/>}
-    <TripCompanions id={idea.id} idea editable={canInvite} showForm={participantMode==="name"} onChanged={onChanged}/>
+    <TripCompanions id={idea.id} idea editable={canInvite} mode={participantMode==="email"?null:participantMode} onChanged={onChanged}/>
     {canInvite&&participantMode==="email"?<form className="collaborator-form" onSubmit={add}><div className="field"><label>อีเมลผู้ร่วมวางแผน</label><input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="friend@gmail.com" value={email} onChange={event=>setEmail(event.target.value)} required/></div><ParticipantInviteActions value={inviteAccess} onChange={setInviteAccess} allowAdmin={canManage} busy={saving} disabled={!isValidInvitationEmail(email)}/>{suggestions.length?<div className="recent-collaborators"><small>เลือกจากคนที่เพิ่มล่าสุด</small><div>{suggestions.map(value=><button type="button" key={value} onClick={()=>setEmail(value)}>{value}</button>)}</div></div>:null}</form>:null}
     {error?<p className="login-error">{error}</p>:null}<div className="collaborator-list">{loading?<CollaboratorsSkeleton count={idea.collaborator_count ?? idea.members.filter(member=>member.role!=="owner").length} label="กำลังโหลดผู้ร่วมวางแผน" />:items.length?items.map(item=><div className={`collaborator-row idea-collaborator-row ${canManage?"":"is-readonly"}`} key={item.id}><span className="collaborator-avatar" style={item.avatar_url?{backgroundImage:`url("${item.avatar_url}")`}:undefined}>{!item.avatar_url&&(item.display_name||item.email).charAt(0).toUpperCase()}</span><div className="collaborator-copy"><strong>{item.display_name||item.email}</strong><small>{item.display_name?item.email:item.joined?"เข้าร่วมแล้ว":"แชร์ด้วยอีเมลแล้ว"}</small></div>{canManage&&<ParticipantAccess label={`สิทธิ์ ${item.email}`} disabled={saving} value={item.access_level} onChange={access=>void updateAccess(item,access)}/>}{canManage?<button type="button" className="delete-record-btn" onClick={()=>confirm({title:`ลบผู้ร่วมวางแผน “${item.email}”?`,description:"บุคคลนี้จะไม่สามารถเปิดหรือแก้ไขรายการนี้ได้อีก",confirmLabel:"ลบผู้ร่วมวางแผน",onConfirm:()=>remove(item)})} aria-label="ลบผู้ร่วมวางแผน"><Trash2 size={17}/></button>:<span className="collaborator-access-badge is-view">{item.access_level==="admin"?"Admin":"View"}</span>}</div>):<p className="collaborator-empty">ยังไม่ได้เชิญผู้ร่วมทริปด้วยอีเมล</p>}</div>
   </section></div>;

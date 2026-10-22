@@ -69,9 +69,12 @@ export const tripActualExpenseSql=(alias="trips")=>`COALESCE((
       UNION
       SELECT member.user_id::text FROM trip_collaborators member
       WHERE member.trip_id=${alias}.id AND member.user_id IS NOT NULL
+    ), budget_guests AS (
+      SELECT guest.id::text AS id FROM trip_expense_guests guest
+      WHERE guest.trip_id=${alias}.id AND guest.participant_type='member'
     )
     SELECT sum(COALESCE((cost.item->>'value')::numeric,0) * LEAST(1::numeric,
-      selected.member_count::numeric / GREATEST(1, CASE
+      selected.participant_count::numeric / GREATEST(1, CASE
         WHEN jsonb_typeof(cost.item->'splitGuestIds')='array'
           THEN jsonb_array_length(CASE WHEN jsonb_typeof(cost.item->'splitMemberIds')='array' THEN cost.item->'splitMemberIds' ELSE '[]'::jsonb END)
             + jsonb_array_length(cost.item->'splitGuestIds')
@@ -86,9 +89,15 @@ export const tripActualExpenseSql=(alias="trips")=>`COALESCE((
     FROM itineraries itinerary
     CROSS JOIN LATERAL jsonb_array_elements(COALESCE(itinerary.cost_items,'[]'::jsonb)) AS cost(item)
     CROSS JOIN LATERAL (
-      SELECT count(*) AS member_count FROM budget_members member
-      WHERE jsonb_typeof(cost.item->'splitMemberIds') IS DISTINCT FROM 'array'
-        OR cost.item->'splitMemberIds' ? member.id
+      SELECT count(*) AS participant_count FROM (
+        SELECT member.id FROM budget_members member
+        WHERE jsonb_typeof(cost.item->'splitMemberIds') IS DISTINCT FROM 'array'
+          OR cost.item->'splitMemberIds' ? member.id
+        UNION ALL
+        SELECT guest.id FROM budget_guests guest
+        WHERE jsonb_typeof(cost.item->'splitGuestIds')='array'
+          AND cost.item->'splitGuestIds' ? guest.id
+      ) budget_participant
     ) selected
     WHERE itinerary.trip_id=${alias}.id
       AND lower(btrim(COALESCE(cost.item->>'category','')))<>'shopping'
@@ -176,4 +185,4 @@ export const tripMembersSql=(alias="trips")=>`(
     ) shared_member
   ) AS members,
   (SELECT count(*)::int FROM trip_collaborators sheet_member WHERE sheet_member.trip_id=${alias}.id) AS collaborator_count,
-  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',guest.id,'name',guest.name) ORDER BY guest.created_at,guest.id),'[]'::jsonb) FROM trip_expense_guests guest WHERE guest.trip_id=${alias}.id) AS companions`;
+  (SELECT COALESCE(jsonb_agg(jsonb_build_object('id',guest.id,'name',guest.name,'participant_type',guest.participant_type) ORDER BY guest.created_at,guest.id),'[]'::jsonb) FROM trip_expense_guests guest WHERE guest.trip_id=${alias}.id) AS companions`;

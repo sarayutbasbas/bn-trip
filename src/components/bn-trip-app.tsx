@@ -1,7 +1,7 @@
 "use client";
 import { filterDate, flightFilter } from "@/src/lib/trip-range-filter";
 import { tripAvatarOrder } from "@/src/lib/trip-avatar-order";
-import { ParticipantMode, TripCompanions } from "./trip-companions";
+import { ParticipantMode, TripCompanions, type ParticipantModeValue } from "./trip-companions";
 import { GUEST_REMOVAL_DESCRIPTION } from "./guest-removal";
 import { ParticipantAccess, ParticipantInviteActions } from "./participant-access";
 import { isValidInvitationEmail } from "@/src/lib/invitation-email";
@@ -292,10 +292,11 @@ type TripMember = {
 type ExpenseGuest = {
   id: string;
   name: string;
+  participant_type?: "guest" | "member";
 };
 export type Trip = {
   owner_id?: string;
-  companions?: { id: string; name: string }[];
+  companions?: ExpenseGuest[];
   favorite_total?: number;
   is_favorite?: boolean;
   collaborator_count?: number;
@@ -1018,6 +1019,10 @@ Object.assign(EN_TEXT, {
   "ยังไม่ได้ตั้งค่า Google OAuth": "Google OAuth is not configured yet",
   "เข้าสู่ระบบด้วย Google ไม่สำเร็จ": "Google sign-in failed",
   ผู้ร่วมทริป: "Collaborators",
+  สมาชิกไม่มีอีเมล: "Member without email",
+  "สมาชิกไม่มีอีเมล · รวมในค่าใช้จ่ายสมาชิก": "Member without email · included in member expenses",
+  "ยอดเทียบงบนับสมาชิกบัญชีและสมาชิกไม่มีอีเมล ไม่รวมผู้ร่วมทริปแบบเพิ่มชื่อ":
+    "Budget usage includes account members and members without email, but excludes named guests.",
   "เพิ่มด้วย Gmail ผู้ร่วมทริปเพิ่มและแก้ไขได้ แต่ลบไม่ได้":
     "Invite by Gmail. Collaborators can add and edit, but cannot delete.",
   "กำหนด View สำหรับเพิ่มและแก้ไข หรือ Admin สำหรับลบข้อมูลได้ด้วย":
@@ -1258,6 +1263,11 @@ Object.assign(EN_TEXT, {
   เลือกรายการที่ต้องการเพิ่มเข้าทริปนี้: "Choose items to add to this trip",
   "เพิ่มรายการจาก Master ครบแล้ว": "All Master items have been added",
   เลือกผู้รับผิดชอบ: "Choose assignee",
+  เลือกผู้รับผิดชอบทั้งหมวด: "Choose assignee for this group",
+  มอบหมายทั้งหมวด: "Assign entire group",
+  ลบทั้งหมวด: "Delete entire group",
+  มอบหมายทั้งหมวดแล้ว: "Entire group assigned",
+  ยกเลิกผู้รับผิดชอบทั้งหมวดแล้ว: "Group assignment removed",
   นำผู้รับผิดชอบออกจากรายการนี้: "Remove the assignee from this item",
   เจ้าของทริป: "Trip owner",
   "แก้ไข Checklist": "Edit checklist",
@@ -1695,7 +1705,7 @@ function SharedTripAvatars({
   actionLabel,
 }: {
   members?: TripMember[];
-  companions?: { id: string; name: string }[];
+  companions?: ExpenseGuest[];
   variant?: "card" | "compact" | "header";
   limit?: number;
   onClick?: () => void;
@@ -6104,6 +6114,7 @@ function ExpenseMemberSummary({
       label: member.display_name || member.email || "-",
       avatarUrl: member.avatar_url,
       guest: false,
+      offlineMember: false,
       total: memberTotals.get(member.id) || { trip: 0, shopping: 0 },
     })),
     ...guests.map((guest) => ({
@@ -6111,6 +6122,7 @@ function ExpenseMemberSummary({
       label: guest.name,
       avatarUrl: null,
       guest: true,
+      offlineMember: guest.participant_type === "member",
       total: guestTotals.get(guest.id) || { trip: 0, shopping: 0 },
     })),
   ];
@@ -6140,7 +6152,7 @@ function ExpenseMemberSummary({
               </span>
               <div className="expense-member-copy">
                 <strong>{row.label}</strong>
-                <small>{t(row.guest ? "ผู้ร่วมทริปแบบเพิ่มชื่อ" : "รวมที่ต้องรับผิดชอบ")}</small>
+                <small>{t(row.guest ? row.offlineMember ? "สมาชิกไม่มีอีเมล · รวมในค่าใช้จ่ายสมาชิก" : "ผู้ร่วมทริปแบบเพิ่มชื่อ" : "รวมที่ต้องรับผิดชอบ")}</small>
               </div>
               <div className="expense-member-totals">
                 <span>
@@ -6186,7 +6198,8 @@ function PlanExpensesContent({
   );
   const allCosts = items.flatMap((item) => item.cost_items || []);
   const budgetMemberIds = trip.members?.length ? trip.members.map(member => member.id) : [trip.owner_id || "owner"];
-  const budgetValue = (cost: CostItem) => memberExpenseValue(cost, budgetMemberIds);
+  const budgetGuestIds = expenseGuests.filter(guest => guest.participant_type === "member").map(guest => guest.id);
+  const budgetValue = (cost: CostItem) => memberExpenseValue(cost, budgetMemberIds, budgetGuestIds);
   const isShopping = (cost: CostItem) =>
     (cost.category || "").trim().toLowerCase() === "shopping";
   const tripCosts = allCosts.filter((cost) => !isShopping(cost));
@@ -6229,7 +6242,7 @@ function PlanExpensesContent({
       <TripSectionHeading
         className="expense-page-heading"
         title={t("ค่าใช้จ่าย")}
-        subtitle={t("ยอดเทียบงบนับเฉพาะส่วนของสมาชิก ไม่รวมผู้ร่วมทริปแบบเพิ่มชื่อ")}
+        subtitle={t("ยอดเทียบงบนับสมาชิกบัญชีและสมาชิกไม่มีอีเมล ไม่รวมผู้ร่วมทริปแบบเพิ่มชื่อ")}
         actions={<button
           type="button"
           className="trip-section-add"
@@ -7921,7 +7934,7 @@ function CollaboratorsSheet({
   const t = useT();
   const canManage = trip.access_role === "owner";
   const canInvite = trip.access_role === "owner" || trip.access_role === "admin";
-  const [participantMode, setParticipantMode] = useState<"email" | "name">("email");
+  const [participantMode, setParticipantMode] = useState<ParticipantModeValue>("email");
   const [inviteAccess, setInviteAccess] = useState<"view" | "admin">(canManage ? "admin" : "view");
   const [items, setItems] = useState<Collaborator[]>([]);
   const [recent, setRecent] = useState<string[]>([]);
@@ -8072,7 +8085,7 @@ function CollaboratorsSheet({
           </button>
         </div>
         {canInvite && <ParticipantMode value={participantMode} onChange={setParticipantMode}/>}
-        <TripCompanions id={trip.id} editable={canInvite} showForm={participantMode === "name"} onChanged={onChanged}/>
+        <TripCompanions id={trip.id} editable={canInvite} mode={participantMode === "email" ? null : participantMode} onChanged={onChanged}/>
         {canInvite && participantMode === "email" && (
           <form className="collaborator-form" onSubmit={add}>
             <div className="field">

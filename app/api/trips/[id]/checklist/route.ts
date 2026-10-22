@@ -169,6 +169,70 @@ const deleteCategorySchema = z.object({
   categoryName: z.string().trim().min(1).max(120),
 });
 
+const assignCategorySchema = z.object({
+  categoryName: z.string().trim().min(1).max(120),
+  assignedUserId: z.string().uuid().nullable(),
+});
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await getSession();
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.isDemo)
+    return NextResponse.json(
+      { error: "Demo mode is read-only", loginRequired: true },
+      { status: 403 },
+    );
+  try {
+    const { id } = await params;
+    if (!(await getTripRole(id, session.userId)))
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const input = assignCategorySchema.parse(await request.json());
+    if (input.assignedUserId) {
+      const member = await query(
+        `SELECT 1 FROM trips trip WHERE trip.id=$1 AND (trip.owner_id=$2 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=trip.id AND c.user_id=$2))`,
+        [id, input.assignedUserId],
+      );
+      if (!member.rowCount)
+        return NextResponse.json(
+          { error: "ผู้รับผิดชอบไม่ได้อยู่ในทริปนี้" },
+          { status: 400 },
+        );
+    }
+    const updated = await query(
+      `UPDATE trip_checklist_items item SET assigned_user_id=$3,updated_at=now()
+       WHERE item.trip_id=$1 AND COALESCE(
+         (SELECT master_category.name FROM checklist_master_items master_item
+          JOIN checklist_master_categories master_category ON master_category.id=master_item.category_id
+          WHERE master_item.id=item.master_item_id),
+         item.category_name
+       )=$2
+       RETURNING item.*`,
+      [id, input.categoryName, input.assignedUserId],
+    );
+    const rows = updated.rows;
+    if (!rows.length)
+      return NextResponse.json({ error: "ไม่พบรายการในหมวดนี้" }, { status: 404 });
+    await logTripActivity({
+      tripId: id,
+      actorUserId: session.userId,
+      entityType: "checklist_category",
+      action: "update",
+      summary: `${input.assignedUserId ? "มอบหมาย" : "ยกเลิกผู้รับผิดชอบ"} Checklist หมวด “${input.categoryName}” ${rows.length} รายการ`,
+      after: rows,
+    });
+    return NextResponse.json({ items: rows });
+  } catch {
+    return NextResponse.json(
+      { error: "ข้อมูลการมอบหมาย Checklist ไม่ถูกต้อง" },
+      { status: 400 },
+    );
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },

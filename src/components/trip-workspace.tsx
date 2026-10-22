@@ -209,6 +209,7 @@ export function TripWorkspace({
   const [documentPreview, setDocumentPreview] =
     useState<AttachmentMediaPreview | null>(null);
   const [assigningItemId, setAssigningItemId] = useState<string | null>(null);
+  const [assigningCategory, setAssigningCategory] = useState<string | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [openChecklistActionMenu, setOpenChecklistActionMenu] = useState<
     string | null
@@ -508,6 +509,46 @@ export function TripWorkspace({
       }
     }, 450);
     assignmentTimers.current.set(item.id, timer);
+  }
+  async function assignChecklistCategory(category: string, member: Member | null) {
+    const categoryItems = data.checklist.filter((item) => item.category_name === category);
+    if (!categoryItems.length) return;
+    const previous = categoryItems;
+    const assignedUserId = member?.id || null;
+    categoryItems.forEach((item) => {
+      const timer = assignmentTimers.current.get(item.id);
+      if (timer) clearTimeout(timer);
+      assignmentTimers.current.delete(item.id);
+    });
+    setBusy(`assign-category:${category}`);
+    setError("");
+    setData((current) => ({
+      ...current,
+      checklist: current.checklist.map((item) => item.category_name === category ? {
+        ...item,
+        assigned_user_id: assignedUserId,
+        assigned_name: member?.display_name || member?.email || null,
+        assigned_avatar_url: member?.avatar_url || null,
+      } : item),
+    }));
+    setAssigningCategory(null);
+    try {
+      await json(`/api/trips/${tripId}/checklist`, {
+        method: "PATCH",
+        body: JSON.stringify({ categoryName: category, assignedUserId }),
+      });
+      invalidateWorkspaceTabs("checklist", "history");
+      notify(assignedUserId ? "มอบหมายทั้งหมวดแล้ว" : "ยกเลิกผู้รับผิดชอบทั้งหมวดแล้ว");
+    } catch (reason) {
+      const previousById = new Map(previous.map((item) => [item.id, item]));
+      setData((current) => ({
+        ...current,
+        checklist: current.checklist.map((item) => previousById.get(item.id) || item),
+      }));
+      setError(reason instanceof Error ? reason.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setBusy("");
+    }
   }
   async function deleteChecklist(item: Checklist) {
     setBusy(item.id);
@@ -990,6 +1031,9 @@ export function TripWorkspace({
   const assigningItem = assigningItemId
     ? checklistById.get(assigningItemId)
     : undefined;
+  const assigningCategoryItems = assigningCategory
+    ? data.checklist.filter((item) => item.category_name === assigningCategory)
+    : [];
   const editingItem = editingItemId
     ? checklistById.get(editingItemId)
     : undefined;
@@ -1189,12 +1233,27 @@ export function TripWorkspace({
                 masterCategoryIconByName.get(
                   category.toLocaleLowerCase("th"),
                 ) || categoryItems[0]?.category_icon_key;
+              const firstAssigned = categoryItems.find((item) => item.assigned_user_id);
+              const categoryIds = categoryItems.map((item) => item.id);
+              const allCategorySelected = categoryIds.every((id) => selection.selected.includes(id));
               return (
                 <section
                   className={`checklist-category-card checklist-tone-${categoryIndex % 4} ${collapsed ? "collapsed" : ""}`}
                   key={category}
                 >
                   <div className="checklist-category-head">
+                    {selection.active && <button
+                      type="button"
+                      className={`checklist-category-select-all ${allCategorySelected ? "selected" : ""}`}
+                      aria-pressed={allCategorySelected}
+                      aria-label={label(`${allCategorySelected ? "ยกเลิกการเลือก" : "เลือกทั้งหมดในหมวด"} ${category}`)}
+                      disabled={selection.busy}
+                      onClick={() => selection.setSelected((current) => allCategorySelected
+                        ? current.filter((id) => !categoryIds.includes(id))
+                        : [...new Set([...current, ...categoryIds])])}
+                    >
+                      {allCategorySelected ? <Check size={16}/> : <Circle size={16}/>}
+                    </button>}
                     <button
                       type="button"
                       className="checklist-category-toggle"
@@ -1225,6 +1284,30 @@ export function TripWorkspace({
                       <b className="checklist-progress-value">{progress}%</b>
                       <ChevronRight className="checklist-category-chevron" size={18} />
                     </button>
+                    {!selection.active && <>
+                      <button
+                        type="button"
+                        className={`checklist-category-assignee ${firstAssigned ? "assigned" : ""}`}
+                        onClick={() => setAssigningCategory(category)}
+                        disabled={busy === `assign-category:${category}`}
+                        aria-label={label(`มอบหมายทั้งหมวด ${category}`)}
+                        title={firstAssigned?.assigned_name || label("มอบหมายทั้งหมวด")}
+                      >
+                        {firstAssigned?.assigned_avatar_url ? <span className="member-avatar-image" style={{ backgroundImage: `url("${firstAssigned.assigned_avatar_url}")` }}/>
+                          : firstAssigned?.assigned_name ? <span>{firstAssigned.assigned_name.slice(0, 1)}</span>
+                            : <UserPlus size={16}/>}
+                      </button>
+                      <button
+                        type="button"
+                        className="checklist-category-delete"
+                        onClick={() => setDeleteTarget({ kind: "category", category, items: categoryItems })}
+                        disabled={busy === `category:${category}`}
+                        aria-label={label(`ลบทั้งหมวด ${category}`)}
+                        title={label("ลบทั้งหมวด")}
+                      >
+                        <Trash2 size={16}/>
+                      </button>
+                    </>}
                   </div>
                   {!collapsed && (
                     <div className="checklist-list">
@@ -1510,12 +1593,15 @@ export function TripWorkspace({
           closeLabel={label("ปิดตัวอย่างเอกสาร")}
         />
       )}
-      {assigningItem && (
+      {(assigningItem || assigningCategory) && (
         <div
           className="modal-backdrop"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setAssigningItemId(null);
+            if (event.target === event.currentTarget) {
+              setAssigningItemId(null);
+              setAssigningCategory(null);
+            }
           }}
         >
           <section
@@ -1526,13 +1612,13 @@ export function TripWorkspace({
           >
             <div className="modal-head">
               <div>
-                <h2 id="assignee-sheet-title">{label("เลือกผู้รับผิดชอบ")}</h2>
-                <p>{assigningItem.title}</p>
+                <h2 id="assignee-sheet-title">{label(assigningCategory ? "เลือกผู้รับผิดชอบทั้งหมวด" : "เลือกผู้รับผิดชอบ")}</h2>
+                <p>{assigningCategory || assigningItem?.title}</p>
               </div>
               <button
                 type="button"
                 className="icon-btn"
-                onClick={() => setAssigningItemId(null)}
+                onClick={() => { setAssigningItemId(null); setAssigningCategory(null); }}
                 aria-label={label("ยกเลิก")}
               >
                 <X size={18} />
@@ -1541,8 +1627,12 @@ export function TripWorkspace({
             <div className="assignee-member-list">
               <button
                 type="button"
-                className={!assigningItem.assigned_user_id ? "active" : ""}
-                onClick={() => assignChecklist(assigningItem, null)}
+                className={assigningCategory
+                  ? assigningCategoryItems.every((item) => !item.assigned_user_id) ? "active" : ""
+                  : !assigningItem?.assigned_user_id ? "active" : ""}
+                onClick={() => assigningCategory
+                  ? void assignChecklistCategory(assigningCategory, null)
+                  : assigningItem && assignChecklist(assigningItem, null)}
               >
                 <span className="assignee-empty-avatar">
                   <UserPlus size={17} />
@@ -1551,10 +1641,14 @@ export function TripWorkspace({
                   <strong>{label("ยังไม่มอบหมาย")}</strong>
                   <small>{label("นำผู้รับผิดชอบออกจากรายการนี้")}</small>
                 </span>
-                {!assigningItem.assigned_user_id && <Check size={17} />}
+                {(assigningCategory
+                  ? assigningCategoryItems.every((item) => !item.assigned_user_id)
+                  : !assigningItem?.assigned_user_id) && <Check size={17} />}
               </button>
               {orderedMembers.map((member) => {
-                const selected = assigningItem.assigned_user_id === member.id;
+                const selected = assigningCategory
+                  ? assigningCategoryItems.length > 0 && assigningCategoryItems.every((item) => item.assigned_user_id === member.id)
+                  : assigningItem?.assigned_user_id === member.id;
                 const memberName =
                   member.display_name || member.email || "Member";
                 return (
@@ -1562,7 +1656,9 @@ export function TripWorkspace({
                     type="button"
                     className={selected ? "active" : ""}
                     key={member.id}
-                    onClick={() => assignChecklist(assigningItem, member)}
+                    onClick={() => assigningCategory
+                      ? void assignChecklistCategory(assigningCategory, member)
+                      : assigningItem && assignChecklist(assigningItem, member)}
                   >
                     <span
                       className="assignee-member-avatar"

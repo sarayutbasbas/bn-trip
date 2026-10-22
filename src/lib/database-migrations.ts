@@ -688,6 +688,10 @@ const migrations = [
   { version: 55, statements: [
     "ALTER TABLE trip_accommodations ADD COLUMN IF NOT EXISTS payment_date DATE",
   ] },
+  { version: 56, statements: [
+    "ALTER TABLE trip_expense_guests ADD COLUMN IF NOT EXISTS participant_type TEXT NOT NULL DEFAULT 'guest' CHECK (participant_type IN ('guest','member'))",
+    "ALTER TABLE trip_idea_expense_guests ADD COLUMN IF NOT EXISTS participant_type TEXT NOT NULL DEFAULT 'guest' CHECK (participant_type IN ('guest','member'))",
+  ] },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

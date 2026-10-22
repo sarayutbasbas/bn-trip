@@ -4,7 +4,7 @@ import { ChevronDown, UserRound, Trash2, UserPlus, Plus } from "lucide-react";
 import { createPortal } from "react-dom";
 import { BottomSheet } from "./bottom-sheet";
 type Person = { id: string; display_name: string | null; email: string | null; avatar_url: string | null; role?: "owner" | "collaborator" };
-type Guest = { id: string; name: string };
+type Guest = { id: string; name: string; participant_type?: "guest" | "member" };
 type Setter<T> = Dispatch<SetStateAction<T>>;
 type Props = {
  t: (text: string) => string;
@@ -72,7 +72,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
  const [newGuestIds, setNewGuestIds] = useState<string[]>([]);
  const pickerSession = useRef(0);
  const orderedGuests = [...expenseGuests.filter(guest => newGuestIds.includes(guest.id)), ...expenseGuests.filter(guest => !newGuestIds.includes(guest.id))];
- const people = [...orderedMembers.map(member => ({ key: `member:${member.id}`, label: member.display_name || member.email || "-", avatar: member.avatar_url })), ...orderedGuests.map(guest => ({ key: `guest:${guest.id}`, label: guest.name, avatar: null }))];
+ const people = [...orderedMembers.map(member => ({ key: `member:${member.id}`, label: member.display_name || member.email || "-", avatar: member.avatar_url, offlineMember: false })), ...orderedGuests.map(guest => ({ key: `guest:${guest.id}`, label: guest.name, avatar: null, offlineMember: guest.participant_type === "member" }))];
  const startSession = () => { pickerSession.current += 1; setNewGuestIds([]); };
  async function addPerson() {
    const session = pickerSession.current;
@@ -209,7 +209,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
                         <span className="split-member-avatar is-guest">
                           <UserRound size={22} aria-hidden="true" />
                         </span>
-                        <span className="people-person-copy" title={guest.name}>{guest.name}{newGuestIds.includes(guest.id) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span>
+                        <span className="people-person-copy" title={guest.name}>{guest.name}{guest.participant_type === "member" && <small>{t("สมาชิกไม่มีอีเมล")}</small>}{newGuestIds.includes(guest.id) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span>
                       </label>
                       {requestDeleteExpenseGuest && <button
                         type="button"
@@ -234,7 +234,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
               <button id="expense-paid-by" type="button" className={`split-member-trigger ${payerOpen ? "is-open" : ""}`} disabled={people.length <= 1} aria-expanded={payerOpen} onClick={() => { startSession(); setSplitPickerOpen(false); setPayerOpen(open => !open); }}><span>{selectedPayer?.label || t("เลือกผู้จ่าย")}</span><ChevronDown size={16}/></button>
               {payerOpen && <PeopleSheet title={t("จ่ายโดย")} onClose={closePayer} footer={addPersonFooter} payer>
                 {people.map(person => <div className="split-guest-option" key={person.key}>
-                  <label><input type="radio" name="expensePayerChoice" value={person.key} checked={payerKey === person.key} onChange={() => { setPayerKey(person.key); setPayerOpen(false); }}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}{person.key.startsWith("guest:") && newGuestIds.includes(person.key.slice(6)) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span></label>
+                  <label><input type="radio" name="expensePayerChoice" value={person.key} checked={payerKey === person.key} onChange={() => { setPayerKey(person.key); setPayerOpen(false); }}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}{person.offlineMember && <small>{t("สมาชิกไม่มีอีเมล")}</small>}{person.key.startsWith("guest:") && newGuestIds.includes(person.key.slice(6)) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span></label>
                   {person.key.startsWith("guest:") && requestDeleteExpenseGuest && <button type="button" className="split-guest-delete" disabled={Boolean(deletingGuestId)} aria-label={`${t("ลบ")} ${person.label}`} onClick={() => { requestDeleteExpenseGuest({ id: person.key.slice(6), name: person.label }); }}><Trash2 size={20}/></button>}
                 </div>)}
               </PeopleSheet>}

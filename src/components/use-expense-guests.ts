@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-type ExpenseGuest = { id: string; name: string };
+type ExpenseGuest = { id: string; name: string; participant_type?: "guest" | "member" };
 export const EXPENSE_GUESTS_CHANGED_EVENT = "bn-trip:expense-guests-changed";
 
 export function useExpenseGuests(tripId: string) {

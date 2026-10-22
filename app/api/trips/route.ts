@@ -126,8 +126,8 @@ export async function POST(request:Request) {
           WHERE source.email IS NOT NULL AND lower(source.email)<>lower($4)
           ON CONFLICT(trip_id,email) DO UPDATE SET
             user_id=EXCLUDED.user_id,access_level=EXCLUDED.access_level`,[created.id,session.userId,input.sourceIdeaId,session.email]);
-        await client.query(`INSERT INTO trip_expense_guests(id,trip_id,name,created_by,created_at)
-          SELECT id,$1,name,created_by,created_at FROM trip_idea_expense_guests WHERE trip_idea_id=$2`, [created.id,input.sourceIdeaId]);
+        await client.query(`INSERT INTO trip_expense_guests(id,trip_id,name,participant_type,created_by,created_at)
+          SELECT id,$1,name,participant_type,created_by,created_at FROM trip_idea_expense_guests WHERE trip_idea_id=$2`, [created.id,input.sourceIdeaId]);
         await client.query("DELETE FROM trip_ideas WHERE id=$1",[input.sourceIdeaId]);
       }
       const members=await client.query(`SELECT account.id,COALESCE(account.email,'') AS email,account.display_name,account.avatar_url,
