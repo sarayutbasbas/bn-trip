@@ -3654,12 +3654,13 @@ button:disabled {
 .checklist-bulk-action-row { width:100%;display:flex;align-items:center;gap:8px; }
 .checklist-bulk-summary-row span { margin-left:0;font-size:12px;color:var(--muted); }
 .checklist-bulk-action-row { justify-content:space-between; }
+.checklist-bulk-action-row > :where(.checklist-bulk-complete,.checklist-bulk-uncomplete,.checklist-bulk-remove) { width:0;min-width:0;flex:1 1 0;padding-right:8px;padding-left:8px;white-space:normal;text-align:center;line-height:1.15; }
 .checklist-bulk-toolbar .checklist-bulk-complete { color:#248a3d;background:rgba(52,199,89,.1);border-color:rgba(52,199,89,.24); }
 .checklist-bulk-toolbar .checklist-bulk-uncomplete { color:var(--muted);background:var(--surface-2);border-color:var(--line); }
 .checklist-bulk-toolbar .checklist-bulk-remove { color:var(--orange); }
 @media (max-width:560px) {
   .checklist-bulk-action-row { gap:6px; }
-  .checklist-bulk-action-row button { min-height:40px;padding:7px 9px;gap:4px;font-size:12px; }
+  .checklist-bulk-action-row button { min-height:40px;padding:7px 4px;gap:4px;font-size:12px; }
   .checklist-bulk-action-row :where(.checklist-bulk-complete,.checklist-bulk-uncomplete,.checklist-bulk-remove) svg { display:none; }
   .checklist-bulk-action-row .checklist-bulk-close { width:38px;min-width:38px;padding:0; }
 }
