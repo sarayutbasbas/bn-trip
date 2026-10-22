@@ -16,7 +16,7 @@ import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useFormDirty } from "@/src/components/use-form-dirty";
 import { DocumentFilePicker } from "@/src/components/document-file-picker";
-import { BlockingSaveOverlay, useBlockingSubmit } from "@/src/components/bottom-sheet";
+import { BottomSheet, BlockingSaveOverlay, useBlockingSubmit } from "@/src/components/bottom-sheet";
 import { ChecklistActionPopover } from "@/src/components/checklist-action-popover";
 import { FormErrorDialog } from "@/src/components/form-error-dialog";
 import { ChecklistCategoryIcon } from "@/src/components/checklist-category-icon";
@@ -1300,7 +1300,7 @@ export function TripWorkspace({
                         aria-label={label(`มอบหมายทั้งหมวด ${category}`)}
                         title={firstAssigned?.assigned_name || label("มอบหมายทั้งหมวด")}
                       >
-                        {firstAssigned?.assigned_avatar_url ? <span className="member-avatar-image" style={{ backgroundImage: `url("${firstAssigned.assigned_avatar_url}")` }}/>
+                        {firstAssigned?.assigned_avatar_url ? <Image className="checklist-category-avatar-image" src={firstAssigned.assigned_avatar_url} alt="" width={34} height={34} unoptimized/>
                           : firstAssigned?.assigned_name ? <span>{firstAssigned.assigned_name.slice(0, 1)}</span>
                             : <UserPlus size={16}/>}
                       </button>
@@ -1601,99 +1601,78 @@ export function TripWorkspace({
         />
       )}
       {(assigningItem || assigningCategory) && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setAssigningItemId(null);
-              setAssigningCategory(null);
-            }
+        <BottomSheet
+          title={label(assigningCategory ? "เลือกผู้รับผิดชอบทั้งหมวด" : "เลือกผู้รับผิดชอบ")}
+          subtitle={assigningCategory || assigningItem?.title}
+          closeLabel={label("ยกเลิก")}
+          onClose={() => {
+            setAssigningItemId(null);
+            setAssigningCategory(null);
           }}
+          className="checklist-assignee-sheet"
         >
-          <section
-            className="modal checklist-assignee-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="assignee-sheet-title"
-          >
-            <div className="modal-head">
-              <div>
-                <h2 id="assignee-sheet-title">{label(assigningCategory ? "เลือกผู้รับผิดชอบทั้งหมวด" : "เลือกผู้รับผิดชอบ")}</h2>
-                <p>{assigningCategory || assigningItem?.title}</p>
-              </div>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => { setAssigningItemId(null); setAssigningCategory(null); }}
-                aria-label={label("ยกเลิก")}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="assignee-member-list">
-              <button
-                type="button"
-                className={assigningCategory
-                  ? assigningCategoryItems.every((item) => !item.assigned_user_id) ? "active" : ""
-                  : !assigningItem?.assigned_user_id ? "active" : ""}
-                onClick={() => assigningCategory
-                  ? void assignChecklistCategory(assigningCategory, null)
-                  : assigningItem && assignChecklist(assigningItem, null)}
-              >
-                <span className="assignee-empty-avatar">
-                  <UserPlus size={17} />
-                </span>
-                <span>
-                  <strong>{label("ยังไม่มอบหมาย")}</strong>
-                  <small>{label("นำผู้รับผิดชอบออกจากรายการนี้")}</small>
-                </span>
-                {(assigningCategory
-                  ? assigningCategoryItems.every((item) => !item.assigned_user_id)
-                  : !assigningItem?.assigned_user_id) && <Check size={17} />}
-              </button>
-              {orderedMembers.map((member) => {
-                const selected = assigningCategory
-                  ? assigningCategoryItems.length > 0 && assigningCategoryItems.every((item) => item.assigned_user_id === member.id)
-                  : assigningItem?.assigned_user_id === member.id;
-                const memberName =
-                  member.display_name || member.email || "Member";
-                return (
-                  <button
-                    type="button"
-                    className={selected ? "active" : ""}
-                    key={member.id}
-                    onClick={() => assigningCategory
-                      ? void assignChecklistCategory(assigningCategory, member)
-                      : assigningItem && assignChecklist(assigningItem, member)}
+          <div className="assignee-member-list">
+            <button
+              type="button"
+              className={assigningCategory
+                ? assigningCategoryItems.every((item) => !item.assigned_user_id) ? "active" : ""
+                : !assigningItem?.assigned_user_id ? "active" : ""}
+              onClick={() => assigningCategory
+                ? void assignChecklistCategory(assigningCategory, null)
+                : assigningItem && assignChecklist(assigningItem, null)}
+            >
+              <span className="assignee-empty-avatar">
+                <UserPlus size={17} />
+              </span>
+              <span>
+                <strong>{label("ยังไม่มอบหมาย")}</strong>
+                <small>{label("นำผู้รับผิดชอบออกจากรายการนี้")}</small>
+              </span>
+              {(assigningCategory
+                ? assigningCategoryItems.every((item) => !item.assigned_user_id)
+                : !assigningItem?.assigned_user_id) && <Check size={17} />}
+            </button>
+            {orderedMembers.map((member) => {
+              const selected = assigningCategory
+                ? assigningCategoryItems.length > 0 && assigningCategoryItems.every((item) => item.assigned_user_id === member.id)
+                : assigningItem?.assigned_user_id === member.id;
+              const memberName =
+                member.display_name || member.email || "Member";
+              return (
+                <button
+                  type="button"
+                  className={selected ? "active" : ""}
+                  key={member.id}
+                  onClick={() => assigningCategory
+                    ? void assignChecklistCategory(assigningCategory, member)
+                    : assigningItem && assignChecklist(assigningItem, member)}
+                >
+                  <span
+                    className="assignee-member-avatar"
+                    style={
+                      member.avatar_url
+                        ? { backgroundImage: `url("${member.avatar_url}")` }
+                        : undefined
+                    }
                   >
-                    <span
-                      className="assignee-member-avatar"
-                      style={
-                        member.avatar_url
-                          ? { backgroundImage: `url("${member.avatar_url}")` }
-                          : undefined
-                      }
-                    >
-                      {!member.avatar_url && memberName.slice(0, 1)}
-                    </span>
-                    <span>
-                      <strong>{memberName}</strong>
-                      <small>
-                        {label(
-                          member.role === "owner"
-                            ? "เจ้าของทริป"
-                            : "ผู้ร่วมทริป",
-                        )}
-                      </small>
-                    </span>
-                    {selected && <Check size={17} />}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        </div>
+                    {!member.avatar_url && memberName.slice(0, 1)}
+                  </span>
+                  <span>
+                    <strong>{memberName}</strong>
+                    <small>
+                      {label(
+                        member.role === "owner"
+                          ? "เจ้าของทริป"
+                          : "ผู้ร่วมทริป",
+                      )}
+                    </small>
+                  </span>
+                  {selected && <Check size={17} />}
+                </button>
+              );
+            })}
+          </div>
+        </BottomSheet>
       )}
       {masterOpen && (
         <div
