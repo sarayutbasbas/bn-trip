@@ -1,7 +1,7 @@
-const STATIC_CACHE="routerao-static-v2";
+const STATIC_CACHE="routerao-static-v3";
 const PRIVATE_DATA_CACHE="bn-trip-private-data-v1";
 const PRIVATE_DOCUMENT_CACHE="bn-trip-private-documents-v1";
-const STATIC_ASSETS=["/manifest.webmanifest","/routerao-icon-192.png","/routerao-icon-512.png","/apple-touch-icon-routerao.png","/travel-postcard-fallback.jpg"];
+const STATIC_ASSETS=["/manifest.webmanifest","/routerao-icon-192.png","/routerao-icon-512.png","/routerao-icon-maskable-192.png","/routerao-icon-maskable-512.png","/apple-touch-icon-routerao.png","/travel-postcard-fallback.jpg"];
 
 self.addEventListener("install",event=>{event.waitUntil(caches.open(STATIC_CACHE).then(cache=>cache.addAll(STATIC_ASSETS)));self.skipWaiting()});
 self.addEventListener("activate",event=>{event.waitUntil(Promise.all([caches.keys().then(names=>Promise.all(names.filter(name=>(name.startsWith("bn-trip-static-")||name.startsWith("pack-and-go-static-")||name.startsWith("routerao-static-"))&&name!==STATIC_CACHE).map(name=>caches.delete(name)))),self.clients.claim()]))});

@@ -8,6 +8,8 @@
   "theme_color": "#ff7412",
   "icons": [
     { "src": "/routerao-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/routerao-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/routerao-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/routerao-icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/routerao-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
