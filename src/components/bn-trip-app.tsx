@@ -20,6 +20,8 @@ import { LoginScreen as RedesignedLoginScreen } from "@/src/components/login-scr
 
 import { costSplitCount, memberExpenseValue } from "@/src/lib/personal-expenses";
 import { ExpenseCategoryBar } from "./expense-category-bar";
+import { BudgetAllocationSheet } from "./budget-allocation-sheet";
+import { expenseShares, effectiveAllocation, type BudgetAllocation } from "@/src/lib/budget-allocation";
 import { expenseCategoryTone, expenseCategoryColor } from "@/src/lib/expense-category";
 import { hasSubmittedReview } from "@/src/lib/review-visibility";
 import { type ExpensePayer } from "@/src/lib/expense-settlement";
@@ -295,6 +297,7 @@ type ExpenseGuest = {
   participant_type?: "guest" | "member";
 };
 export type Trip = {
+  budget_allocation?: BudgetAllocation | null;
   owner_id?: string;
   companions?: ExpenseGuest[];
   favorite_total?: number;
@@ -6057,16 +6060,23 @@ function ExpenseMemberSummary({
   costs,
   members,
   guests,
+  allocation,
+  budget,
 }: {
   costs: CostItem[];
   members: TripMember[];
   guests: ExpenseGuest[];
+  allocation?: BudgetAllocation | null;
+  budget: number;
 }) {
   const t = useT();
   const orderedMembers = ownerLastTripMembers(members);
   const memberIds = new Set(orderedMembers.map((member) => member.id));
   const guestIds = new Set(guests.map((guest) => guest.id));
-  const settlement = expenseSettlement(costs, orderedMembers.map(member => member.id), guests.map(guest => guest.id));
+  const memberGuestIds = guests.filter(guest => guest.participant_type === "member").map(guest => guest.id);
+  const settlement = expenseSettlement(costs, orderedMembers.map(member => member.id), guests.map(guest => guest.id), allocation, memberGuestIds);
+  const weights = effectiveAllocation(allocation, [...members.map(member => `member:${member.id}`), ...memberGuestIds.map(id => `guest:${id}`)]);
+  const budgets = effectiveAllocation(allocation, Object.keys(weights), Math.max(0, Math.round(budget * 100)));
   const memberTotals = new Map(
     orderedMembers.map((member) => [
       member.id,
@@ -6087,22 +6097,20 @@ function ExpenseMemberSummary({
     const participants = hasExplicitMembers
       ? selectedMembers
       : orderedMembers.map((member) => member.id);
-    const divisor = costSplitCount(
-      cost,
-      participants.length + selectedGuests.length,
-    );
     if (!participants.length && !selectedGuests.length) continue;
-    const share = Number(cost.value || 0) / divisor;
+    const shares = expenseShares(cost, [...memberIds], [...guestIds], allocation, memberGuestIds);
     const shopping = (cost.category || "").toLowerCase() === "shopping";
-    for (const memberId of participants) {
+    for (const memberId of memberIds) {
       const total = memberTotals.get(memberId);
       if (!total) continue;
+      const share = (shares.get(`member:${memberId}`) || 0) / 100;
       if (shopping) total.shopping += share;
       else total.trip += share;
     }
-    for (const guestId of selectedGuests) {
+    for (const guestId of guestIds) {
       const total = guestTotals.get(guestId);
       if (!total) continue;
+      const share = (shares.get(`guest:${guestId}`) || 0) / 100;
       if (shopping) total.shopping += share;
       else total.trip += share;
     }
@@ -6155,6 +6163,7 @@ function ExpenseMemberSummary({
                 <small>{t(row.guest ? row.offlineMember ? "สมาชิกไม่มีอีเมล · รวมในค่าใช้จ่ายสมาชิก" : "ผู้ร่วมทริปแบบเพิ่มชื่อ" : "รวมที่ต้องรับผิดชอบ")}</small>
               </div>
               <div className="expense-member-totals">
+                {allocation && row.id in weights && <span>งบ {weights[row.id] / 100}% <b>฿{bahtFormat(budgets[row.id] / 100)}</b></span>}
                 <span>
                   {t("ค่าใช้จ่ายทริป")} <b>฿{bahtFormat(row.total.trip)}</b>
                 </span>
@@ -6191,7 +6200,13 @@ function PlanExpensesContent({
   openCost: (item?: Itinerary, index?: number, defaultDay?: number) => void;
 }) {
   const t = useT();
-  const { guests: expenseGuests } = useExpenseGuests(trip.id);
+  const router = useRouter();
+  const [allocation, setAllocation] = useState(trip.budget_allocation);
+  const [budgetSheet, setBudgetSheet] = useState(false);
+  const [budgetToast, setBudgetToast] = useState("");
+  useEffect(() => { setAllocation(trip.budget_allocation); }, [trip.id, trip.budget_allocation]);
+  useEffect(() => { if (!budgetToast) return; const timer = setTimeout(() => setBudgetToast(""), 3500); return () => clearTimeout(timer); }, [budgetToast]);
+  const { guests: expenseGuests, loaded: budgetPeopleLoaded } = useExpenseGuests(trip.id);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [collapsedDays, setCollapsedDays] = useState<Set<number>>(
     () => new Set(),
@@ -6199,6 +6214,8 @@ function PlanExpensesContent({
   const allCosts = items.flatMap((item) => item.cost_items || []);
   const budgetMemberIds = trip.members?.length ? trip.members.map(member => member.id) : [trip.owner_id || "owner"];
   const budgetGuestIds = expenseGuests.filter(guest => guest.participant_type === "member").map(guest => guest.id);
+  const budgetPeople = [...(trip.members || []).map(member => ({ key: `member:${member.id}`, name: member.display_name || member.email || "สมาชิก", avatar: member.avatar_url })), ...expenseGuests.filter(guest => guest.participant_type === "member").map(guest => ({ key: `guest:${guest.id}`, name: guest.name, avatar: null }))];
+  const canSplitBudget = budgetPeopleLoaded && budgetPeople.length > 1;
   const budgetValue = (cost: CostItem) => memberExpenseValue(cost, budgetMemberIds, budgetGuestIds);
   const isShopping = (cost: CostItem) =>
     (cost.category || "").trim().toLowerCase() === "shopping";
@@ -6243,7 +6260,7 @@ function PlanExpensesContent({
         className="expense-page-heading"
         title={t("ค่าใช้จ่าย")}
         subtitle={t("ยอดเทียบงบนับสมาชิกบัญชีและสมาชิกไม่มีอีเมล ไม่รวมผู้ร่วมทริปแบบเพิ่มชื่อ")}
-        actions={<button
+        actions={<>{canSplitBudget && <button type="button" className="trip-section-add budget-allocation-open" aria-label="ตั้งงบรายคน" title="ตั้งงบรายคน" disabled={trip.access_role !== "owner" && trip.access_role !== "admin"} onClick={() => setBudgetSheet(true)}><UserRound size={21}/><span>งบรายคน</span></button>}<button
           type="button"
           className="trip-section-add"
           disabled={!firstAvailableDay}
@@ -6253,7 +6270,7 @@ function PlanExpensesContent({
         >
           <Plus size={21} />
           <span>{t("เพิ่มค่าใช้จ่าย")}</span>
-        </button>}
+        </button></>}
       />
       <ExpenseSplitSummary
         trip={trip}
@@ -6266,7 +6283,11 @@ function PlanExpensesContent({
         selectedCategory={selectedCategory}
         onSelectedCategoryChange={setSelectedCategory}
       />
-      <ExpenseMemberSummary costs={allCosts} members={trip.members || []} guests={expenseGuests} />
+      <ExpenseMemberSummary costs={allCosts} members={trip.members || []} guests={expenseGuests} allocation={allocation} budget={Number(trip.budget_thb) + Number(trip.shopping_budget_thb)} />
+      {budgetSheet && canSplitBudget && <BudgetAllocationSheet tripId={trip.id} saved={allocation} budget={Number(trip.budget_thb) + Number(trip.shopping_budget_thb)}
+        people={budgetPeople}
+        onClose={() => setBudgetSheet(false)} onSave={value => { setAllocation(value); setBudgetSheet(false); setBudgetToast("บันทึกสัดส่วนและคำนวณค่าใช้จ่ายใหม่แล้ว"); tripListCache = [{ ...trip, budget_allocation: value }, ...(tripListCache || []).filter(item => item.id !== trip.id)]; window.dispatchEvent(new CustomEvent("bn-trip:budget-allocation-changed", { detail: { tripId: trip.id, allocation: value } })); router.refresh(); }} />}
+      {budgetToast && createPortal(<div className="toast toast-success" role="status">{budgetToast}</div>, document.body)}
       <div className="expense-list-heading">
         <span><CalendarDays size={18} /></span>
         <h2>{t("รายการค่าใช้จ่าย")}</h2>
@@ -9889,6 +9910,15 @@ export function BNTripApp({
       (cachedSelected ? [cachedSelected] : tripListCache || []),
   );
   const [selected, setSelected] = useState<Trip | null>(cachedSelected);
+  useEffect(() => {
+    const changed = (event: Event) => {
+      const { tripId: changedId, allocation } = (event as CustomEvent<{ tripId: string; allocation: BudgetAllocation | null }>).detail;
+      setSelected(current => current?.id === changedId ? { ...current, budget_allocation: allocation } : current);
+      setTrips(current => current.map(trip => trip.id === changedId ? { ...trip, budget_allocation: allocation } : trip));
+    };
+    window.addEventListener("bn-trip:budget-allocation-changed", changed);
+    return () => window.removeEventListener("bn-trip:budget-allocation-changed", changed);
+  }, []);
   const [itineraries, setItineraries] = useState<Itinerary[]>(() =>
     initialItineraries || (tripId ? itineraryCache.get(tripId) || [] : []),
   );

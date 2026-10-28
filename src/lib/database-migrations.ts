@@ -692,6 +692,9 @@ const migrations = [
     "ALTER TABLE trip_expense_guests ADD COLUMN IF NOT EXISTS participant_type TEXT NOT NULL DEFAULT 'guest' CHECK (participant_type IN ('guest','member'))",
     "ALTER TABLE trip_idea_expense_guests ADD COLUMN IF NOT EXISTS participant_type TEXT NOT NULL DEFAULT 'guest' CHECK (participant_type IN ('guest','member'))",
   ] },
+  { version: 57, statements: [
+    "ALTER TABLE trips ADD COLUMN IF NOT EXISTS budget_allocation JSONB",
+  ] },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;

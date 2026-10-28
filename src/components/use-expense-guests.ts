@@ -5,13 +5,15 @@ export const EXPENSE_GUESTS_CHANGED_EVENT = "bn-trip:expense-guests-changed";
 
 export function useExpenseGuests(tripId: string) {
   const [guests, setGuests] = useState<ExpenseGuest[]>([]);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
+    setLoaded(false);
     let active = true;
     const load = async () => {
       try {
         const response = await fetch(`/api/trips/${tripId}/expense-guests`);
         const data = await response.json();
-        if (active && response.ok && Array.isArray(data)) setGuests(data);
+        if (active && response.ok && Array.isArray(data)) { setGuests(data); setLoaded(true); }
       } catch {
         // The cost form stays usable for joined members if guest loading fails.
       }
@@ -28,5 +30,5 @@ export function useExpenseGuests(tripId: string) {
       window.removeEventListener(EXPENSE_GUESTS_CHANGED_EVENT, onChanged);
     };
   }, [tripId]);
-  return { guests, setGuests };
+  return { guests, setGuests, loaded };
 }

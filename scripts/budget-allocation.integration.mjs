@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {Pool} from 'pg';
+import {SignJWT} from 'jose';
+const db=new Pool({connectionString:'postgresql://bntrip:bntrip_dev_password@localhost:5434/bntrip'});
+const users=Array.from({length:4},()=>randomUUID());
+const [owner,admin,viewer,outsider]=users;
+const env=JSON.parse(execFileSync('docker',['inspect','bn-trip-app-1'],{encoding:'utf8'}))[0].Config.Env;
+const tokens=new Map(await Promise.all(users.map(async id=>[id,await new SignJWT({email:id+'@example.invalid',displayName:'Budget test'}).setProtectedHeader({alg:'HS256'}).setSubject(id).setExpirationTime('1h').sign(new TextEncoder().encode(env.find(v=>v.startsWith('AUTH_SECRET=')).slice(12)))])));
+const call=async(user,path,method='GET',body)=>{const response=await fetch('http://localhost:8001'+path,{method,headers:{cookie:'bn_trip_session='+tokens.get(user),'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});return {status:response.status,body:await response.json()};};
+try {
+ for(const user of users)await db.query("INSERT INTO users(id,email,display_name) VALUES($1,$2,'Budget test')",[user,user+'@example.invalid']);
+ const trip=await call(owner,'/api/trips','POST',{name:'Budget test',countryCode:'TH',locationIds:['TH:bangkok'],outboundDate:'2030-01-01',outboundTime:'08:00',returnDate:'2030-01-03',returnTime:'18:00',budgetThb:30000});
+ assert.equal(trip.status,201,JSON.stringify(trip.body));
+ const path='/api/trips/'+trip.body.id;
+ for(const [user,role] of [[admin,'admin'],[viewer,'view']])await db.query('INSERT INTO trip_collaborators(trip_id,email,user_id,invited_by,access_level) VALUES($1,$2,$3,$4,$5)',[trip.body.id,user+'@example.invalid',user,owner,role]);
+ const offline=await call(owner,path+'/expense-guests','POST',{name:'Offline member',participantType:'member'});
+ const guest=await call(owner,path+'/expense-guests','POST',{name:'Guest',participantType:'guest'});
+ const allocation=Object.fromEntries([[`member:${owner}`,5000],[`member:${admin}`,2500],[`member:${viewer}`,0],[`guest:${offline.body.id}`,2500]]);
+ assert.equal((await call(admin,path+'/budget-allocation','PUT',{allocation})).status,200);
+ assert.deepEqual((await call(owner,path)).body.budget_allocation,allocation);
+ assert.equal((await call(viewer,path+'/budget-allocation','PUT',{allocation})).status,403);
+ assert.equal((await call(outsider,path+'/budget-allocation','PUT',{allocation})).status,404);
+ for(const bad of [{...allocation,[`member:${owner}`]:0},{...allocation,[`guest:${guest.body.id}`]:0},{...allocation,[`member:${owner}`]:NaN},{...allocation,[`member:${owner}`]:5000.1}]) assert.equal((await call(owner,path+'/budget-allocation','PUT',{allocation:bad})).status,400);
+ const exact={...allocation,[`member:${owner}`]:1234567,[`member:${admin}`]:1765433,[`member:${viewer}`]:0,[`guest:${offline.body.id}`]:0};
+ assert.equal((await call(admin,path+'/budget-allocation','PUT',{allocation:exact})).status,200);
+ assert.deepEqual((await call(owner,path)).body.budget_allocation,exact);
+ assert.equal((await call(owner,path+'/budget-allocation','PUT',{allocation:null})).status,200);
+ assert.equal((await call(owner,path)).body.budget_allocation,null);
+ console.log('PASS exact satang saved/reloaded, legacy allocation, offline members, permissions, validation and reset');
+} finally {await db.query('DELETE FROM users WHERE id=ANY($1::uuid[])',[users]);await db.end();}

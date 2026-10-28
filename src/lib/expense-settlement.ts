@@ -1,4 +1,5 @@
 import { costSplitCount, type SplitExpense } from "./personal-expenses";
+import { expenseShares, type BudgetAllocation } from "./budget-allocation";
 
 export type ExpensePayer = { type: "member" | "guest"; id: string };
 export type SettlementExpense = SplitExpense & { paidBy?: ExpensePayer };
@@ -6,7 +7,7 @@ export const expensePersonKey = (person: ExpensePayer) => `${person.type}:${pers
 
 // Integer satang arithmetic: every counted expense must balance exactly.
 // Legacy entries without a payer (or with unidentified split slots) stay pending.
-export function expenseSettlement(costs: SettlementExpense[], memberIds: string[], guestIds: string[]) {
+export function expenseSettlement(costs: SettlementExpense[], memberIds: string[], guestIds: string[], allocation?: BudgetAllocation | null, memberGuestIds: string[] = []) {
   const rows = new Map<string, { paid: number; share: number; balance: number }>();
   for (const id of memberIds) rows.set(`member:${id}`, { paid: 0, share: 0, balance: 0 });
   for (const id of guestIds) rows.set(`guest:${id}`, { paid: 0, share: 0, balance: 0 });
@@ -26,9 +27,7 @@ export function expenseSettlement(costs: SettlementExpense[], memberIds: string[
       continue;
     }
     payer.paid += amount;
-    const share = Math.floor(amount / participants.length);
-    const remainder = amount % participants.length;
-    participants.forEach((id, index) => { rows.get(id)!.share += share + (index < remainder ? 1 : 0); });
+    for (const [id, share] of expenseShares(cost, memberIds, guestIds, allocation, memberGuestIds)) rows.get(id)!.share += share;
   }
   for (const row of rows.values()) row.balance = row.paid - row.share;
   return { rows, pendingCount, pendingAmount };
