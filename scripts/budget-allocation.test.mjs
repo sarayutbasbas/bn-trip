@@ -62,4 +62,10 @@ assert.equal(budgetAmountSatang('1,234.50'),123450);
 assert.equal(budgetAmountSatang('0.29'),29);
 const precision = changeAllocation(effectiveAllocation(null,['member:a','member:b']), 'member:a',3333);
 assert.equal(precision['member:a'],3333);assert.equal(precision['member:b'],6667);
+for(const category of ['Shopping','ของฝาก',' shopping ','souvenirs','ช็อปปิ้ง']) {
+ const personal={...cost,value:600,category,splitMemberIds:['b']};
+ const personalShares=expenseShares(personal,['a','b'],[],allocation);
+ assert.equal(personalShares.get('member:b'),60000);
+ assert.equal(personalShares.get('member:a')||0,0);
+}
 console.log('PASS exact satang after save/reload, money deletion/zero/decimals, fractional percentages, sponsor/refund, guests, legacy and 3000 rounding cases');

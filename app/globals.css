@@ -16777,3 +16777,22 @@ body:has(.login-redesign) .app-glass-scene-content { padding-bottom:0; }
 @media(min-width:600px) { .budget-allocation-person { grid-template-columns:minmax(0,1fr) 105px;gap:8px;min-height:62px; }.budget-allocation-layout { grid-template-columns:minmax(0,.9fr) minmax(0,1.25fr); } }
 @media(max-width:380px) { .budget-allocation-layout { gap:10px; }.budget-allocation-avatar { width:28px;height:28px;flex-basis:28px; }.budget-allocation-identity { gap:5px; }.budget-allocation-identity strong { font-size:12px; }.budget-allocation-chart-center { gap:0;padding:4px; }.budget-allocation-chart-center > span,.budget-allocation-chart-center small { font-size:10px; } }
 .dark .budget-allocation-chart-center,.dark .budget-allocation-person input { background:#242731; }
+.personal-shopping-summary { margin:14px 0;padding:14px;border:1px solid var(--line);border-radius:18px;background:var(--surface); }
+.personal-shopping-summary > header { display:flex;align-items:center;justify-content:space-between;gap:8px; }
+.personal-shopping-summary h3 { margin:0;display:flex;align-items:center;gap:7px;font-size:15px;line-height:1.5; }
+.personal-shopping-summary h3 svg { color:var(--orange);flex-shrink:0; }
+.personal-shopping-summary > header button { width:32px;height:32px;min-height:32px; }
+.personal-shopping-summary > p,.expense-main-budget-note { margin:5px 0 10px;color:var(--muted);font-size:11px;line-height:1.6; }
+.expense-main-budget-note { padding:0 12px; }
+.personal-shopping-stats { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px; }
+.personal-shopping-stats > div { min-width:0;display:flex;flex-direction:column;gap:4px;padding:8px 5px;border-radius:10px;background:var(--surface-2); }
+.personal-shopping-stats span { font-size:11px;color:var(--muted); }
+.personal-shopping-stats strong { font-size:clamp(13px,3.8vw,20px);font-variant-numeric:tabular-nums;overflow-wrap:anywhere; }
+.personal-shopping-stats .is-over strong { color:#e05238; }.personal-shopping-stats .is-remaining strong { color:#169779; }
+.personal-shopping-breakdown { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px; }
+.personal-shopping-breakdown > span { display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:11px; }
+.personal-shopping-breakdown svg { color:var(--muted); }.personal-shopping-breakdown b { margin-left:auto; }
+.personal-shopping-summary .personal-shopping-clearing { margin:10px 0 0;padding:8px;border:1px solid var(--line);border-radius:10px;color:var(--ink); }
+.modal-backdrop > .modal.bottom-sheet.personal-shopping-budget-sheet { height:auto;max-height:min(85dvh,100%);margin:0;padding-bottom:0;border-radius:30px 30px 0 0;border-bottom:0; }
+.personal-shopping-budget-sheet .bottom-sheet-body { padding-bottom:18px; }
+.personal-shopping-budget-field { padding:8px 0; }.personal-shopping-budget-field > span { display:block;margin:0 0 6px;font-size:12px; }

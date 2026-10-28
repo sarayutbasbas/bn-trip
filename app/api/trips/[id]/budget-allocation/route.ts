@@ -19,7 +19,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!parsed.success) return NextResponse.json({ error: "กรุณาระบุสัดส่วนให้ถูกต้อง" }, { status: 400 });
   const allocation = parsed.data.allocation;
   const saved = await transaction(async client => {
-    const trip = await client.query<{ total: string }>("SELECT round((budget_thb+shopping_budget_thb)*100)::text AS total FROM trips WHERE id=$1 FOR UPDATE", [id]);
+    const trip = await client.query<{ total: string }>("SELECT round(budget_thb*100)::text AS total FROM trips WHERE id=$1 FOR UPDATE", [id]);
     const people = await client.query<{ key: string }>(`SELECT 'member:'||owner_id AS key FROM trips WHERE id=$1
       UNION SELECT 'member:'||user_id FROM trip_collaborators WHERE trip_id=$1 AND user_id IS NOT NULL
       UNION SELECT 'guest:'||id FROM trip_expense_guests WHERE trip_id=$1 AND participant_type='member'`, [id]);

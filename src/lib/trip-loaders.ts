@@ -1,4 +1,5 @@
 import { appendTripRangeFilter } from "@/src/lib/trip-range-filter";
+import { tripPersonalBudgetSql } from "@/src/lib/trip-access";
 import type { SessionUser } from "@/src/lib/auth";
 import { appendTripSearch } from "@/src/lib/trip-search";
 import { canonicalTripDestination } from "@/src/lib/destination-search";
@@ -516,10 +517,10 @@ export async function loadDashboard(session: SessionUser): Promise<DashboardPayl
   const favorite = tripFavoriteSql("t");
   const destinationAccess = tripAccessSql("destination_trip");
   const [favoriteTrips, ongoing, upcoming, past, favoriteAccommodations, counts, countries, destinations, tripIdeas] = await Promise.all([
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite},count(*) OVER()::int AS favorite_total FROM trips t JOIN user_favorite_trips f ON f.trip_id=t.id AND f.user_id=$1 WHERE ${access} ORDER BY f.favorited_at DESC,t.id LIMIT 6`, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC`, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 6`, [session.userId]),
+    query(`SELECT t.*,${tripPersonalBudgetSql("t")},${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite},count(*) OVER()::int AS favorite_total FROM trips t JOIN user_favorite_trips f ON f.trip_id=t.id AND f.user_id=$1 WHERE ${access} ORDER BY f.favorited_at DESC,t.id LIMIT 6`, [session.userId]),
+    query(`SELECT t.*,${tripPersonalBudgetSql("t")},${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)<=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)>=(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC LIMIT 1`, [session.userId]),
+    query(`SELECT t.*,${tripPersonalBudgetSql("t")},${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.outbound_departure_at,t.start_date::timestamp)>(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.outbound_departure_at,t.start_date::timestamp) ASC`, [session.userId]),
+    query(`SELECT t.*,${tripPersonalBudgetSql("t")},${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${access} AND COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp)<(now() AT TIME ZONE COALESCE(t.timezone,'Asia/Bangkok')) ORDER BY COALESCE(t.return_departure_at,(t.start_date+t.total_days-1)::timestamp) DESC LIMIT 6`, [session.userId]),
     query<FavoriteAccommodation>(`SELECT
         accommodation.id,
         accommodation.trip_id,
@@ -695,7 +696,7 @@ export async function loadTripDirectory(
   const clause = where.join(" AND ");
   const [filterPeople, items, total, years, statusCounts] = await Promise.all([
     query<TripFilterMember>(tripFilterMembersSql, [session.userId]),
-    query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, 0]),
+    query(`SELECT t.*,${tripPersonalBudgetSql("t")},${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [...values, limit, 0]),
     query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`, values),
     query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`, [session.userId]),
     query(`SELECT count(*)::int AS total,
@@ -735,7 +736,7 @@ export async function loadTrip(session: SessionUser, id: string) {
   if (session.isDemo) return getDemoTrip(id);
   await ensureLatestDatabaseSchema();
   const result = await query(
-    `SELECT t.*,${tripRoleSql("t")},${tripMembersSql("t")},${tripReviewSummarySql("t")},${tripFavoriteSql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,
+    `SELECT t.*,${tripPersonalBudgetSql("t")},${tripRoleSql("t")},${tripMembersSql("t")},${tripReviewSummarySql("t")},${tripFavoriteSql("t")} FROM trips t WHERE t.id=$2 AND (t.owner_id=$1 OR EXISTS(SELECT 1 FROM trip_collaborators c WHERE c.trip_id=t.id AND c.user_id=$1))`,
     [session.userId, id],
   );
   return clientSafe(result.rows[0] ?? null);

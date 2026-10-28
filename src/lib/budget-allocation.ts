@@ -1,4 +1,4 @@
-import { costSplitCount, type SplitExpense } from "./personal-expenses";
+import { costSplitCount, isPersonalExpense, type SplitExpense } from "./personal-expenses";
 
 // Integer relative weights. Older settings use basis points; new settings use
 // the allocated budget in satang so an entered amount survives save/reload.
@@ -50,7 +50,7 @@ export function expenseShares(cost: SplitExpense, memberIds: string[], guestIds:
   const divisor = costSplitCount(cost, participants.length);
   const base = Math.floor(amount / divisor), remainder = amount % divisor;
   const shares = new Map(participants.map((key, index) => [key, base + (index < remainder ? 1 : 0)]));
-  if (!allocation) return shares;
+  if (!allocation || isPersonalExpense(cost.category)) return shares;
   const eligible = [...memberIds.map(id => `member:${id}`), ...memberGuestIds.filter(id => guestIds.includes(id)).map(id => `guest:${id}`)];
   let pool = 0;
   for (const key of eligible) { pool += shares.get(key) || 0; shares.set(key, 0); }

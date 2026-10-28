@@ -77,7 +77,7 @@ export function BudgetAllocationSheet({ tripId, people, budget, saved, onSave, o
     setDraft(current => changeAllocation(current, selected, fraction * scale, scale));
   }
   if (people.length < 2) return null;
-  return createPortal(<BottomSheet title={<><UsersRound size={20}/> งบรายคน</>} subtitle="แบ่งส่วนรับผิดชอบของสมาชิก รวม 100%" backdropRef={root} onClose={onClose} busy={busy} backdropClassName="budget-allocation-backdrop"
+  return createPortal(<BottomSheet title={<><UsersRound size={20}/> งบหลักรายคน</>} subtitle="แบ่งเฉพาะงบหลักของทริป รวม 100%" backdropRef={root} onClose={onClose} busy={busy} backdropClassName="budget-allocation-backdrop"
     className="budget-allocation-sheet" submitLabel={busy ? "กำลังบันทึก…" : "บันทึกสัดส่วน"} submitDisabled={busy || !people.length || invalidAmount}
     onSubmit={event => { event.preventDefault(); return save(draft); }}>
     <div className="budget-allocation-layout">
@@ -85,7 +85,7 @@ export function BudgetAllocationSheet({ tripId, people, budget, saved, onSave, o
     <div className="budget-allocation-chart" style={{ background: `conic-gradient(${gradient})` }}
       onPointerDown={event => { if (busy || people.length < 2) return; dragging.current = true; event.currentTarget.setPointerCapture(event.pointerId); move(event); }}
       onPointerMove={move} onPointerUp={() => { dragging.current = false; }} onPointerCancel={() => { dragging.current = false; }}>
-      <div className="budget-allocation-chart-center"><span>งบรวม</span><strong>฿{money(total)}</strong><small>{person?.name}</small><b>{((percentages[selected] || 0) / 100).toFixed(2)}%</b></div>
+      <div className="budget-allocation-chart-center"><span>งบหลักรวม</span><strong>฿{money(total)}</strong><small>{person?.name}</small><b>{((percentages[selected] || 0) / 100).toFixed(2)}%</b></div>
       <span className="budget-allocation-handle" style={{ left: `${50 + Math.cos(angle) * 45}%`, top: `${50 + Math.sin(angle) * 45}%` }} />
     </div>
     <output className="budget-allocation-popover" aria-live="polite" aria-atomic="true"><span>งบของ {person?.name}</span><strong>฿{money(total ? draft[selected] || 0 : 0)}</strong></output>
@@ -116,7 +116,7 @@ export function BudgetAllocationSheet({ tripId, people, budget, saved, onSave, o
     </div>
     {!total && <p className="budget-allocation-note">ยังไม่ได้ตั้งงบทริป แต่ตั้งเปอร์เซ็นต์เพื่อแบ่งค่าใช้จ่ายจริงได้</p>}
     <div className="budget-allocation-tools"><button type="button" disabled={busy} onClick={() => { setEditing(null); setDraft(effectiveAllocation(null, people.map(p => p.key), scale)); }}>แบ่งเท่ากัน</button>{saved && <button type="button" disabled={busy} onClick={() => void save(null)}>กลับไปหารตามรายการ</button>}</div>
-    <p className="budget-allocation-note">ปรับคนหนึ่งแล้วส่วนที่เหลือจะแบ่งอัตโนมัติ · ตั้ง 0 สำหรับคนที่ไม่ต้องออก<br/>ใช้กับค่าใช้จ่ายทั้งทริป ยอดที่จ่ายแทนยังนำมาเคลียร์คืน</p>
+    <p className="budget-allocation-note">ใช้เฉพาะค่าใช้จ่ายงบหลัก · Shopping และของฝากเป็นส่วนตัว<br/>ปรับคนหนึ่งแล้วส่วนที่เหลือจะแบ่งอัตโนมัติ ตั้ง 0 สำหรับคนที่ไม่ต้องออก</p>
     {invalidAmount && <p role="alert" className="workspace-error">งบรายคนต้องไม่เกินงบรวม ฿{money(total)}</p>}
     {error && <p role="alert" className="workspace-error">{error}</p>}
   </BottomSheet>, document.body);

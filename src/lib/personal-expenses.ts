@@ -6,6 +6,10 @@ export type SplitExpense = {
   splitCount?: number;
 };
 
+export const PERSONAL_EXPENSE_CATEGORIES = ["shopping", "ของฝาก", "souvenir", "souvenirs", "ช้อปปิ้ง", "ช็อปปิ้ง", "ช้อป", "ช็อป"];
+export const isPersonalExpense = (category?: string | null) => PERSONAL_EXPENSE_CATEGORIES.includes((category || "").trim().toLowerCase());
+export const isSouvenirExpense = (category?: string | null) => ["ของฝาก", "souvenir", "souvenirs"].includes((category || "").trim().toLowerCase());
+
 // Shared with the trip's per-person expense summary, including legacy costs.
 export function costSplitCount(cost: SplitExpense, fallback = 1) {
   if (Array.isArray(cost.splitGuestIds)) {
@@ -27,7 +31,7 @@ export function personalExpenseTotals(costs: SplitExpense[], userId: string, mem
     const value = Number(cost.value || 0);
     if (!Number.isFinite(value)) continue;
     const share = value / costSplitCount(cost, memberCount);
-    if ((cost.category || "").trim().toLowerCase() === "shopping") shoppingExpense += share;
+    if (isPersonalExpense(cost.category)) shoppingExpense += share;
     else travelExpense += share;
   }
   return { travelExpense, shoppingExpense };

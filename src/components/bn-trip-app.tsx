@@ -18,9 +18,10 @@ import { CollaboratorsSkeleton } from "@/src/components/collaborators-skeleton";
 import { AutoLoadMore } from "@/src/components/auto-load-more";
 import { LoginScreen as RedesignedLoginScreen } from "@/src/components/login-screen";
 
-import { costSplitCount, memberExpenseValue } from "@/src/lib/personal-expenses";
+import { costSplitCount, isPersonalExpense, isSouvenirExpense, memberExpenseValue } from "@/src/lib/personal-expenses";
 import { ExpenseCategoryBar } from "./expense-category-bar";
 import { BudgetAllocationSheet } from "./budget-allocation-sheet";
+import { PersonalShoppingSummary } from "./personal-shopping-summary";
 import { expenseShares, effectiveAllocation, type BudgetAllocation } from "@/src/lib/budget-allocation";
 import { expenseCategoryTone, expenseCategoryColor } from "@/src/lib/expense-category";
 import { hasSubmittedReview } from "@/src/lib/review-visibility";
@@ -297,6 +298,7 @@ type ExpenseGuest = {
   participant_type?: "guest" | "member";
 };
 export type Trip = {
+  budget_user_id?: string;
   budget_allocation?: BudgetAllocation | null;
   owner_id?: string;
   companions?: ExpenseGuest[];
@@ -6020,24 +6022,21 @@ function ExpenseCategoryIcon({ category }: { category?: string | null }) {
 function ExpenseSplitSummary({
   trip,
   tripTotal,
-  shoppingTotal,
 }: {
   trip: Trip;
   tripTotal: number;
-  shoppingTotal: number;
 }) {
   const t = useT();
   const tripBudget = Number(trip.budget_thb);
-  const shoppingBudget = Number(trip.shopping_budget_thb);
-  const totalBudget = tripBudget + shoppingBudget;
-  const totalSpent = tripTotal + shoppingTotal;
+  const totalBudget = tripBudget;
+  const totalSpent = tripTotal;
   const remaining = totalBudget - totalSpent;
   const totalPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
   return (
     <section className={`expense-overview ${remaining < 0 ? "is-over-budget" : ""}`}>
       <div className="expense-overview-stats">
         <article className="is-budget">
-          <header><WalletCards size={14} /><span>{t("งบประมาณรวม")}</span></header>
+          <header><WalletCards size={14} /><span>{t("งบหลักรวม")}</span></header>
           <strong>฿{bahtFormat(totalBudget)}</strong>
         </article>
         <article className="is-spent">
@@ -6074,7 +6073,7 @@ function ExpenseMemberSummary({
   const memberIds = new Set(orderedMembers.map((member) => member.id));
   const guestIds = new Set(guests.map((guest) => guest.id));
   const memberGuestIds = guests.filter(guest => guest.participant_type === "member").map(guest => guest.id);
-  const settlement = expenseSettlement(costs, orderedMembers.map(member => member.id), guests.map(guest => guest.id), allocation, memberGuestIds);
+  const settlement = expenseSettlement(costs.filter(cost=>!isPersonalExpense(cost.category)), orderedMembers.map(member => member.id), guests.map(guest => guest.id), allocation, memberGuestIds);
   const weights = effectiveAllocation(allocation, [...members.map(member => `member:${member.id}`), ...memberGuestIds.map(id => `guest:${id}`)]);
   const budgets = effectiveAllocation(allocation, Object.keys(weights), Math.max(0, Math.round(budget * 100)));
   const memberTotals = new Map(
@@ -6099,7 +6098,7 @@ function ExpenseMemberSummary({
       : orderedMembers.map((member) => member.id);
     if (!participants.length && !selectedGuests.length) continue;
     const shares = expenseShares(cost, [...memberIds], [...guestIds], allocation, memberGuestIds);
-    const shopping = (cost.category || "").toLowerCase() === "shopping";
+    const shopping = isPersonalExpense(cost.category);
     for (const memberId of memberIds) {
       const total = memberTotals.get(memberId);
       if (!total) continue;
@@ -6137,6 +6136,7 @@ function ExpenseMemberSummary({
   return (
     <details className="expense-member-summary expense-member-disclosure">
       <summary className="expense-member-summary-head"><h3><UserRound size={18} />{t("สรุปค่าใช้จ่ายแยกตามคน")}</h3><ChevronDown size={17} /></summary>
+      <p className="expense-main-budget-note">ยอดจ่ายแล้ว ส่วนหาร และเคลียร์เงินด้านล่างคิดเฉพาะงบหลัก · Shopping / ของฝากแยกตามผู้รับผิดชอบในแต่ละรายการ</p>
       {settlement.pendingCount > 0 && <p className="expense-member-pending" role="status">ยังสรุปไม่ครบ: {settlement.pendingCount} รายการ (฿{bahtFormat(settlement.pendingAmount / 100)}) ยังไม่ระบุผู้จ่ายหรือผู้หารไม่ครบ ยอดเคลียร์เงินด้านล่างคิดเฉพาะรายการที่ข้อมูลครบแล้ว</p>}
       <div>
         {rows.map((row) => {
@@ -6168,7 +6168,7 @@ function ExpenseMemberSummary({
                   {t("ค่าใช้จ่ายทริป")} <b>฿{bahtFormat(row.total.trip)}</b>
                 </span>
                 <span>
-                  {t("ค่า Shopping")} <b>฿{bahtFormat(row.total.shopping)}</b>
+                  {t("Shopping / ของฝาก")} <b>฿{bahtFormat(row.total.shopping)}</b>
                 </span>
               </div>
               </div>
@@ -6202,6 +6202,10 @@ function PlanExpensesContent({
   const t = useT();
   const router = useRouter();
   const [allocation, setAllocation] = useState(trip.budget_allocation);
+  const [personalBudget, setPersonalBudget] = useState(Number(trip.shopping_budget_thb || 0));
+  const [viewerId,setViewerId] = useState(trip.budget_user_id || "");
+  useEffect(()=>{setPersonalBudget(Number(trip.shopping_budget_thb || 0));},[trip.id,trip.shopping_budget_thb]);
+  useEffect(()=>{let active=true;if(trip.budget_user_id){setViewerId(trip.budget_user_id);return;}void getCurrentAccount().then(account=>{if(active)setViewerId(account.id);}).catch(()=>{});return()=>{active=false;};},[trip.id,trip.budget_user_id]);
   const [budgetSheet, setBudgetSheet] = useState(false);
   const [budgetToast, setBudgetToast] = useState("");
   useEffect(() => { setAllocation(trip.budget_allocation); }, [trip.id, trip.budget_allocation]);
@@ -6217,20 +6221,20 @@ function PlanExpensesContent({
   const budgetPeople = [...(trip.members || []).map(member => ({ key: `member:${member.id}`, name: member.display_name || member.email || "สมาชิก", avatar: member.avatar_url })), ...expenseGuests.filter(guest => guest.participant_type === "member").map(guest => ({ key: `guest:${guest.id}`, name: guest.name, avatar: null }))];
   const canSplitBudget = budgetPeopleLoaded && budgetPeople.length > 1;
   const budgetValue = (cost: CostItem) => memberExpenseValue(cost, budgetMemberIds, budgetGuestIds);
-  const isShopping = (cost: CostItem) =>
-    (cost.category || "").trim().toLowerCase() === "shopping";
+  const isShopping = (cost: CostItem) => isPersonalExpense(cost.category);
+  const personalValue = (cost: CostItem) => viewerId ? (expenseShares(cost,budgetMemberIds,expenseGuests.map(guest=>guest.id)).get(`member:${viewerId}`)||0)/100 : 0;
   const tripCosts = allCosts.filter((cost) => !isShopping(cost));
   const shoppingCosts = allCosts.filter(isShopping);
   const tripTotal = tripCosts.reduce(
     (sum, cost) => sum + budgetValue(cost),
     0,
   );
-  const shoppingTotal = shoppingCosts.reduce(
-    (sum, cost) => sum + budgetValue(cost),
-    0,
-  );
+  const shoppingTotal = shoppingCosts.filter(cost=>!isSouvenirExpense(cost.category)).reduce((sum,cost)=>sum+personalValue(cost),0);
+  const souvenirTotal = shoppingCosts.filter(cost=>isSouvenirExpense(cost.category)).reduce((sum,cost)=>sum+personalValue(cost),0);
+  const personalSettlement=expenseSettlement(shoppingCosts.filter(cost=>personalValue(cost)>0 || (cost.paidBy?.type==="member"&&cost.paidBy.id===viewerId)),budgetMemberIds,expenseGuests.map(guest=>guest.id));
+  const personalBalance=(personalSettlement.rows.get(`member:${viewerId}`)?.balance||0)/100;
   const categories = Array.from(
-    allCosts.reduce(
+    tripCosts.reduce(
       (map, cost) =>
         map.set(
           cost.category || "อื่น ๆ",
@@ -6239,7 +6243,7 @@ function PlanExpensesContent({
       new Map<string, number>(),
     ),
   ).sort((a, b) => b[1] - a[1]);
-  const grandTotal = tripTotal + shoppingTotal;
+  const grandTotal = tripTotal;
   const selectedCategoryTotal = selectedCategory
     ? categories.find(([category]) => category === selectedCategory)?.[1] || 0
     : 0;
@@ -6275,16 +6279,17 @@ function PlanExpensesContent({
       <ExpenseSplitSummary
         trip={trip}
         tripTotal={tripTotal}
-        shoppingTotal={shoppingTotal}
       />
+      {viewerId&&<PersonalShoppingSummary tripId={trip.id} budget={personalBudget} shopping={shoppingTotal} souvenirs={souvenirTotal} balance={personalBalance} pending={personalSettlement.pendingCount}
+        onSaved={budget=>{setPersonalBudget(budget);setBudgetToast("บันทึกงบ Shopping ของฉันแล้ว");tripListCache=[{...trip,shopping_budget_thb:String(budget)},...(tripListCache||[]).filter(item=>item.id!==trip.id)];window.dispatchEvent(new CustomEvent("bn-trip:shopping-budget-changed",{detail:{tripId:trip.id,budget}}));router.refresh();}} />}
       <ExpenseCategoryBar t={t}
         categories={categories}
         total={grandTotal}
         selectedCategory={selectedCategory}
         onSelectedCategoryChange={setSelectedCategory}
       />
-      <ExpenseMemberSummary costs={allCosts} members={trip.members || []} guests={expenseGuests} allocation={allocation} budget={Number(trip.budget_thb) + Number(trip.shopping_budget_thb)} />
-      {budgetSheet && canSplitBudget && <BudgetAllocationSheet tripId={trip.id} saved={allocation} budget={Number(trip.budget_thb) + Number(trip.shopping_budget_thb)}
+      <ExpenseMemberSummary costs={allCosts} members={trip.members || []} guests={expenseGuests} allocation={allocation} budget={Number(trip.budget_thb)} />
+      {budgetSheet && canSplitBudget && <BudgetAllocationSheet tripId={trip.id} saved={allocation} budget={Number(trip.budget_thb)}
         people={budgetPeople}
         onClose={() => setBudgetSheet(false)} onSave={value => { setAllocation(value); setBudgetSheet(false); setBudgetToast("บันทึกสัดส่วนและคำนวณค่าใช้จ่ายใหม่แล้ว"); tripListCache = [{ ...trip, budget_allocation: value }, ...(tripListCache || []).filter(item => item.id !== trip.id)]; window.dispatchEvent(new CustomEvent("bn-trip:budget-allocation-changed", { detail: { tripId: trip.id, allocation: value } })); router.refresh(); }} />}
       {budgetToast && createPortal(<div className="toast toast-success" role="status">{budgetToast}</div>, document.body)}
@@ -6313,14 +6318,14 @@ function PlanExpensesContent({
               .reduce((sum, cost) => sum + budgetValue(cost), 0);
             const dayShoppingTotal = dayCosts
               .filter(isShopping)
-              .reduce((sum, cost) => sum + budgetValue(cost), 0);
+              .reduce((sum, cost) => sum + personalValue(cost), 0);
             const selectedDayTotal = visibleDayCosts.reduce(
-              (sum, cost) => sum + budgetValue(cost),
+              (sum, cost) => sum + (isShopping(cost) ? personalValue(cost) : budgetValue(cost)),
               0,
             );
             const count = visibleDayCosts.length;
             const isCollapsed = collapsedDays.has(dayNumber);
-            const dayGrandTotal = dayTripTotal + dayShoppingTotal;
+            const dayGrandTotal = dayTripTotal;
             return (
               <section
                 className={`expense-day-card ${dayItems.length ? "" : "without-timeline"} ${isCollapsed ? "is-collapsed" : ""}`}
@@ -6358,7 +6363,7 @@ function PlanExpensesContent({
                         </span>
                         <div className="day-member-breakdown">
                           <span title={t("ค่าใช้จ่ายทริป")} aria-label={`${t("ค่าใช้จ่ายทริป")} ฿${bahtFormat(dayTripTotal)}`}><WalletCards size={12} aria-hidden="true" /><b>฿{bahtFormat(dayTripTotal)}</b></span>
-                          <span title={t("ค่า Shopping")} aria-label={`${t("ค่า Shopping")} ฿${bahtFormat(dayShoppingTotal)}`}><ShoppingBag size={12} aria-hidden="true" /><b>฿{bahtFormat(dayShoppingTotal)}</b></span>
+                          <span title={t("Shopping / ของฝากของฉัน")} aria-label={`${t("Shopping / ของฝากของฉัน")} ฿${bahtFormat(dayShoppingTotal)}`}><ShoppingBag size={12} aria-hidden="true" /><b>฿{bahtFormat(dayShoppingTotal)}</b></span>
                         </div>
                       </div>
                     )}
@@ -8250,6 +8255,7 @@ function CostSheet({
     modal.item?.id || dayItems[0]?.id || "",
   );
   const [currency, setCurrency] = useState(existing?.currency || "THB");
+  const [costCategory,setCostCategory]=useState(modal.item?.accommodation_id?"ที่พัก":existing?.category||"อาหาร");
   const dayDate = (day: number) =>
     addDays(localDate(trip.outbound_departure_at, trip.start_date), day - 1);
   const [exchangeRate, setExchangeRate] = useState(
@@ -8607,11 +8613,18 @@ function CostSheet({
             )}
             <select
               name="category"
-              defaultValue={
-                modal.item?.accommodation_id
-                  ? "ที่พัก"
-                  : existing?.category || "อาหาร"
-              }
+              value={costCategory}
+              onChange={event=>{
+                const next=event.target.value;
+                if(!existing&&isPersonalExpense(next)&&!isPersonalExpense(costCategory)){
+                  const mine=trip.budget_user_id||trip.owner_id;
+                  if(mine&&allSplitMemberIds.includes(mine)){
+                    initializedGuestSelection.current=true;
+                    setSplitMemberIds([mine]);setSplitGuestIds([]);setPayerKey(`member:${mine}`);
+                  }
+                }
+                setCostCategory(next);
+              }}
               disabled={Boolean(modal.item?.accommodation_id)}
             >
               {categories.map((category) => (
@@ -9583,7 +9596,7 @@ function ModalForm({
                   />
                 </div>
                 <div className="field">
-                  <label>{t("งบ Shopping (THB)")}</label>
+                  <label>{t("งบ Shopping ของฉัน (THB)")}</label>
                   <MoneyInput
                     name="shoppingBudgetThb"
                     required
@@ -9919,6 +9932,15 @@ export function BNTripApp({
     window.addEventListener("bn-trip:budget-allocation-changed", changed);
     return () => window.removeEventListener("bn-trip:budget-allocation-changed", changed);
   }, []);
+  useEffect(()=>{
+    const changed=(event:Event)=>{
+      const {tripId:changedId,budget}=(event as CustomEvent<{tripId:string;budget:number}>).detail;
+      setSelected(current=>current?.id===changedId?{...current,shopping_budget_thb:String(budget)}:current);
+      setTrips(current=>current.map(trip=>trip.id===changedId?{...trip,shopping_budget_thb:String(budget)}:trip));
+    };
+    window.addEventListener("bn-trip:shopping-budget-changed",changed);
+    return()=>window.removeEventListener("bn-trip:shopping-budget-changed",changed);
+  },[]);
   const [itineraries, setItineraries] = useState<Itinerary[]>(() =>
     initialItineraries || (tripId ? itineraryCache.get(tripId) || [] : []),
   );

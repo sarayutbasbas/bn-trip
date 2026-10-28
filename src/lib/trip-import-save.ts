@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { TripImportBatch } from "@/src/lib/trip-import";
 import { saveImportedBookings } from "@/src/lib/trip-import-bookings-save";
+import { savePersonalShoppingBudget } from "@/src/lib/personal-shopping-budget";
 
 // The caller owns the transaction so every trip and its children commit together.
 export async function saveTripImport(client: PoolClient, userId: string, { trips, plans, stays, flights }: TripImportBatch, fingerprint: string) {
@@ -16,6 +17,7 @@ export async function saveTripImport(client: PoolClient, userId: string, { trips
       [id, userId, trip.name, trip.destination, trip.countryCode, trip.countryName, JSON.stringify(trip.destinations), trip.outboundDate, trip.totalDays, trip.budget, trip.shoppingBudget, `${trip.outboundDate} ${trip.outboundTime}:00`, `${trip.returnDate} ${trip.returnTime}:00`, "/travel-postcard-fallback.jpg", trip.timezone, trip.hasFlights, trip.note]);
     count += result.rowCount || 0;
     if (!result.rowCount) continue;
+    await savePersonalShoppingBudget(client,id,userId,trip.shoppingBudget);
     const tripPlans = plans.filter(plan => plan.tripCode === trip.code).sort((a, b) => a.day - b.day || a.time.localeCompare(b.time));
     if (tripPlans.length) {
       const records = tripPlans.map((plan, index) => ({

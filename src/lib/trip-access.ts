@@ -1,9 +1,14 @@
 import { query } from "@/src/lib/db";
 import { submittedReviewSql } from "@/src/lib/review-visibility";
+import { PERSONAL_EXPENSE_CATEGORIES } from "@/src/lib/personal-expenses";
 
 export type TripRole="owner"|"admin"|"view";
 
 export const canManageTripContent=(role:TripRole|null)=>role==="owner"||role==="admin";
+
+// Every reader sees only their own personal budget. The legacy trip column is
+// retained for old snapshots; migration 58 copies it to the owner's private row.
+export const tripPersonalBudgetSql=(alias="t",viewer="$1")=>`COALESCE((SELECT personal.shopping_budget_thb FROM trip_personal_budgets personal WHERE personal.trip_id=${alias}.id AND personal.user_id=${viewer}),0)::text AS shopping_budget_thb,${viewer}::text AS budget_user_id`;
 
 export async function getTripRole(tripId:string,userId:string):Promise<TripRole|null>{
   const result=await query<{role:TripRole}>(`SELECT CASE WHEN t.owner_id=$2 THEN 'owner' ELSE c.access_level END AS role
@@ -100,7 +105,7 @@ export const tripActualExpenseSql=(alias="trips")=>`COALESCE((
       ) budget_participant
     ) selected
     WHERE itinerary.trip_id=${alias}.id
-      AND lower(btrim(COALESCE(cost.item->>'category','')))<>'shopping'
+      AND lower(btrim(COALESCE(cost.item->>'category',''))) NOT IN (${PERSONAL_EXPENSE_CATEGORIES.map(category => `'${category}'`).join(",")})
   ),0)::float AS actual_spent_thb`;
 export const tripFlightSummariesSql=(alias="trips")=>`COALESCE((
     SELECT jsonb_agg(

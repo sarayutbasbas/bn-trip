@@ -1,4 +1,6 @@
 import { appendTripRangeFilter } from "@/src/lib/trip-range-filter";
+import { tripPersonalBudgetSql } from "@/src/lib/trip-access";
+import { savePersonalShoppingBudget, shoppingBudgetSchema } from "@/src/lib/personal-shopping-budget";
 import { tripCoverUrlsSchema } from "@/src/lib/trip-cover-validation";
 import { tripCovers } from "@/src/lib/trip-covers";
 import { NextResponse } from "next/server";
@@ -17,7 +19,7 @@ import { appendTripMemberFilter, parseMemberFilter, tripFilterMembersSql, type T
 
 const googlePhotosUrlSchema=z.string().trim().max(2000).refine(value=>{if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"&&(url.hostname==="photos.app.goo.gl"||url.hostname==="photos.google.com")}catch{return false}},{message:"Invalid Google Photos URL"});
 const countryCodeSchema=z.string().length(2).transform(value=>value.toUpperCase()).refine(value=>Boolean(countryByCode(value)),{message:"Invalid country"});
-const tripSchema = z.object({ name:z.string().min(2), note:tripNoteSchema.optional(), locationIds:z.array(z.string().min(3).max(800)).min(1).max(20), countryCode:countryCodeSchema, countryCodes:z.array(countryCodeSchema).min(1).max(20).optional(), outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:z.number().nonnegative().default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), coverImageUrls:tripCoverUrlsSchema.optional(), summaryImageUrl:z.string().max(500).nullable().optional(), googlePhotosUrl:googlePhotosUrlSchema.optional(), sourceIdeaId:z.string().uuid().optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
+const tripSchema = z.object({ name:z.string().min(2), note:tripNoteSchema.optional(), locationIds:z.array(z.string().min(3).max(800)).min(1).max(20), countryCode:countryCodeSchema, countryCodes:z.array(countryCodeSchema).min(1).max(20).optional(), outboundDate:z.string().date(), outboundTime:z.string().regex(/^\d{2}:\d{2}$/), returnDate:z.string().date(), returnTime:z.string().regex(/^\d{2}:\d{2}$/), budgetThb:z.number().nonnegative(), shoppingBudgetThb:shoppingBudgetSchema.default(0), hasFlights:z.boolean().default(false), coverImageUrl:z.string().max(500).optional(), coverImageUrls:tripCoverUrlsSchema.optional(), summaryImageUrl:z.string().max(500).nullable().optional(), googlePhotosUrl:googlePhotosUrlSchema.optional(), sourceIdeaId:z.string().uuid().optional() }).refine(x=>x.returnDate>=x.outboundDate,{message:"Return date cannot be before departure date"});
 const selectedYears=(params:URLSearchParams)=>[...new Set(params.getAll("year").flatMap(value=>value.split(",")).map(Number).filter(year=>Number.isInteger(year)&&year>=2000&&year<=2200))].slice(0,50);
 
 export async function GET(request:Request) {
@@ -61,7 +63,7 @@ export async function GET(request:Request) {
     const clause=where.join(" AND ");
     const [filterPeople,items,total,years,statusCounts]=await Promise.all([
       query<TripFilterMember>(tripFilterMembersSql,[session.userId]),
-      query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,limit,offset]),
+      query(`SELECT t.*,${tripPersonalBudgetSql("t")},${role},${members},${reviews},${actualExpense},${incomplete},${flightSummaries},${favorite} FROM trips t WHERE ${clause} ORDER BY ${order} LIMIT $${values.length+1} OFFSET $${values.length+2}`,[...values,limit,offset]),
       query(`SELECT count(*)::int AS count FROM trips t WHERE ${clause}`,values),
       query(`SELECT DISTINCT EXTRACT(YEAR FROM t.start_date)::int AS year FROM trips t WHERE ${access} ORDER BY year DESC`,[session.userId]),
       query(`SELECT count(*)::int AS total,
@@ -75,7 +77,7 @@ export async function GET(request:Request) {
     const counts=statusCounts.rows[0]||{};
     return NextResponse.json({filterMembers:filterPeople.rows.filter(member=>member.id!==session.userId),items:items.rows,total:count,years:years.rows.map(row=>row.year),hasMore:offset+items.rows.length<count,statusCounts:{all:Number(counts.total||0),ongoing:Number(counts.ongoing||0),upcoming:Number(counts.upcoming||0),past:Number(counts.past||0),favorite:Number(counts.favorite||0)}});
   }
-  const result = await query(`SELECT t.*,${role},${members},${reviews},${actualExpense},${incomplete},${favorite} FROM trips t WHERE ${access} ORDER BY t.start_date DESC`,[session.userId]); return NextResponse.json(result.rows);
+  const result = await query(`SELECT t.*,${tripPersonalBudgetSql("t")},${role},${members},${reviews},${actualExpense},${incomplete},${favorite} FROM trips t WHERE ${access} ORDER BY t.start_date DESC`,[session.userId]); return NextResponse.json(result.rows);
 }
 
 export async function POST(request:Request) {
@@ -102,8 +104,10 @@ export async function POST(request:Request) {
         sourceNote=source.rows[0].note;
         if(!input.coverImageUrls && !input.coverImageUrl)coverImageUrls=tripCovers(source.rows[0]);
       }
-      const result=await client.query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,trip_destinations,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,summary_image_url,google_photos_url,timezone,has_flights,note) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *",[session.userId,input.name,destination,country.code,country.nameTh,JSON.stringify(tripDestinations),input.outboundDate,totalDays,input.budgetThb,input.shoppingBudgetThb,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.summaryImageUrl||null,input.googlePhotosUrl||null,country.timezone,input.hasFlights,input.note??sourceNote]);
+      const result=await client.query("INSERT INTO trips (owner_id,name,destination,country_code,country_name,trip_destinations,start_date,total_days,budget_thb,shopping_budget_thb,outbound_departure_at,return_departure_at,cover_image_url,summary_image_url,google_photos_url,timezone,has_flights,note) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *",[session.userId,input.name,destination,country.code,country.nameTh,JSON.stringify(tripDestinations),input.outboundDate,totalDays,input.budgetThb,0,`${input.outboundDate} ${input.outboundTime}:00`,`${input.returnDate} ${input.returnTime}:00`,input.coverImageUrl||"/travel-postcard-fallback.jpg",input.summaryImageUrl||null,input.googlePhotosUrl||null,country.timezone,input.hasFlights,input.note??sourceNote]);
       const created=result.rows[0];
+      await savePersonalShoppingBudget(client,created.id,session.userId,input.shoppingBudgetThb);
+      created.shopping_budget_thb=String(input.shoppingBudgetThb);created.budget_user_id=session.userId;
       await client.query("UPDATE trips SET cover_image_url=$2,cover_image_urls=$3 WHERE id=$1",[created.id,coverImageUrls[0],coverImageUrls]);
       created.cover_image_url=coverImageUrls[0];created.cover_image_urls=coverImageUrls;
       if(input.sourceIdeaId){
