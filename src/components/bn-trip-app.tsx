@@ -60,7 +60,7 @@ import { ArrowDownUp, BookOpen } from "lucide-react";
 import { TimelineExpenseTags } from "./timeline-expense-tags";
 import { TRIP_SORT_OPTIONS, normalizeTripSort } from "@/src/lib/trip-sort";
 import { tripDaysUntilLabel } from "@/src/lib/trip-countdown";
-import { tripCalendarDateLabel, tripWeekdayLabel } from "@/src/lib/trip-weekday";
+import { tripWeekdayLabel } from "@/src/lib/trip-weekday";
 import { TripNoteField } from "@/src/components/trip-note-field";
 import { TripImportSettings } from "@/src/components/trip-import-settings";
 import { BadgeHighlightSkeleton } from "@/src/components/badge-skeleton";
@@ -4889,8 +4889,7 @@ function TimelineDayShortcuts({
             if (window.scrollY > dayStart) window.scrollTo(0, Math.max(0, dayStart));
           }}
         >
-          <small>{tripWeekdayLabel(baseDate, number, activeLang)}</small>
-          <strong>{tripCalendarDateLabel(baseDate, number, activeLang)}</strong>
+          <strong>{tripWeekdayLabel(baseDate, number, activeLang)} {Number(addDays(baseDate, number - 1).slice(8, 10))}</strong>
           <span className="timeline-day-shortcut-number">(day {displayTripDay(trip, number)})</span>
         </button>
       ))}
