@@ -1,4 +1,6 @@
-export type SplitExpense = {
+import { isExpenseUnpaid, type ExpensePayment } from "./expense-payment";
+
+export type SplitExpense = ExpensePayment & {
   value?: number | string;
   category?: string;
   splitMemberIds?: string[];
@@ -22,10 +24,11 @@ export function costSplitCount(cost: SplitExpense, fallback = 1) {
   return Math.min(100, Math.max(1, Math.floor(Number(fallback) || 1)));
 }
 
-export function personalExpenseTotals(costs: SplitExpense[], userId: string, memberCount: number) {
+export function personalExpenseTotals(costs: SplitExpense[], userId: string, memberCount: number, today?: string) {
   let travelExpense = 0;
   let shoppingExpense = 0;
   for (const cost of costs) {
+    if(isExpenseUnpaid(cost,today))continue;
     // An explicit empty list means guests only, not all trip members.
     if (Array.isArray(cost.splitMemberIds) && !cost.splitMemberIds.includes(userId)) continue;
     const value = Number(cost.value || 0);

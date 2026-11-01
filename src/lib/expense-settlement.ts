@@ -1,21 +1,29 @@
 import { costSplitCount, type SplitExpense } from "./personal-expenses";
 import { expenseShares, type BudgetAllocation } from "./budget-allocation";
+import { isExpenseUnpaid, type ExpensePayment } from "./expense-payment";
 
 export type ExpensePayer = { type: "member" | "guest"; id: string };
-export type SettlementExpense = SplitExpense & { paidBy?: ExpensePayer };
+export type SettlementExpense = SplitExpense & ExpensePayment & { paidBy?: ExpensePayer };
 export const expensePersonKey = (person: ExpensePayer) => `${person.type}:${person.id}`;
 
 // Integer satang arithmetic: every counted expense must balance exactly.
 // Legacy entries without a payer (or with unidentified split slots) stay pending.
-export function expenseSettlement(costs: SettlementExpense[], memberIds: string[], guestIds: string[], allocation?: BudgetAllocation | null, memberGuestIds: string[] = []) {
+export function expenseSettlement(costs: SettlementExpense[], memberIds: string[], guestIds: string[], allocation?: BudgetAllocation | null, memberGuestIds: string[] = [], today?: string) {
   const rows = new Map<string, { paid: number; share: number; balance: number }>();
   for (const id of memberIds) rows.set(`member:${id}`, { paid: 0, share: 0, balance: 0 });
   for (const id of guestIds) rows.set(`guest:${id}`, { paid: 0, share: 0, balance: 0 });
   let pendingCount = 0;
   let pendingAmount = 0;
+  let scheduledCount = 0;
+  let scheduledAmount = 0;
   for (const cost of costs) {
     const amount = Math.round(Number(cost.value || 0) * 100);
     if (!Number.isSafeInteger(amount) || amount <= 0) continue;
+    if (isExpenseUnpaid(cost,today)) {
+      scheduledCount++;
+      scheduledAmount+=amount;
+      continue;
+    }
     const participants = [...new Set([
       ...(Array.isArray(cost.splitMemberIds) ? cost.splitMemberIds : memberIds).map(id => `member:${id}`),
       ...(cost.splitGuestIds || []).map(id => `guest:${id}`),
@@ -30,5 +38,5 @@ export function expenseSettlement(costs: SettlementExpense[], memberIds: string[
     for (const [id, share] of expenseShares(cost, memberIds, guestIds, allocation, memberGuestIds)) rows.get(id)!.share += share;
   }
   for (const row of rows.values()) row.balance = row.paid - row.share;
-  return { rows, pendingCount, pendingAmount };
+  return { rows, pendingCount, pendingAmount, scheduledCount, scheduledAmount };
 }

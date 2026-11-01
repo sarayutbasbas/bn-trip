@@ -16796,3 +16796,5 @@ body:has(.login-redesign) .app-glass-scene-content { padding-bottom:0; }
 .modal-backdrop > .modal.bottom-sheet.personal-shopping-budget-sheet { height:auto;max-height:min(85dvh,100%);margin:0;padding-bottom:0;border-radius:30px 30px 0 0;border-bottom:0; }
 .personal-shopping-budget-sheet .bottom-sheet-body { padding-bottom:18px; }
 .personal-shopping-budget-field { padding:8px 0; }.personal-shopping-budget-field > span { display:block;margin:0 0 6px;font-size:12px; }
+.expense-scheduled-notice { margin:10px 0;padding:10px 12px;border:1px solid color-mix(in srgb,var(--orange) 25%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--orange) 7%,var(--surface-solid));color:var(--ink);font-size:12px;line-height:1.7; }
+.expense-plan-copy .expense-payment-pending { width:fit-content;max-width:100%;padding:2px 6px;border-radius:7px;color:var(--orange);background:var(--brand-soft);font-size:10px;line-height:1.6;white-space:normal; }

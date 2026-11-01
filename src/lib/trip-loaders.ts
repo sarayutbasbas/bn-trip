@@ -1,5 +1,6 @@
 import { appendTripRangeFilter } from "@/src/lib/trip-range-filter";
 import { tripPersonalBudgetSql } from "@/src/lib/trip-access";
+import { accommodationExpenseItemsExpression, accommodationExpenseItemsSql } from "@/src/lib/accommodation-expense-sql";
 import type { SessionUser } from "@/src/lib/auth";
 import { appendTripSearch } from "@/src/lib/trip-search";
 import { canonicalTripDestination } from "@/src/lib/destination-search";
@@ -425,7 +426,7 @@ export async function loadTravelAnalytics(
        COALESCE(jsonb_agg(cost.item) FILTER (WHERE cost.item IS NOT NULL),'[]'::jsonb) AS cost_items
      FROM accessible_past trip
      LEFT JOIN itineraries itinerary ON itinerary.trip_id=trip.id
-     LEFT JOIN LATERAL jsonb_array_elements(COALESCE(itinerary.cost_items,'[]'::jsonb)) AS cost(item) ON true
+     LEFT JOIN LATERAL jsonb_array_elements(${accommodationExpenseItemsExpression("itinerary")}) AS cost(item) ON true
      GROUP BY trip.id,trip.name,trip.ended_at,trip.year,trip.country,trip.country_code,trip.destination,trip.trip_destinations,trip.member_count
      ORDER BY trip.year DESC`,
     [session.userId],
@@ -747,7 +748,7 @@ export async function loadItineraries(session: SessionUser, id: string) {
   await ensureLatestDatabaseSchema();
   if (!(await getTripRole(id, session.userId))) return [];
   const result = await query(
-    `SELECT i.*,
+    `SELECT i.*,${accommodationExpenseItemsSql("i")},
        COALESCE((
          SELECT jsonb_agg(
            jsonb_build_object(

@@ -1,6 +1,7 @@
 import { query } from "@/src/lib/db";
 import { submittedReviewSql } from "@/src/lib/review-visibility";
 import { PERSONAL_EXPENSE_CATEGORIES } from "@/src/lib/personal-expenses";
+import { accommodationCostMatchSql, accommodationUnpaidSql } from "@/src/lib/accommodation-expense-sql";
 
 export type TripRole="owner"|"admin"|"view";
 
@@ -106,6 +107,10 @@ export const tripActualExpenseSql=(alias="trips")=>`COALESCE((
     ) selected
     WHERE itinerary.trip_id=${alias}.id
       AND lower(btrim(COALESCE(cost.item->>'category',''))) NOT IN (${PERSONAL_EXPENSE_CATEGORIES.map(category => `'${category}'`).join(",")})
+      AND NOT EXISTS(SELECT 1 FROM trip_accommodations payment_accommodation
+        WHERE payment_accommodation.trip_id=${alias}.id
+          AND ${accommodationCostMatchSql("cost.item","itinerary")}
+          AND ${accommodationUnpaidSql()})
   ),0)::float AS actual_spent_thb`;
 export const tripFlightSummariesSql=(alias="trips")=>`COALESCE((
     SELECT jsonb_agg(

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {dirname,join} from 'node:path';
 import {runInNewContext} from 'node:vm';
 import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
@@ -13,7 +14,7 @@ function load(file) {
   if(id==='react-dom')return {...require(id),createPortal:child=>child};
   if(id==='./bottom-sheet')return {BottomSheet:props=>createElement('form',{'aria-label':'งบรายคน'},props.children,createElement('button',{disabled:props.submitDisabled},props.submitLabel))};
   if(id.startsWith('@/'))return load(id.replace('@/','')+'.ts');
-  if(id==='./personal-expenses')return load('src/lib/personal-expenses.ts');
+  if(id.startsWith('./'))return load(join(dirname(file),id)+'.ts');
   return require(id);
  }});
  return exports;
