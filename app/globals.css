@@ -4972,8 +4972,8 @@ html.dark .trip-section-nav button.active {
 .timeline-skeleton-nav .is-label { width:65%;height:12px;border-radius:4px; }
 .timeline-skeleton-heading { display:flex;align-items:center;gap:8px;margin:12px 0; }
 .timeline-skeleton-heading > div { flex:1;display:flex;flex-direction:column;gap:10px; }
-.timeline-skeleton-days { display:flex;justify-content:center;gap:8px;margin:16px 0; }
-.timeline-skeleton-days .is-circle { width:44px;height:44px; }
+.timeline-skeleton-days { display:flex;justify-content:center;gap:8px;margin:16px 0;overflow:hidden; }
+.timeline-skeleton-days .is-circle { width:84px;height:84px;flex:0 0 84px; }
 .timeline-skeleton-items { position:relative;padding-left:32px; }
 .timeline-skeleton-items::before { content:"";position:absolute;top:24px;bottom:38px;left:10px;width:2px;background:var(--line); }
 .timeline-skeleton-stop { position:relative; }
@@ -5310,15 +5310,15 @@ html.dark .trip-section-nav button.active {
 .timeline-day-shortcuts > :first-child { margin-left: auto; }
 .timeline-day-shortcuts > :last-child { margin-right: auto; }
 .timeline-day-shortcut {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: 84px;
+  height: 84px;
+  flex: 0 0 84px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  padding: 0;
+  gap: 2px;
+  padding: 7px;
   border: 1px solid color-mix(in srgb, #0d9488 24%, var(--line));
   border-radius: 50%;
   color: #087d73;
@@ -5330,14 +5330,16 @@ html.dark .trip-section-nav button.active {
   transition: background 160ms ease, color 160ms ease, transform 160ms ease;
 }
 .timeline-day-shortcut small {
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.4;
 }
 .timeline-day-shortcut strong {
-  font-size: 16px;
-  line-height: 1;
+  font-size: 17px;
+  line-height: 1.4;
+  white-space: nowrap;
 }
+.timeline-day-shortcut-number { font-size:11px;font-weight:500;line-height:1.4;white-space:nowrap; }
 .timeline-day-shortcut.is-active {
   border-color: #0d9488;
   color: #fff;

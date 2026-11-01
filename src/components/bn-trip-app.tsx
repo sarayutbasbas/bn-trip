@@ -60,7 +60,7 @@ import { ArrowDownUp, BookOpen } from "lucide-react";
 import { TimelineExpenseTags } from "./timeline-expense-tags";
 import { TRIP_SORT_OPTIONS, normalizeTripSort } from "@/src/lib/trip-sort";
 import { tripDaysUntilLabel } from "@/src/lib/trip-countdown";
-import { tripWeekdayLabel } from "@/src/lib/trip-weekday";
+import { tripCalendarDateLabel, tripWeekdayLabel } from "@/src/lib/trip-weekday";
 import { TripNoteField } from "@/src/components/trip-note-field";
 import { TripImportSettings } from "@/src/components/trip-import-settings";
 import { BadgeHighlightSkeleton } from "@/src/components/badge-skeleton";
@@ -4825,6 +4825,7 @@ function TimelineDayShortcuts({
   setDay: (day: number) => void;
 }) {
   const t = useT();
+  const baseDate = localDate(trip.outbound_departure_at, trip.start_date);
   const railRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const rail = railRef.current;
@@ -4875,7 +4876,7 @@ function TimelineDayShortcuts({
           type="button"
           key={number}
           className={`timeline-day-shortcut${number === day ? " is-active" : ""}`}
-          aria-label={t(`แผนวันที่ ${displayTripDay(trip, number)}`)}
+          aria-label={`${tripDayLabel(baseDate, number, true)} (day ${displayTripDay(trip, number)})`}
           aria-current={number === day ? "date" : undefined}
           onClick={() => {
             if (number === day) return;
@@ -4888,8 +4889,9 @@ function TimelineDayShortcuts({
             if (window.scrollY > dayStart) window.scrollTo(0, Math.max(0, dayStart));
           }}
         >
-          <small>{tripWeekdayLabel(localDate(trip.outbound_departure_at, trip.start_date), number, activeLang)}</small>
-          <strong>{displayTripDay(trip, number)}</strong>
+          <small>{tripWeekdayLabel(baseDate, number, activeLang)}</small>
+          <strong>{tripCalendarDateLabel(baseDate, number, activeLang)}</strong>
+          <span className="timeline-day-shortcut-number">(day {displayTripDay(trip, number)})</span>
         </button>
       ))}
     </div>
