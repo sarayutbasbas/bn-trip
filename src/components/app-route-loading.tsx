@@ -107,7 +107,7 @@ function SettingsLoading() {
 
 export function AppRouteLoading({ page = "home" }: { page?: LoadingPage }) {
   const shellClass = page === "ideas" ? "trip-ideas-page-shell" : page === "home" ? "dashboard-page-shell main-nav-page-shell" : "main-nav-page-shell";
-  return <div className={`app-shell flow-shell ${shellClass} route-skeleton-shell route-skeleton-${page}`} role="status" aria-label="กำลังเปิดหน้า">
+  return <div data-app-loading className={`app-shell flow-shell ${shellClass} route-skeleton-shell route-skeleton-${page}`} role="status" aria-label="กำลังเปิดหน้า">
     <main>
       <header className="mobile-head flow-header route-skeleton-header">
         <Link className="brand" href="/" aria-label="RouteRao · หน้าแรก">

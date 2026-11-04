@@ -28,5 +28,5 @@ export function TimelineSkeleton() {
 }
 
 export function TimelineRouteLoading() {
-  return <div className="app-shell flow-shell trip-page-shell"><main><TimelineSkeleton /></main></div>;
+  return <div data-app-loading className="app-shell flow-shell trip-page-shell"><main><TimelineSkeleton /></main></div>;
 }

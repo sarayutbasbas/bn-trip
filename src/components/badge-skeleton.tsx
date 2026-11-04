@@ -22,7 +22,7 @@ export function BadgeHighlightSkeleton() {
 }
 
 export function BadgesRouteLoading() {
-  return <div className="app-shell flow-shell badges-page-shell badges-detail-page" role="status" aria-label="กำลังโหลดเข็มกลัดทั้งหมด" aria-busy="true">
+  return <div data-app-loading className="app-shell flow-shell badges-page-shell badges-detail-page" role="status" aria-label="กำลังโหลดเข็มกลัดทั้งหมด" aria-busy="true">
     <main aria-hidden="true">
       <div className="badges-back-bar"><Block className="badge-skeleton-back" /></div>
       <div className="badges-screen badges-screen-redesign">

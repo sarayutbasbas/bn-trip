@@ -11,6 +11,9 @@ import "./globals.css";
 import { AppGlassScene } from "@/src/components/app-glass-scene";
 import { PwaRuntime } from "@/src/components/pwa-runtime";
 import { GlobalFormValidationDialog } from "@/src/components/form-error-dialog";
+import { AppLaunchScreen } from "@/src/components/app-launch-screen";
+import { appLaunchStyle } from "@/src/lib/app-launch-style";
+import { appStartupImages } from "@/src/lib/app-startup-images";
 
 export const metadata: Metadata = {
   title: { default: "RouteRao", template: "%s · RouteRao" },
@@ -50,9 +53,14 @@ const themeScript = `
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="th" suppressHydrationWarning>
-      <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: appLaunchStyle }} />
+        <link rel="preload" as="image" href="/images/routerao-launch.webp" />
+        {appStartupImages.map(([width, height, ratio]) => <link key={`${width}-${height}-${ratio}`} rel="apple-touch-startup-image" href={`/images/startup/${width * ratio}x${height * ratio}.jpg`} media={`(device-width: ${width}px) and (device-height: ${height}px) and (-webkit-device-pixel-ratio: ${ratio}) and (orientation: portrait)`} />)}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>
-        <AppGlassScene>{children}</AppGlassScene>
+        <AppLaunchScreen><AppGlassScene>{children}</AppGlassScene></AppLaunchScreen>
         <GlobalFormValidationDialog />
         <PwaRuntime />
       </body>
