@@ -1,4 +1,4 @@
-const STATIC_CACHE="routerao-static-v4";
+const STATIC_CACHE="routerao-static-v5";
 const PRIVATE_DATA_CACHE="bn-trip-private-data-v1";
 const PRIVATE_DOCUMENT_CACHE="bn-trip-private-documents-v1";
 const STATIC_ASSETS=["/manifest.webmanifest","/routerao-icon-192.png","/routerao-icon-512.png","/routerao-icon-maskable-192.png","/routerao-icon-maskable-512.png","/apple-touch-icon-routerao.png","/travel-postcard-fallback.jpg","/routerao-logo-transparent-512.png","/images/routerao-launch.webp"];

@@ -44,8 +44,8 @@ async function scenario({ slow = false, imageError = false } = {}) {
       for (const [key, timer] of timers) if (timer.due <= now) { timers.delete(key); timer.fn(); }
     }
   };
-  advance(1480);
-  assert.equal(phases.length, 0, "never dismiss before 1.5 seconds");
+  advance(1980);
+  assert.equal(phases.length, 0, "never dismiss before 2 seconds");
   if (slow || imageError) {
     advance(5000);
     assert.equal(phases.length, 0, "slow page or artwork stays covered");

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-const MINIMUM_MS = 1500;
+const MINIMUM_MS = 2000;
 
 /** Persists in the root layout: route changes never replay the launch screen. */
 export function AppLaunchScreen({ children }: { children: ReactNode }) {
@@ -62,9 +62,9 @@ export function AppLaunchScreen({ children }: { children: ReactNode }) {
 
   return <>
     {phase !== "done" && <div className={`app-launch-screen${phase === "leaving" ? " is-leaving" : ""}`} aria-label="กำลังเตรียมแอป RouteRao">
+      <img className="app-launch-art" src="/images/routerao-launch.webp" width="1280" height="1280" alt="" fetchPriority="high" />
       <div className="app-launch-brand"><img src="/routerao-logo-transparent-512.png" width="44" height="44" alt="" /><span>RouteRao<small>TRAVEL SMARTER TOGETHER</small></span></div>
       <div className="app-launch-center">
-        <img className="app-launch-art" src="/images/routerao-launch.webp" width="512" height="512" alt="" fetchPriority="high" />
         <h1>ทุกทริปดี ๆ เริ่มที่นี่</h1><p>เตรียมพร้อมสำหรับการเดินทางของคุณ</p>
         <div className="app-launch-progress-copy"><span><i aria-hidden="true" />กำลังเตรียมแอป</span><strong>{progress}%</strong></div>
         <div className="app-launch-progress" role="progressbar" aria-label="ความคืบหน้าการเตรียมแอป" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div>
