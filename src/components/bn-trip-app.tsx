@@ -4900,7 +4900,7 @@ function TimelineDayShortcuts({
         (() => {
           const dayWeather = weatherByDate.get(addDays(baseDate, number - 1));
           const temperatureLabel = dayWeather
-            ? `${Math.round(dayWeather.minimum)}°–${Math.round(dayWeather.maximum)}°C`
+            ? `${Math.floor(Math.min(dayWeather.minimum, dayWeather.maximum))}°–${Math.ceil(Math.max(dayWeather.minimum, dayWeather.maximum))}°C`
             : weather ? `${Math.round(weather.current.temperature)}°C` : weatherLoading ? "···" : "—";
           const weatherCode = dayWeather?.code ?? weather?.current.code;
           return (
