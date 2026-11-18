@@ -5340,7 +5340,7 @@ html.dark .trip-section-nav button.active {
 .timeline-day-shortcut-label { display:flex;width:100%;align-items:baseline;justify-content:center;gap:2px;white-space:nowrap; }
 .timeline-day-shortcut-number { font-size:8px;font-weight:500;line-height:1;white-space:nowrap; }
 .timeline-day-shortcut-weather { display:flex;width:100%;align-items:center;justify-content:center;gap:3px;font-size:9px;font-weight:650;line-height:1.1;text-align:center;white-space:nowrap; }
-.timeline-day-shortcut-qualifier { position:absolute;left:0;right:0;bottom:9px;font-size:7px;font-weight:500;line-height:1;text-align:center;white-space:nowrap; }
+.timeline-day-shortcut-qualifier { position:absolute;left:0;right:0;bottom:16px;font-size:7px;font-weight:500;line-height:1;text-align:center;white-space:nowrap; }
 .timeline-day-shortcut.is-active {
   border-color: #0d9488;
   color: #fff;
