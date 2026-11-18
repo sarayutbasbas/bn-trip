@@ -5304,21 +5304,23 @@ html.dark .trip-section-nav button.active {
   scrollbar-width: none;
   touch-action: pan-y pinch-zoom;
 }
+.timeline-day-shortcuts-area { min-width:0; }
 .timeline-day-shortcuts::-webkit-scrollbar {
   display: none;
 }
 .timeline-day-shortcuts > :first-child { margin-left: auto; }
 .timeline-day-shortcuts > :last-child { margin-right: auto; }
 .timeline-day-shortcut {
-  width: 60px;
-  height: 60px;
-  flex: 0 0 60px;
+  position: relative;
+  width: 78px;
+  height: 78px;
+  flex: 0 0 78px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 5px;
+  gap: 0;
+  padding: 7px 4px;
   border: 1px solid color-mix(in srgb, #0d9488 24%, var(--line));
   border-radius: 50%;
   color: #087d73;
@@ -5330,11 +5332,15 @@ html.dark .trip-section-nav button.active {
   transition: background 160ms ease, color 160ms ease, transform 160ms ease;
 }
 .timeline-day-shortcut strong {
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1;
   white-space: nowrap;
 }
-.timeline-day-shortcut-number { font-size:10px;font-weight:500;line-height:1.4;white-space:nowrap; }
+.timeline-day-shortcut-main { display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;width:100%; }
+.timeline-day-shortcut-label { display:flex;width:100%;align-items:baseline;justify-content:center;gap:2px;white-space:nowrap; }
+.timeline-day-shortcut-number { font-size:8px;font-weight:500;line-height:1;white-space:nowrap; }
+.timeline-day-shortcut-weather { display:flex;width:100%;align-items:center;justify-content:center;gap:3px;font-size:9px;font-weight:650;line-height:1.1;text-align:center;white-space:nowrap; }
+.timeline-day-shortcut-qualifier { position:absolute;left:0;right:0;bottom:9px;font-size:7px;font-weight:500;line-height:1;text-align:center;white-space:nowrap; }
 .timeline-day-shortcut.is-active {
   border-color: #0d9488;
   color: #fff;

@@ -147,6 +147,12 @@ import {
   ChevronRight,
   ChevronUp,
   ClipboardList,
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
   Clock,
   Crown,
   Download,
@@ -377,7 +383,7 @@ export type PaymentCard = {
   member_role?: "owner" | "collaborator";
 };
 type CostItem = ExpensePayment & {
-  paidBy?: ExpensePayer;
+  paidBy?: ExpensePayer | ExpensePayer[];
   id?: string;
   key: string;
   value: number;
@@ -4826,6 +4832,24 @@ function TimelineDayShortcuts({
 }) {
   const t = useT();
   const baseDate = localDate(trip.outbound_departure_at, trip.start_date);
+  const [weather, setWeather] = useState<{ days: Array<{ date: string; minimum: number; maximum: number; code: number; approximate: boolean }>; current: { temperature: number; code: number }; city: string; country: string } | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const weatherLocation = trip.trip_destinations?.[0]?.nameEn || trip.destination;
+  const weatherByDate = new Map((weather?.days || []).map(entry => [entry.date, entry]));
+  useEffect(() => {
+    let active = true;
+    setWeatherLoading(true);
+    setWeather(null);
+    const params = new URLSearchParams({ location: weatherLocation });
+    params.set("dates", Array.from({ length: trip.total_days }, (_, index) => addDays(baseDate, index)).join(","));
+    if (trip.country_code) params.set("country", trip.country_code);
+    fetch(`/api/weather?${params}`, { cache: "no-store" })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error("Weather unavailable")))
+      .then(result => { if (active) setWeather(result); })
+      .catch(() => { if (active) setWeather(null); })
+      .finally(() => { if (active) setWeatherLoading(false); });
+    return () => { active = false; };
+  }, [trip.id, trip.country_code, trip.total_days, weatherLocation, baseDate]);
   const railRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const rail = railRef.current;
@@ -4870,8 +4894,16 @@ function TimelineDayShortcuts({
     };
   }, []);
   return (
+    <div className="timeline-day-shortcuts-area">
     <div ref={railRef} className="timeline-day-shortcuts" role="group" aria-label={t("เลือกวัน")}>
       {Array.from({ length: trip.total_days }, (_, index) => index + 1).map((number) => (
+        (() => {
+          const dayWeather = weatherByDate.get(addDays(baseDate, number - 1));
+          const temperatureLabel = dayWeather
+            ? `${Math.round(dayWeather.minimum)}°–${Math.round(dayWeather.maximum)}°C`
+            : weather ? `${Math.round(weather.current.temperature)}°C` : weatherLoading ? "···" : "—";
+          const weatherCode = dayWeather?.code ?? weather?.current.code;
+          return (
         <button
           type="button"
           key={number}
@@ -4889,12 +4921,30 @@ function TimelineDayShortcuts({
             if (window.scrollY > dayStart) window.scrollTo(0, Math.max(0, dayStart));
           }}
         >
-          <strong>{tripWeekdayLabel(baseDate, number, activeLang)} {Number(addDays(baseDate, number - 1).slice(8, 10))}</strong>
-          <span className="timeline-day-shortcut-number">(day {displayTripDay(trip, number)})</span>
+          <span className="timeline-day-shortcut-main">
+            <span className="timeline-day-shortcut-label">
+              <strong>{tripWeekdayLabel(baseDate, number, activeLang)} {Number(addDays(baseDate, number - 1).slice(8, 10))}</strong>
+              <span className="timeline-day-shortcut-number">(day {displayTripDay(trip, number)})</span>
+            </span>
+            <span className="timeline-day-shortcut-weather" title={weather ? `${weather.city}${weather.country ? `, ${weather.country}` : ""}` : t("อุณหภูมิไม่พร้อมใช้งาน")}>
+              {weatherLoading && !weather
+                ? <RefreshCw className="analytics-refresh-spinning" size={13} aria-label={t("กำลังโหลดอุณหภูมิ")} />
+                : <><WeatherIcon code={typeof weatherCode === "number" ? weatherCode : 3} /><span>{temperatureLabel}</span></>}
+            </span>
+          </span>
+          {dayWeather?.approximate && <span className="timeline-day-shortcut-qualifier">(คาดการณ์)</span>}
         </button>
+          );
+        })()
       ))}
     </div>
+    </div>
   );
+}
+
+function WeatherIcon({ code }: { code: number }) {
+  const Icon = code === 0 ? Sun : code <= 2 ? CloudSun : code === 3 ? Cloud : code === 45 || code === 48 ? CloudFog : code >= 51 && code <= 67 || code >= 80 && code <= 82 ? CloudRain : code >= 71 && code <= 77 || code === 85 || code === 86 ? CloudSnow : code >= 95 ? CloudLightning : Cloud;
+  return <Icon size={10} strokeWidth={2.5} aria-hidden="true" />;
 }
 
 function TimelineDayPicker({
@@ -6241,7 +6291,7 @@ function PlanExpensesContent({
   );
   const shoppingTotal = shoppingCosts.filter(cost=>!isSouvenirExpense(cost.category)).reduce((sum,cost)=>sum+personalValue(cost),0);
   const souvenirTotal = shoppingCosts.filter(cost=>isSouvenirExpense(cost.category)).reduce((sum,cost)=>sum+personalValue(cost),0);
-  const personalSettlement=expenseSettlement(shoppingCosts.filter(cost=>personalValue(cost)>0 || (cost.paidBy?.type==="member"&&cost.paidBy.id===viewerId)),budgetMemberIds,expenseGuests.map(guest=>guest.id));
+  const personalSettlement=expenseSettlement(shoppingCosts.filter(cost=>personalValue(cost)>0 || (Array.isArray(cost.paidBy) ? cost.paidBy.some(payer => payer.type==="member"&&payer.id===viewerId) : cost.paidBy?.type==="member"&&cost.paidBy.id===viewerId)),budgetMemberIds,expenseGuests.map(guest=>guest.id));
   const personalBalance=(personalSettlement.rows.get(`member:${viewerId}`)?.balance||0)/100;
   const categories = Array.from(
     tripCosts.reduce(
@@ -8297,7 +8347,7 @@ function CostSheet({
   const existingSplitMemberIds = (existing?.splitMemberIds || []).filter(
     (id) => allSplitMemberIds.includes(id),
   );
-  const [payerKey, setPayerKey] = useState(existing?.paidBy ? `${existing.paidBy.type}:${existing.paidBy.id}` : `member:${splitMembers.find(member=>member.role === "owner")?.id || splitMembers[0]?.id || ""}`);
+  const [payerKey, setPayerKey] = useState<string[]>((existing?.paidBy ? (Array.isArray(existing.paidBy) ? existing.paidBy : [existing.paidBy]).map(p => `${p.type}:${p.id}`) : [`member:${splitMembers.find(member=>member.role === "owner")?.id || splitMembers[0]?.id || ""}`]));
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>(
     existing && Array.isArray(existing.splitMemberIds)
       ? existingSplitMemberIds
@@ -8440,7 +8490,7 @@ function CostSheet({
         current.filter((item) => item.id !== guest.id),
       );
       setSplitGuestIds((current) => current.filter((id) => id !== guest.id));
-      setPayerKey(current => current === `guest:${guest.id}` ? "" : current);
+      setPayerKey(current => current.filter(key => key !== `guest:${guest.id}`));
       window.dispatchEvent(
         new CustomEvent(EXPENSE_GUESTS_CHANGED_EVENT, {
           detail: { tripId: trip.id },
@@ -8483,12 +8533,9 @@ function CostSheet({
       setError("กรุณาเลือกอย่างน้อย 1 คนสำหรับหารค่าใช้จ่าย");
       return;
     }
-    const [payerType, payerId] = payerKey.split(":");
-    const paidBy: ExpensePayer | undefined = payerType === "member" && allSplitMemberIds.includes(payerId)
-      ? { type: "member", id: payerId }
-      : payerType === "guest" && expenseGuests.some(guest => guest.id === payerId)
-        ? { type: "guest", id: payerId } : undefined;
-    if (!paidBy) { setError("กรุณาเลือกผู้จ่ายรายการนี้"); return; }
+    const availablePayers = payerKey.map(key => { const [type, id] = key.split(":"); return type === "member" && allSplitMemberIds.includes(id) ? { type: "member" as const, id } : type === "guest" && expenseGuests.some(guest => guest.id === id) ? { type: "guest" as const, id } : null; }).filter((payer): payer is ExpensePayer => Boolean(payer));
+    const paidBy = availablePayers.length === 1 ? availablePayers[0] : availablePayers;
+    if (!availablePayers.length) { setError("กรุณาเลือกผู้จ่ายรายการนี้"); return; }
     const paymentSource = String(form.get("paymentSource") || "cash");
     const selectedCard = cards.find((card) => card.id === paymentSource);
     const cost: CostItem = {
@@ -8632,7 +8679,7 @@ function CostSheet({
                   const mine=trip.budget_user_id||trip.owner_id;
                   if(mine&&allSplitMemberIds.includes(mine)){
                     initializedGuestSelection.current=true;
-                    setSplitMemberIds([mine]);setSplitGuestIds([]);setPayerKey(`member:${mine}`);
+                    setSplitMemberIds([mine]);setSplitGuestIds([]);setPayerKey([`member:${mine}`]);
                   }
                 }
                 setCostCategory(next);

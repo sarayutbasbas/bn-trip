@@ -22,12 +22,16 @@ export function removeMemberFromCost(
   const hadMember = memberIds.includes(userId);
   const removedCard = typeof cost.creditCardId === "string" && cardIds.has(cost.creditCardId);
   const hadSavedSplitCount = cost.splitCount !== undefined;
-  const payer = cost.paidBy as { type?: string; id?: string } | undefined;
-  const removedPayer = payer?.type === "member" && payer.id === userId;
+  const payers = (Array.isArray(cost.paidBy) ? cost.paidBy : cost.paidBy ? [cost.paidBy] : []) as Array<{ type?: string; id?: string }>;
+  const remainingPayers = payers.filter((payer) => !(payer.type === "member" && payer.id === userId));
+  const removedPayer = remainingPayers.length !== payers.length;
   if (!hadMember && !removedCard && !hadSavedSplitCount && !removedPayer) return { cost, changed: false };
 
   const next: StoredCost = { ...cost };
-  if (removedPayer) delete next.paidBy;
+  if (removedPayer) {
+    if (remainingPayers.length === 0) delete next.paidBy;
+    else next.paidBy = remainingPayers.length === 1 ? remainingPayers[0] : remainingPayers;
+  }
   delete next.splitCount;
   if (hadMember) {
     const remaining = memberIds.filter((memberId) => memberId !== userId);

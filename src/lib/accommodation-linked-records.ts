@@ -23,7 +23,7 @@ export type AccommodationLinkedInput = {
   paymentOwnerName?: string | null;
   splitMemberIds: string[];
   splitGuestIds?: string[];
-  paidBy?: ExpensePayer | null;
+  paidBy?: ExpensePayer | ExpensePayer[] | null;
   costItemId: string;
 };
 

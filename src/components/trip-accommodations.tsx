@@ -495,14 +495,14 @@ export function TripAccommodations({
   const [splitMemberIds, setSplitMemberIds] = useState<string[]>(allMemberIds);
   const [splitGuestIds, setSplitGuestIds] = useState<string[]>([]);
   const defaultPayerKey = members.length ? `member:${members.find(member=>member.role === "owner")?.id || members[0].id}` : "";
-  const [payerKey, setPayerKey] = useState(defaultPayerKey);
+  const [payerKey, setPayerKey] = useState<string[]>(defaultPayerKey ? [defaultPayerKey] : []);
   const { guests: expenseGuests, setGuests: setExpenseGuests } = useExpenseGuests(tripId);
   const [guestName, setGuestName] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const guestRemoval = useGuestRemoval({ id: tripId, onRemoved: async guest => {
     setExpenseGuests(current => current.filter(person => person.id !== guest.id));
     setSplitGuestIds(current => current.filter(value => value !== guest.id));
-    setPayerKey(current => current === `guest:${guest.id}` ? "" : current);
+    setPayerKey(current => current.filter(key => key !== `guest:${guest.id}`));
     await Promise.all([load(), onChanged()]);
     notify(`ลบ ${guest.name} แล้ว`);
   } });
@@ -739,7 +739,7 @@ export function TripAccommodations({
     if (imageInputRef.current) imageInputRef.current.value = "";
     setSplitMemberIds(allMemberIds);
     setSplitGuestIds(expenseGuests.map(guest => guest.id));
-    setPayerKey(defaultPayerKey);
+    setPayerKey(defaultPayerKey ? [defaultPayerKey] : []);
     setGuestName("");
     setSplitPickerOpen(false);
     setEditing("new");
@@ -796,7 +796,7 @@ export function TripAccommodations({
     );
     setSplitMemberIds(validIds.length || item.split_guest_ids?.length ? validIds : allMemberIds);
     setSplitGuestIds(item.split_guest_ids || []);
-    setPayerKey(item.paid_by ? `${item.paid_by.type}:${item.paid_by.id}` : defaultPayerKey);
+    setPayerKey(item.paid_by ? (Array.isArray(item.paid_by) ? item.paid_by : [item.paid_by]).map(payer => `${payer.type}:${payer.id}`) : defaultPayerKey ? [defaultPayerKey] : []);
     setGuestName("");
     setSplitPickerOpen(false);
     setEditing(item);
@@ -862,11 +862,9 @@ export function TripAccommodations({
     }
     const bookingUrl = String(form.get("bookingUrl") || "").trim();
     if (bookingUrl && !safeBookingUrl(bookingUrl)) { setError("กรุณาใส่ลิงก์ที่พักแบบ https:// หรือ http://"); return; }
-    const [payerType, payerId] = payerKey.split(":");
-    const paidBy: ExpensePayer | null = payerType === "member" && allMemberIds.includes(payerId)
-      ? { type: "member", id: payerId }
-      : payerType === "guest" && expenseGuests.some(guest => guest.id === payerId) ? { type: "guest", id: payerId } : null;
-    if (!paidBy) { setError("กรุณาเลือกผู้จ่ายรายการนี้"); return; }
+    const paidPayers = payerKey.map(key => { const [type, id] = key.split(":"); return type === "member" && allMemberIds.includes(id) ? { type: "member" as const, id } : type === "guest" && expenseGuests.some(guest => guest.id === id) ? { type: "guest" as const, id } : null; }).filter((payer): payer is ExpensePayer => Boolean(payer));
+    const paidBy = paidPayers.length === 1 ? paidPayers[0] : paidPayers;
+    if (!paidPayers.length) { setError("กรุณาเลือกผู้จ่ายรายการนี้"); return; }
     setSaving(true);
     setError("");
     try {

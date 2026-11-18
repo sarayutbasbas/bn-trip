@@ -17,7 +17,7 @@ type Props = {
  addExpenseGuest: () => Promise<{ guest: Guest; created: boolean } | undefined>;
  requestDeleteExpenseGuest?: (guest: Guest) => void;
  deletingGuestId?: string | null;
- payerKey: string; setPayerKey: Setter<string>;
+ payerKey: string[]; setPayerKey: Setter<string[]>;
 };
 
 function PeopleSheet({ title, onClose, children, footer, payer = false }: { title: string; onClose: () => void; children: ReactNode; footer: ReactNode; payer?: boolean }) {
@@ -81,7 +81,7 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
      setNewGuestIds(current => [...new Set([...current, result.guest.id])]);
    }
  }
- const selectedPayer = people.find(person => person.key === payerKey);
+ const selectedPayers = people.filter(person => payerKey.includes(person.key));
  const closeSplit = useCallback(() => setSplitPickerOpen(false), [setSplitPickerOpen]);
  const closePayer = useCallback(() => setPayerOpen(false), [setPayerOpen]);
  const addPersonFooter = (
@@ -231,10 +231,11 @@ export function ExpensePeopleFields({ t, splitPickerRef, splitPickerOpen, setSpl
             <div className="field expense-payer-field split-member-field">
               <label htmlFor="expense-paid-by">{t("จ่ายโดย")}</label>
               <input type="hidden" name="paidBy" value={payerKey}/>
-              <button id="expense-paid-by" type="button" className={`split-member-trigger ${payerOpen ? "is-open" : ""}`} disabled={people.length <= 1} aria-expanded={payerOpen} onClick={() => { startSession(); setSplitPickerOpen(false); setPayerOpen(open => !open); }}><span>{selectedPayer?.label || t("เลือกผู้จ่าย")}</span><ChevronDown size={16}/></button>
+              <button id="expense-paid-by" type="button" className={`split-member-trigger ${payerOpen ? "is-open" : ""}`} disabled={!people.length} aria-expanded={payerOpen} onClick={() => { startSession(); setSplitPickerOpen(false); setPayerOpen(open => !open); }}><span>{selectedPayers.length === people.length && people.length > 1 ? t("ทุกคน") : selectedPayers.length > 1 ? `${selectedPayers.length} คน` : selectedPayers[0]?.label || t("เลือกผู้จ่าย")}</span><ChevronDown size={16}/></button>
               {payerOpen && <PeopleSheet title={t("จ่ายโดย")} onClose={closePayer} footer={addPersonFooter} payer>
+                <label className="split-all-option"><input type="checkbox" checked={people.length > 0 && payerKey.length === people.length} onChange={event => setPayerKey(event.target.checked ? people.map(person => person.key) : [])}/><span className="split-checkmark" aria-hidden="true"/><span>{t("ทุกคน")}</span></label>
                 {people.map(person => <div className="split-guest-option" key={person.key}>
-                  <label><input type="radio" name="expensePayerChoice" value={person.key} checked={payerKey === person.key} onChange={() => { setPayerKey(person.key); setPayerOpen(false); }}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}{person.offlineMember && <small>{t("สมาชิกไม่มีอีเมล")}</small>}{person.key.startsWith("guest:") && newGuestIds.includes(person.key.slice(6)) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span></label>
+                  <label><input type="checkbox" name="expensePayerChoice" value={person.key} checked={payerKey.includes(person.key)} onChange={event => setPayerKey(current => event.target.checked ? [...new Set([...current, person.key])] : current.filter(key => key !== person.key))}/><span className="split-checkmark" aria-hidden="true"/><span className="split-member-avatar" style={person.avatar ? { backgroundImage: `url("${person.avatar}")` } : undefined}>{!person.avatar && <UserRound size={22}/>}</span><span className="people-person-copy" title={person.label}>{person.label}{person.offlineMember && <small>{t("สมาชิกไม่มีอีเมล")}</small>}{person.key.startsWith("guest:") && newGuestIds.includes(person.key.slice(6)) && <small className="people-new-tag">{t("เพิ่งเพิ่ม")}</small>}</span></label>
                   {person.key.startsWith("guest:") && requestDeleteExpenseGuest && <button type="button" className="split-guest-delete" disabled={Boolean(deletingGuestId)} aria-label={`${t("ลบ")} ${person.label}`} onClick={() => { requestDeleteExpenseGuest({ id: person.key.slice(6), name: person.label }); }}><Trash2 size={20}/></button>}
                 </div>)}
               </PeopleSheet>}

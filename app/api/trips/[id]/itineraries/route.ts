@@ -12,7 +12,7 @@ import { linkedExpenseIds } from "@/src/lib/linked-expense";
 import { accommodationExpenseItemsSql } from "@/src/lib/accommodation-expense-sql";
 
 const costItem=z.object({
-  paidBy:expensePayerSchema.optional(),
+  paidBy:z.union([expensePayerSchema,z.array(expensePayerSchema).min(1).max(50)]).optional(),
   id:z.string().optional(),key:z.string().trim().min(1).max(100),value:z.number().min(0),category:z.string().max(60).optional(),currency:z.string().length(3).optional(),foreignAmount:z.number().min(0).optional(),exchangeRate:z.number().positive().optional(),rateDate:z.string().optional(),paymentMethod:z.string().max(260).optional(),creditCardId:z.string().uuid().optional(),paymentOwnerName:z.string().max(120).optional(),splitMemberIds:z.array(z.string().uuid()).max(20).optional(),splitGuestIds:z.array(z.string().uuid()).max(30).optional(),splitCount:z.number().int().min(1).max(100).optional(),
 });
 const schema=z.object({dayNumber:z.number().int().min(1),timeSlot:z.enum(["morning","afternoon","evening"]).optional(),startTime:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),placeName:z.string().min(1),address:z.string().optional(),imageUrl:z.string().max(2000).nullable().optional(),transportMode:z.string().optional(),transportNote:z.string().optional(),costItems:z.array(costItem).max(30).optional()});
@@ -60,7 +60,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
     const {id}=await params;if(!await getTripRole(id,session.userId))return NextResponse.json({error:"Not found"},{status:404});const x=schema.parse(await request.json());
     if(!await tripCardIdsAreMembers(id,(x.costItems||[]).flatMap(item=>item.creditCardId?[item.creditCardId]:[])))return NextResponse.json({error:"บัตรนี้ไม่ได้เป็นของสมาชิกในทริป"},{status:400});
     if(!await tripMemberIdsAreMembers(id,(x.costItems||[]).flatMap(item=>item.splitMemberIds||[])))return NextResponse.json({error:"ผู้หารค่าใช้จ่ายต้องเป็นสมาชิกในทริป"},{status:400});
-    if(!await tripMemberIdsAreMembers(id,(x.costItems||[]).flatMap(item=>item.paidBy?.type==="member"?[item.paidBy.id]:[])) || !await tripExpenseGuestIdsBelongToTrip(id,(x.costItems||[]).flatMap(item=>item.paidBy?.type==="guest"?[item.paidBy.id]:[])))return NextResponse.json({error:"ผู้จ่ายต้องเป็นสมาชิกหรือคนนอกที่เพิ่มไว้ในทริปนี้"},{status:400});
+    if(!await tripMemberIdsAreMembers(id,(x.costItems||[]).flatMap(item=>(Array.isArray(item.paidBy)?item.paidBy:item.paidBy?[item.paidBy]:[]).filter(payer=>payer.type==="member").map(payer=>payer.id))) || !await tripExpenseGuestIdsBelongToTrip(id,(x.costItems||[]).flatMap(item=>(Array.isArray(item.paidBy)?item.paidBy:item.paidBy?[item.paidBy]:[]).filter(payer=>payer.type==="guest").map(payer=>payer.id))))return NextResponse.json({error:"ผู้จ่ายต้องเป็นสมาชิกหรือคนนอกที่เพิ่มไว้ในทริปนี้"},{status:400});
     if(!await tripExpenseGuestIdsBelongToTrip(id,(x.costItems||[]).flatMap(item=>item.splitGuestIds||[])))return NextResponse.json({error:"คนนอกที่เลือกไม่ได้อยู่ในทริปนี้"},{status:400});
     const duplicate=await query("SELECT 1 FROM itineraries WHERE trip_id=$1 AND day_number=$2 AND start_time=$3::time LIMIT 1",[id,x.dayNumber,x.startTime]);if(duplicate.rowCount)return NextResponse.json({error:"วันและเวลานี้มีแผนอยู่แล้ว กรุณาเลือกเวลาอื่น"},{status:409});
     const hour=Number(x.startTime.slice(0,2));const timeSlot=x.timeSlot??(hour<12?"morning":hour<17?"afternoon":"evening");

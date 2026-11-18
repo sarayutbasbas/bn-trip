@@ -3,7 +3,7 @@ import { expenseShares, type BudgetAllocation } from "./budget-allocation";
 import { isExpenseUnpaid, type ExpensePayment } from "./expense-payment";
 
 export type ExpensePayer = { type: "member" | "guest"; id: string };
-export type SettlementExpense = SplitExpense & ExpensePayment & { paidBy?: ExpensePayer };
+export type SettlementExpense = SplitExpense & ExpensePayment & { paidBy?: ExpensePayer | ExpensePayer[] };
 export const expensePersonKey = (person: ExpensePayer) => `${person.type}:${person.id}`;
 
 // Integer satang arithmetic: every counted expense must balance exactly.
@@ -28,13 +28,15 @@ export function expenseSettlement(costs: SettlementExpense[], memberIds: string[
       ...(Array.isArray(cost.splitMemberIds) ? cost.splitMemberIds : memberIds).map(id => `member:${id}`),
       ...(cost.splitGuestIds || []).map(id => `guest:${id}`),
     ])].sort();
-    const payer = cost.paidBy ? rows.get(expensePersonKey(cost.paidBy)) : undefined;
-    if (!payer || !participants.length || participants.some(id => !rows.has(id)) || costSplitCount(cost, participants.length) !== participants.length) {
+    const payers = (Array.isArray(cost.paidBy) ? cost.paidBy : cost.paidBy ? [cost.paidBy] : []).map(person => rows.get(expensePersonKey(person)));
+    if (!payers.length || payers.some(payer => !payer) || !participants.length || participants.some(id => !rows.has(id)) || costSplitCount(cost, participants.length) !== participants.length) {
       pendingCount++;
       pendingAmount += amount;
       continue;
     }
-    payer.paid += amount;
+    const baseShare = Math.floor(amount / payers.length);
+    const remainder = amount % payers.length;
+    payers.forEach((payer, index) => { payer!.paid += baseShare + (index < remainder ? 1 : 0); });
     for (const [id, share] of expenseShares(cost, memberIds, guestIds, allocation, memberGuestIds)) rows.get(id)!.share += share;
   }
   for (const row of rows.values()) row.balance = row.paid - row.share;

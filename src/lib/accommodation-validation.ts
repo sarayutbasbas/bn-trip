@@ -19,7 +19,7 @@ export const accommodationSchema = z.object({
   name: z.string().trim().min(1).max(180),
   location: z.string().trim().max(1000).default(""),
   bookingUrl: z.string().trim().max(2000).refine(value => !value || Boolean(safeBookingUrl(value)), "กรุณาใส่ลิงก์ที่พักแบบ https:// หรือ http://").default(""),
-  paidBy: expensePayerSchema.nullable().optional(),
+  paidBy: z.union([expensePayerSchema, z.array(expensePayerSchema).min(1)]).nullable().optional(),
   splitGuestIds: z.array(z.string().uuid()).max(100).default([]),
   bookingPlatform: z
     .enum(["agoda", "trip.com", "booking.com", "klook", "traveloka", "direct"])

@@ -31,9 +31,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const breakfastDays = [...new Set(input.breakfastDays ?? (input.includesBreakfast ? Array.from({length: Math.max(0, input.checkOutDay-input.checkInDay)}, (_, index) => input.checkInDay+index+1) : []))].sort((a,b)=>a-b);
     input.includesBreakfast = breakfastDays.length > 0;
     if (!await tripExpenseGuestIdsBelongToTrip(id, input.splitGuestIds)) return NextResponse.json({ error: "คนนอกทริปไม่ถูกต้อง" }, { status: 400 });
-    if (input.paidBy && !(input.paidBy.type === "member"
-      ? await tripMemberIdsAreMembers(id, [input.paidBy.id])
-      : await tripExpenseGuestIdsBelongToTrip(id, [input.paidBy.id]))) return NextResponse.json({ error: "ผู้จ่ายต้องอยู่ในทริปนี้" }, { status: 400 });
+    const payers = input.paidBy ? (Array.isArray(input.paidBy) ? input.paidBy : [input.paidBy]) : [];
+    if (!await tripMemberIdsAreMembers(id, payers.filter(payer => payer.type === "member").map(payer => payer.id)) || !await tripExpenseGuestIdsBelongToTrip(id, payers.filter(payer => payer.type === "guest").map(payer => payer.id))) return NextResponse.json({ error: "ผู้จ่ายต้องอยู่ในทริปนี้" }, { status: 400 });
     if (!input.splitMemberIds.length && !input.splitGuestIds.length) return NextResponse.json({ error: "กรุณาเลือกผู้หารค่าใช้จ่ายอย่างน้อย 1 คน" }, { status: 400 });
     if (input.checkOutDay <= input.checkInDay) return NextResponse.json({ error: "วันเช็กเอาต์ต้องอยู่หลังวันเช็กอิน" }, { status: 400 });
     if (!await tripCardIdsAreMembers(id, input.creditCardId ? [input.creditCardId] : [])) return NextResponse.json({ error: "บัตรนี้ไม่ได้เป็นของสมาชิกในทริป" }, { status: 400 });
