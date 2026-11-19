@@ -4832,7 +4832,7 @@ function TimelineDayShortcuts({
 }) {
   const t = useT();
   const baseDate = localDate(trip.outbound_departure_at, trip.start_date);
-  const [weather, setWeather] = useState<{ days: Array<{ date: string; minimum: number; maximum: number; code: number; approximate: boolean }>; current: { temperature: number; code: number }; city: string; country: string } | null>(null);
+  const [weather, setWeather] = useState<{ days: Array<{ date: string; minimum: number; maximum: number; code: number; approximate: boolean }>; current: { temperature: number; code: number } | null; city: string; country: string; historical: boolean } | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const weatherLocation = trip.trip_destinations?.[0]?.nameEn || trip.destination;
   const weatherByDate = new Map((weather?.days || []).map(entry => [entry.date, entry]));
@@ -4841,6 +4841,7 @@ function TimelineDayShortcuts({
     setWeatherLoading(true);
     setWeather(null);
     const params = new URLSearchParams({ location: weatherLocation });
+    params.set("tripId", trip.id);
     params.set("dates", Array.from({ length: trip.total_days }, (_, index) => addDays(baseDate, index)).join(","));
     if (trip.country_code) params.set("country", trip.country_code);
     fetch(`/api/weather?${params}`, { cache: "no-store" })
@@ -4901,8 +4902,8 @@ function TimelineDayShortcuts({
           const dayWeather = weatherByDate.get(addDays(baseDate, number - 1));
           const temperatureLabel = dayWeather
             ? `${Math.floor(Math.min(dayWeather.minimum, dayWeather.maximum))}°–${Math.ceil(Math.max(dayWeather.minimum, dayWeather.maximum))}°C`
-            : weather ? `${Math.round(weather.current.temperature)}°C` : weatherLoading ? "···" : "—";
-          const weatherCode = dayWeather?.code ?? weather?.current.code;
+            : weather?.historical ? "—" : weather?.current ? `${Math.round(weather.current.temperature)}°C` : weatherLoading ? "···" : "—";
+          const weatherCode = dayWeather?.code ?? weather?.current?.code;
           return (
         <button
           type="button"

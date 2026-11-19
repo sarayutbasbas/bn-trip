@@ -706,6 +706,22 @@ const migrations = [
     `INSERT INTO trip_personal_budgets(trip_id,user_id,shopping_budget_thb)
       SELECT id,owner_id,shopping_budget_thb FROM trips ON CONFLICT DO NOTHING`,
   ] },
+  { version: 59, statements: [
+    `CREATE TABLE IF NOT EXISTS trip_weather_days (
+      trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      forecast_date DATE NOT NULL,
+      location_key TEXT NOT NULL,
+      location_name TEXT NOT NULL,
+      country_code CHAR(2),
+      minimum NUMERIC(6,2) NOT NULL,
+      maximum NUMERIC(6,2) NOT NULL,
+      weather_code INTEGER NOT NULL,
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY(trip_id,forecast_date,location_key),
+      CHECK (minimum <= maximum)
+    )`,
+    "CREATE INDEX IF NOT EXISTS trip_weather_days_trip_date_idx ON trip_weather_days(trip_id,forecast_date)",
+  ] },
 ] as const;
 
 let migrationPromise: Promise<void> | null = null;
